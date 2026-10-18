@@ -20,7 +20,7 @@ const App = () => {
       <TaskCard toggles={state.toggles} locked={running} busy={state.busy} />
       {!isReady(state) && !state.run && (
         <p class="muted" style="margin-top:10px">
-          You can already write a task; it runs once the steps above are done.
+          You can already write a task. Finish the steps above before you press Start.
         </p>
       )}
       <History items={state.history} />

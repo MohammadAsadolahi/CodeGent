@@ -27,12 +27,14 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// apps/vscode/test/integration/env.ts
+// test/integration/env.ts
 var env_exports = {};
 __export(env_exports, {
   configuration: () => configuration,
+  describeFromSources: () => describeFromSources,
   getApi: () => getApi,
   hubPorts: () => hubPorts,
+  itFromSources: () => itFromSources,
   replaceWindowFunction: () => replaceWindowFunction,
   sandbox: () => sandbox,
   setSetting: () => setSetting,
@@ -41,7 +43,7 @@ __export(env_exports, {
 module.exports = __toCommonJS(env_exports);
 var vscode = __toESM(require("vscode"));
 
-// apps/vscode/test/support/git-fixture.ts
+// test/support/git-fixture.ts
 var import_node_child_process = require("node:child_process");
 var import_node_path = __toESM(require("node:path"));
 var git = (cwd, ...args) => (0, import_node_child_process.execFileSync)("git", args, {
@@ -66,7 +68,7 @@ var attachRepo = (parent, name) => {
   };
 };
 
-// apps/vscode/test/integration/env.ts
+// test/integration/env.ts
 var sandbox = () => {
   const dir = process.env.CODEGENT_IT_DIR;
   if (!dir)
@@ -81,7 +83,12 @@ var getApi = async () => {
   const extension = vscode.extensions.getExtension("codegent.codegent");
   if (!extension)
     throw new Error("The CodeGent extension is not installed in the test instance.");
-  return extension.isActive ? extension.exports : extension.activate();
+  const api = extension.isActive ? extension.exports : await extension.activate();
+  if (!api)
+    throw new Error(
+      "The extension did not return its test API (CODEGENT_TEST_API=1 is set by scripts/integration.mjs)."
+    );
+  return api;
 };
 var configuration = () => vscode.workspace.getConfiguration("codegent");
 var setSetting = async (key, value) => {
@@ -95,11 +102,15 @@ var replaceWindowFunction = (name, replacement) => {
     window2[name] = original;
   };
 };
+var itFromSources = process.env.CODEGENT_IT_VSIX ? it.skip : it;
+var describeFromSources = process.env.CODEGENT_IT_VSIX ? describe.skip : describe;
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   configuration,
+  describeFromSources,
   getApi,
   hubPorts,
+  itFromSources,
   replaceWindowFunction,
   sandbox,
   setSetting,

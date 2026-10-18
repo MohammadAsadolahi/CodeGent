@@ -25,9 +25,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// node_modules/ws/lib/constants.js
+// ../../node_modules/ws/lib/constants.js
 var require_constants = __commonJS({
-  "node_modules/ws/lib/constants.js"(exports2, module2) {
+  "../../node_modules/ws/lib/constants.js"(exports2, module2) {
     "use strict";
     var BINARY_TYPES = ["nodebuffer", "arraybuffer", "fragments"];
     var hasBlob = typeof Blob !== "undefined";
@@ -48,9 +48,9 @@ var require_constants = __commonJS({
   }
 });
 
-// node_modules/ws/lib/buffer-util.js
+// ../../node_modules/ws/lib/buffer-util.js
 var require_buffer_util = __commonJS({
-  "node_modules/ws/lib/buffer-util.js"(exports2, module2) {
+  "../../node_modules/ws/lib/buffer-util.js"(exports2, module2) {
     "use strict";
     var { EMPTY_BUFFER } = require_constants();
     var FastBuffer = Buffer[Symbol.species];
@@ -123,9 +123,9 @@ var require_buffer_util = __commonJS({
   }
 });
 
-// node_modules/ws/lib/limiter.js
+// ../../node_modules/ws/lib/limiter.js
 var require_limiter = __commonJS({
-  "node_modules/ws/lib/limiter.js"(exports2, module2) {
+  "../../node_modules/ws/lib/limiter.js"(exports2, module2) {
     "use strict";
     var kDone = Symbol("kDone");
     var kRun = Symbol("kRun");
@@ -173,9 +173,9 @@ var require_limiter = __commonJS({
   }
 });
 
-// node_modules/ws/lib/permessage-deflate.js
+// ../../node_modules/ws/lib/permessage-deflate.js
 var require_permessage_deflate = __commonJS({
-  "node_modules/ws/lib/permessage-deflate.js"(exports2, module2) {
+  "../../node_modules/ws/lib/permessage-deflate.js"(exports2, module2) {
     "use strict";
     var zlib = require("zlib");
     var bufferUtil = require_buffer_util();
@@ -556,9 +556,9 @@ var require_permessage_deflate = __commonJS({
   }
 });
 
-// node_modules/ws/lib/validation.js
+// ../../node_modules/ws/lib/validation.js
 var require_validation = __commonJS({
-  "node_modules/ws/lib/validation.js"(exports2, module2) {
+  "../../node_modules/ws/lib/validation.js"(exports2, module2) {
     "use strict";
     var { isUtf8 } = require("buffer");
     var { hasBlob } = require_constants();
@@ -757,9 +757,9 @@ var require_validation = __commonJS({
   }
 });
 
-// node_modules/ws/lib/receiver.js
+// ../../node_modules/ws/lib/receiver.js
 var require_receiver = __commonJS({
-  "node_modules/ws/lib/receiver.js"(exports2, module2) {
+  "../../node_modules/ws/lib/receiver.js"(exports2, module2) {
     "use strict";
     var { Writable } = require("stream");
     var PerMessageDeflate2 = require_permessage_deflate();
@@ -1380,9 +1380,9 @@ var require_receiver = __commonJS({
   }
 });
 
-// node_modules/ws/lib/sender.js
+// ../../node_modules/ws/lib/sender.js
 var require_sender = __commonJS({
-  "node_modules/ws/lib/sender.js"(exports2, module2) {
+  "../../node_modules/ws/lib/sender.js"(exports2, module2) {
     "use strict";
     var { Duplex } = require("stream");
     var { randomFillSync } = require("crypto");
@@ -1873,9 +1873,9 @@ var require_sender = __commonJS({
   }
 });
 
-// node_modules/ws/lib/event-target.js
+// ../../node_modules/ws/lib/event-target.js
 var require_event_target = __commonJS({
-  "node_modules/ws/lib/event-target.js"(exports2, module2) {
+  "../../node_modules/ws/lib/event-target.js"(exports2, module2) {
     "use strict";
     var { kForOnEventAttribute, kListener } = require_constants();
     var kCode = Symbol("kCode");
@@ -2102,9 +2102,9 @@ var require_event_target = __commonJS({
   }
 });
 
-// node_modules/ws/lib/extension.js
+// ../../node_modules/ws/lib/extension.js
 var require_extension = __commonJS({
-  "node_modules/ws/lib/extension.js"(exports2, module2) {
+  "../../node_modules/ws/lib/extension.js"(exports2, module2) {
     "use strict";
     var { tokenChars } = require_validation();
     function push(dest, name, elem) {
@@ -2255,9 +2255,9 @@ var require_extension = __commonJS({
   }
 });
 
-// node_modules/ws/lib/websocket.js
+// ../../node_modules/ws/lib/websocket.js
 var require_websocket = __commonJS({
-  "node_modules/ws/lib/websocket.js"(exports2, module2) {
+  "../../node_modules/ws/lib/websocket.js"(exports2, module2) {
     "use strict";
     var EventEmitter = require("events");
     var https = require("https");
@@ -3164,9 +3164,9 @@ var require_websocket = __commonJS({
   }
 });
 
-// node_modules/ws/lib/stream.js
+// ../../node_modules/ws/lib/stream.js
 var require_stream = __commonJS({
-  "node_modules/ws/lib/stream.js"(exports2, module2) {
+  "../../node_modules/ws/lib/stream.js"(exports2, module2) {
     "use strict";
     var WebSocket2 = require_websocket();
     var { Duplex } = require("stream");
@@ -3262,9 +3262,9 @@ var require_stream = __commonJS({
   }
 });
 
-// node_modules/ws/lib/subprotocol.js
+// ../../node_modules/ws/lib/subprotocol.js
 var require_subprotocol = __commonJS({
-  "node_modules/ws/lib/subprotocol.js"(exports2, module2) {
+  "../../node_modules/ws/lib/subprotocol.js"(exports2, module2) {
     "use strict";
     var { tokenChars } = require_validation();
     function parse(header) {
@@ -3307,9 +3307,9 @@ var require_subprotocol = __commonJS({
   }
 });
 
-// node_modules/ws/lib/websocket-server.js
+// ../../node_modules/ws/lib/websocket-server.js
 var require_websocket_server = __commonJS({
-  "node_modules/ws/lib/websocket-server.js"(exports2, module2) {
+  "../../node_modules/ws/lib/websocket-server.js"(exports2, module2) {
     "use strict";
     var EventEmitter = require("events");
     var http = require("http");
@@ -3708,13 +3708,13 @@ var require_websocket_server = __commonJS({
   }
 });
 
-// apps/vscode/test/integration/run.test.ts
+// test/integration/run.test.ts
 var import_strict = __toESM(require("node:assert/strict"));
 var import_node_fs2 = __toESM(require("node:fs"));
 var import_node_path2 = __toESM(require("node:path"));
 var vscode3 = __toESM(require("vscode"));
 
-// node_modules/ws/wrapper.mjs
+// ../../node_modules/ws/wrapper.mjs
 var import_stream = __toESM(require_stream(), 1);
 var import_extension = __toESM(require_extension(), 1);
 var import_permessage_deflate = __toESM(require_permessage_deflate(), 1);
@@ -3725,7 +3725,7 @@ var import_websocket = __toESM(require_websocket(), 1);
 var import_websocket_server = __toESM(require_websocket_server(), 1);
 var wrapper_default = import_websocket.default;
 
-// packages/protocol/src/constants.ts
+// ../../packages/protocol/src/constants.ts
 var HUB_SERVICE_NAME = "codegent-hub";
 var MAX_MESSAGE_BYTES = 8 * 1024 * 1024;
 var MAILBOX_TTL_MS = 15 * 6e4;
@@ -3736,7 +3736,7 @@ var MAX_URL_CHARS = 2048;
 var MAX_LABEL_CHARS = 200;
 var DEFAULT_JOB_TIMEOUT_MS = 15 * 6e4;
 
-// packages/protocol/src/schema.ts
+// ../../packages/protocol/src/schema.ts
 var ValidationError = class extends Error {
   path;
   reason;
@@ -3800,7 +3800,7 @@ var union = (key, variants) => (value, path3) => {
   return variants[tag](value, path3);
 };
 
-// packages/protocol/src/messages.ts
+// ../../packages/protocol/src/messages.ts
 var id = str(MAX_ID_CHARS, 1);
 var label = str(MAX_LABEL_CHARS);
 var role = oneOf("editor", "browser");
@@ -3905,7 +3905,7 @@ var hubToBrowserSchema = union("type", { welcome, job, cancel, ping });
 var editorToHubSchema = union("type", { job, cancel, pong, shutdown });
 var browserToHubSchema = union("type", { presence, event, pong });
 
-// packages/protocol/src/ids.ts
+// ../../packages/protocol/src/ids.ts
 var newId = () => {
   const c = globalThis.crypto;
   if (c && typeof c.randomUUID === "function") return c.randomUUID();
@@ -3921,7 +3921,7 @@ var newId = () => {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 };
 
-// packages/protocol/src/health.ts
+// ../../packages/protocol/src/health.ts
 var hubHealthSchema = obj({
   ok: bool,
   service: lit(HUB_SERVICE_NAME),
@@ -3933,7 +3933,7 @@ var hubHealthSchema = obj({
   browsers: int(0, 1e6)
 });
 
-// apps/vscode/test/support/fake-browser.ts
+// test/support/fake-browser.ts
 var EXT_ORIGIN = `chrome-extension://${"a".repeat(32)}`;
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 var until = async (probe, what, timeoutMs = 1e4) => {
@@ -3944,9 +3944,14 @@ var until = async (probe, what, timeoutMs = 1e4) => {
   }
 };
 var FakeBrowser = class {
-  constructor(port, id2 = newId()) {
+  /**
+   * `origin` is the extension the browser claims to be. In the integration tests the hub only
+   * accepts the bundled extension, whose origin the harness passes in CODEGENT_IT_EXT_ORIGIN.
+   */
+  constructor(port, id2 = newId(), origin = process.env.CODEGENT_IT_EXT_ORIGIN || EXT_ORIGIN) {
     this.port = port;
     this.id = id2;
+    this.origin = origin;
   }
   jobs = [];
   cancels = [];
@@ -3963,7 +3968,7 @@ var FakeBrowser = class {
       ext: "0"
     });
     this.socket = new wrapper_default(`ws://127.0.0.1:${this.port}/ws?${query}`, {
-      origin: EXT_ORIGIN
+      origin: this.origin
     });
     this.socket.on("message", (raw) => {
       const message = JSON.parse(raw.toString());
@@ -4009,7 +4014,7 @@ var FakeBrowser = class {
   }
 };
 
-// apps/vscode/test/support/git-fixture.ts
+// test/support/git-fixture.ts
 var import_node_child_process = require("node:child_process");
 var import_node_fs = __toESM(require("node:fs"));
 var import_node_path = __toESM(require("node:path"));
@@ -4039,7 +4044,7 @@ var attachRepo = (parent, name) => {
   };
 };
 
-// apps/vscode/test/support/replies.ts
+// test/support/replies.ts
 var fence = (body, lang = "txt") => `\`\`\`${lang}
 ${body}
 \`\`\``;
@@ -4057,7 +4062,7 @@ var chatReply = (summary, parts, status) => [summary, "", ...parts, ...status ? 
   "\n"
 );
 
-// apps/vscode/test/integration/env.ts
+// test/integration/env.ts
 var vscode = __toESM(require("vscode"));
 var sandbox = () => {
   const dir = process.env.CODEGENT_IT_DIR;
@@ -4072,14 +4077,21 @@ var getApi = async () => {
   const extension2 = vscode.extensions.getExtension("codegent.codegent");
   if (!extension2)
     throw new Error("The CodeGent extension is not installed in the test instance.");
-  return extension2.isActive ? extension2.exports : extension2.activate();
+  const api = extension2.isActive ? extension2.exports : await extension2.activate();
+  if (!api)
+    throw new Error(
+      "The extension did not return its test API (CODEGENT_TEST_API=1 is set by scripts/integration.mjs)."
+    );
+  return api;
 };
 var configuration = () => vscode.workspace.getConfiguration("codegent");
 var setSetting = async (key, value) => {
   await configuration().update(key, value, vscode.ConfigurationTarget.Global);
 };
+var itFromSources = process.env.CODEGENT_IT_VSIX ? it.skip : it;
+var describeFromSources = process.env.CODEGENT_IT_VSIX ? describe.skip : describe;
 
-// apps/vscode/test/integration/fixture.ts
+// test/integration/fixture.ts
 var vscode2 = __toESM(require("vscode"));
 var REPO = "octo/project";
 var CONVERSATION = "https://chatgpt.com/c/test-conversation";
@@ -4121,7 +4133,7 @@ var installRunHooks = () => {
   return context;
 };
 
-// apps/vscode/test/integration/run.test.ts
+// test/integration/run.test.ts
 describe("an agent run in VS Code", () => {
   const ctx = installRunHooks();
   const repo = workRepo();

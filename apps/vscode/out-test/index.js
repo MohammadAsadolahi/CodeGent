@@ -27,7 +27,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// apps/vscode/test/integration/index.ts
+// test/integration/index.ts
 var integration_exports = {};
 __export(integration_exports, {
   run: () => run

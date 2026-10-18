@@ -84,6 +84,41 @@ describe('the extension in VS Code', () => {
     await api.waitFor((s) => s.connection.browsers.length === 0)
   })
 
+  it('turns away any browser extension other than the bundled one', async () => {
+    const stranger = new FakeBrowser(
+      api.hub().port!,
+      undefined,
+      `chrome-extension://${'p'.repeat(32)}`
+    )
+    await assert.rejects(stranger.connect(), /403/)
+    assert.equal(api.state().connection.browsers.length, 0)
+  })
+
+  it('lets the user allow the id of their own build of the browser extension', async () => {
+    const own = 'p'.repeat(32)
+    const connectOwn = () =>
+      new FakeBrowser(api.hub().port!, undefined, `chrome-extension://${own}`).connect()
+    const restartHub = async () => {
+      await vscode.commands.executeCommand('codegent.restartHub')
+      await api.waitFor((s) => s.connection.hub === 'connected', 30_000)
+    }
+    try {
+      await setSetting('advanced.extraBrowserExtensionIds', [own, 'not an id'])
+      await restartHub() // the list is handed to the hub when it starts
+      const browser = await connectOwn()
+      try {
+        await api.waitFor((s) => s.connection.browsers.length === 1)
+      } finally {
+        browser.close()
+      }
+      await api.waitFor((s) => s.connection.browsers.length === 0)
+    } finally {
+      await setSetting('advanced.extraBrowserExtensionIds', undefined)
+      await restartHub()
+    }
+    await assert.rejects(connectOwn(), /403/)
+  })
+
   it('keeps the toggles in sync with the VS Code settings', async () => {
     try {
       await api.send({ type: 'setToggle', key: 'autoApply', value: false })

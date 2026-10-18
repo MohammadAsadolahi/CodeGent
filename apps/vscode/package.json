@@ -4,6 +4,7 @@
   "description": "Agentic coding on a free ChatGPT account. ChatGPT reads your GitHub repository, CodeGent applies its changes, checks them and reports back — step by step.",
   "version": "0.1.0",
   "publisher": "codegent",
+  "icon": "media/icon.png",
   "private": true,
   "type": "commonjs",
   "engines": {
@@ -36,7 +37,8 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.webview.json",
     "build": "node scripts/build.mjs",
     "test:integration": "node scripts/integration.mjs",
-    "package": "node scripts/build.mjs --production && vsce package --no-dependencies --skip-license"
+    "package": "node scripts/package.mjs",
+    "test:package": "node scripts/integration.mjs --vsix"
   },
   "dependencies": {
     "@codegent/engine": "*",
@@ -246,6 +248,16 @@
           "default": [],
           "scope": "machine",
           "markdownDescription": "Local ports on which the hub looks for the browser extension. Leave empty to use the built-in range (47615–47619); the browser extension has to use the same ports."
+        },
+        "codegent.advanced.extraBrowserExtensionIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-p]{32}$"
+          },
+          "default": [],
+          "scope": "machine",
+          "markdownDescription": "Ids of additional browser extensions that may connect to the hub, for example your own build of the CodeGent Bridge or a store version. The bundled extension is always allowed; no other browser extension is. Takes effect the next time the hub starts (*CodeGent: Reconnect to the Browser*)."
         }
       }
     }

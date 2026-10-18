@@ -27,7 +27,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// apps/vscode/test/support/git-fixture.ts
+// test/support/git-fixture.ts
 var git_fixture_exports = {};
 __export(git_fixture_exports, {
   attachRepo: () => attachRepo,

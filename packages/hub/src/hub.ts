@@ -46,6 +46,12 @@ export interface HubOptions {
   maxMessageBytes?: number
   mailboxTtlMs?: number
   mailboxMaxEvents?: number
+  /**
+   * The only `Origin`s a browser peer may connect from (for example
+   * `chrome-extension://<id>`). Without it any extension is accepted, which lets other
+   * extensions in the same browser act as "the browser". Empty means no restriction.
+   */
+  allowedBrowserOrigins?: readonly string[]
   /** Called once when no editor has been connected for `idleExitMs`. */
   onIdle?: () => void
   /** Called when an editor asks the hub to stop. */
@@ -213,6 +219,18 @@ export class Hub {
     }
     if (!isOriginAllowedForRole(role, req.headers.origin)) {
       return { ok: false, status: 403, reason: 'origin not allowed' }
+    }
+    const allowed = this.options.allowedBrowserOrigins ?? []
+    if (
+      role === 'browser' &&
+      allowed.length > 0 &&
+      !allowed.includes(req.headers.origin!)
+    ) {
+      return {
+        ok: false,
+        status: 403,
+        reason: `browser extension ${req.headers.origin} is not on the allow-list`
+      }
     }
     if (url.searchParams.get('protocol') !== String(PROTOCOL_VERSION)) {
       return {

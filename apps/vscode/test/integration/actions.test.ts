@@ -5,7 +5,12 @@ import * as vscode from 'vscode'
 import { FakeBrowser, until } from '../support/fake-browser'
 import { git } from '../support/git-fixture'
 import { chatReply, createdFile } from '../support/replies'
-import { replaceWindowFunction, workRepo } from './env'
+import {
+  describeFromSources,
+  itFromSources,
+  replaceWindowFunction,
+  workRepo
+} from './env'
 import { CONVERSATION, installRunHooks, REPO } from './fixture'
 
 describe('what the user can do', () => {
@@ -57,7 +62,7 @@ describe('what the user can do', () => {
       assert.ok(fs.existsSync(path.join(repo.dir, 'hello.txt')))
     })
 
-    it('"Start Task" asks for the task when it is not given one', async () => {
+    itFromSources('"Start Task" asks for the task when it is not given one', async () => {
       greeting()
       const prompts: unknown[] = []
       const restore = replaceWindowFunction('showInputBox', async (options: unknown) => {
@@ -120,7 +125,7 @@ describe('what the user can do', () => {
     })
   })
 
-  describe('the question before the first commit and push', () => {
+  describeFromSources('the question before the first commit and push', () => {
     /** Answers the modal question with `answer` (undefined = the dialog is closed) and records it. */
     const answerQuestion = (answer: string | undefined) => {
       const asked: Array<{ message: string; detail?: string; items: string[] }> = []
@@ -215,7 +220,7 @@ describe('what the user can do', () => {
     })
   })
 
-  describe('with several browsers connected', () => {
+  describeFromSources('with several browsers connected', () => {
     it('asks which one to use, sends the message there, and remembers the choice', async () => {
       const second = await new FakeBrowser(ctx.api.hub().port!).connect()
       try {

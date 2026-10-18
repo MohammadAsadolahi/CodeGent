@@ -4,6 +4,7 @@ import * as vscode from 'vscode'
 import { HUB_PORTS } from '@codegent/protocol'
 import type { BrowserInfo } from '@codegent/protocol'
 import { normalizeRepoPath } from '@codegent/engine'
+import { allowedBrowserOrigins } from './bridge/allowed-origins'
 import { BridgeChat } from './bridge/bridge-chat'
 import { HubConnection } from './bridge/hub-connection'
 import { installBrowserExtension } from './browser-extension-installer'
@@ -71,6 +72,7 @@ export class App implements vscode.Disposable {
       version,
       logFile: path.join(storage, 'hub.log'),
       ports: configuredPorts.length > 0 ? configuredPorts : HUB_PORTS,
+      allowedOrigins: () => this.allowedBrowserOrigins(),
       log: (line) => this.log.info(line)
     })
 
@@ -149,6 +151,31 @@ export class App implements vscode.Disposable {
     if (this.noticeTimer) clearTimeout(this.noticeTimer)
     if (this.pushTimer) clearTimeout(this.pushTimer)
     for (const disposable of this.disposables.splice(0)) disposable.dispose()
+  }
+
+  /** The browser extensions the hub is told to accept: the bundled one plus the user's own ids. */
+  private allowedBrowserOrigins(): string[] {
+    let bundledManifestKey: unknown
+    try {
+      const manifest = path.join(
+        this.context.asAbsolutePath('out'),
+        'browser-extension',
+        'manifest.json'
+      )
+      bundledManifestKey = (
+        JSON.parse(fs.readFileSync(manifest, 'utf8')) as { key?: unknown }
+      ).key
+    } catch (error) {
+      this.log.warn(
+        `could not read the bundled browser extension's manifest: ${(error as Error).message}`
+      )
+    }
+    const extraIds = vscode.workspace
+      .getConfiguration('codegent')
+      .get<string[]>('advanced.extraBrowserExtensionIds', [])
+    const { origins, notes } = allowedBrowserOrigins({ bundledManifestKey, extraIds })
+    for (const note of notes) this.log.warn(note)
+    return origins
   }
 
   // ── services that depend on the open folder ─────────────────────────────────────────────────

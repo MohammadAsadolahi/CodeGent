@@ -41,6 +41,8 @@ export interface HubConnectionOptions {
   logFile?: string
   idleExitMs?: number
   ports?: readonly number[]
+  /** Browser extension origins a hub started by this connection accepts (read at each start). */
+  allowedOrigins?: () => readonly string[]
   editorId?: string
   log?: (line: string) => void
   /** Test seams. */
@@ -162,7 +164,8 @@ export class HubConnection implements BridgeConnection {
         ports: this.options.ports,
         version: this.options.version,
         logFile: this.options.logFile,
-        idleExitMs: this.options.idleExitMs
+        idleExitMs: this.options.idleExitMs,
+        allowedOrigins: this.options.allowedOrigins?.()
       })
       if (!this.wanted) return
       this.port = hub.port

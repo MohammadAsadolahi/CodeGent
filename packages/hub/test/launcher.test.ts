@@ -5,7 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { findHub, probeHub } from '@codegent/protocol'
 import { ensureHub, HubStartError } from '../src'
-import { connect, sleep } from './helpers'
+import { connect, EXT_ORIGIN, sleep } from './helpers'
 import { Hub } from '../src'
 
 const hubScriptPath = path.resolve(
@@ -93,6 +93,26 @@ describe('ensureHub (real child processes)', () => {
     const editor = await connect(proxy, { role: 'editor' })
     expect((await editor.next((m) => m.type === 'welcome')).role).toBe('editor')
     editor.close()
+  })
+
+  it('passes the allow-list of browser extensions on to the hub process, which enforces it', async () => {
+    const ours = `chrome-extension://${'b'.repeat(32)}`
+    const ports = [await freePort()]
+    const { port } = track(
+      await ensureHub({ hubScriptPath, ports, allowedOrigins: [ours] })
+    )
+    const proxy = { port } as unknown as Hub
+
+    const browser = await connect(proxy, { role: 'browser', origin: ours })
+    expect((await browser.next((m) => m.type === 'welcome')).role).toBe('browser')
+    browser.close()
+
+    const stranger = await connect(proxy, { role: 'browser', origin: EXT_ORIGIN }).then(
+      () => undefined,
+      (error) => error
+    )
+    expect(stranger).toMatchObject({ status: 403 })
+    expect(String(stranger.body)).toMatch(/not on the allow-list/)
   })
 
   it('converges on a single hub when many windows start at once', async () => {

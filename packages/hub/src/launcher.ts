@@ -24,6 +24,8 @@ export interface EnsureHubOptions {
   version?: string
   idleExitMs?: number
   logFile?: string
+  /** Browser extension origins the new hub accepts (see `HubOptions.allowedBrowserOrigins`). */
+  allowedOrigins?: readonly string[]
   /** How long to wait for a spawned hub to answer `/health`, per port. */
   startupTimeoutMs?: number
   spawn?: typeof nodeSpawn
@@ -67,6 +69,9 @@ const startOnPort = async (
   if (options.idleExitMs !== undefined)
     args.push('--idle-exit-ms', String(options.idleExitMs))
   if (options.logFile) args.push('--log-file', options.logFile)
+  if (options.allowedOrigins?.length) {
+    args.push('--allowed-origins', options.allowedOrigins.join(','))
+  }
 
   const spawnFn = options.spawn ?? nodeSpawn
   let child: ChildProcess

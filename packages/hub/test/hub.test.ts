@@ -82,6 +82,7 @@ describe('upgrade validation', () => {
     )
     expect(error).toBeInstanceOf(Rejected)
     expect((error as Rejected).status).toBe(status)
+    return error as Rejected
   }
 
   it('rejects foreign hosts', async () => {
@@ -122,6 +123,50 @@ describe('upgrade validation', () => {
     await expectRejected(connect(hub, { role: 'editor', id: 'has spaces' }), 400)
     await expectRejected(connect(hub, { role: 'editor', id: 'x'.repeat(101) }), 400)
     await expectRejected(connect(hub, { role: 'editor', path: '/other' }), 404)
+  })
+
+  describe('with an allow-list of browser extensions', () => {
+    const OURS = `chrome-extension://${'b'.repeat(32)}`
+    const ALSO = `chrome-extension://${'c'.repeat(32)}`
+
+    it('accepts only the listed extensions as the browser — another extension is turned away', async () => {
+      const hub = await hubWith({ allowedBrowserOrigins: [OURS, ALSO] })
+      await join(hub, { role: 'browser', origin: OURS })
+      await join(hub, { role: 'browser', origin: ALSO })
+      const error = await expectRejected(
+        connect(hub, { role: 'browser', origin: EXT_ORIGIN }),
+        403
+      )
+      expect(error.body).toMatch(/not on the allow-list/)
+      expect(error.body).toContain(EXT_ORIGIN) // the log says which one it was
+    })
+
+    it('does not change who may be an editor, and still turns web pages away', async () => {
+      const hub = await hubWith({ allowedBrowserOrigins: [OURS] })
+      await join(hub, { role: 'editor' })
+      await expectRejected(connect(hub, { role: 'editor', origin: OURS }), 403)
+      await expectRejected(
+        connect(hub, { role: 'browser', origin: 'https://chatgpt.com' }),
+        403
+      )
+      await expectRejected(connect(hub, { role: 'browser', origin: null }), 403)
+    })
+
+    it('treats an empty list as "no restriction"', async () => {
+      const hub = await hubWith({ allowedBrowserOrigins: [] })
+      await join(hub, { role: 'browser', origin: EXT_ORIGIN })
+    })
+
+    it('tells nobody about the browser that was turned away', async () => {
+      const hub = await hubWith({ allowedBrowserOrigins: [OURS] })
+      const editor = await join(hub, { role: 'editor' })
+      await expectRejected(connect(hub, { role: 'browser', origin: EXT_ORIGIN }), 403)
+      await join(hub, { role: 'browser', origin: OURS })
+      const peers = await editor.next(
+        (m) => m.type === 'peers' && m.browsers.length === 1
+      )
+      expect(peers.browsers).toHaveLength(1)
+    })
   })
 
   it('accepts a correct editor and browser', async () => {

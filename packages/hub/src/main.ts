@@ -2,6 +2,7 @@
  * Entry point of the detached hub process.
  *
  *   node hub.cjs --port 47615 [--version 1.2.3] [--idle-exit-ms 60000] [--log-file path]
+ *                [--allowed-origins chrome-extension://<id>,…]
  *
  * Exit codes: 0 graceful/idle, 3 port already in use (another hub won the race), 1 failure.
  */
@@ -62,6 +63,7 @@ const shutdown = async (code: number) => {
 const hub = new Hub({
   port,
   version: args.get('version'),
+  allowedBrowserOrigins: (args.get('allowed-origins') ?? '').split(',').filter(Boolean),
   idleExitMs: args.has('idle-exit-ms') ? Number(args.get('idle-exit-ms')) : undefined,
   onIdle: () => void shutdown(0),
   onShutdownRequested: () => void shutdown(0),

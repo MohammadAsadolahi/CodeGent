@@ -19,7 +19,10 @@
     "test:watch": "vitest",
     "build": "npm run build --workspaces --if-present",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "icons": "node scripts/make-icons.mjs",
+    "package": "npm run package -w apps/vscode",
+    "test:package": "npm run test:package -w apps/vscode"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

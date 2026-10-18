@@ -156,7 +156,12 @@ export interface World {
 export const startWorld = async (): Promise<World> => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codegent-e2e-'))
   const extensionDir = path.join(root, 'extension')
-  await buildExtension({ outDir: extensionDir, hubPorts: E2E_PORTS })
+  // CODEGENT_MINIFY=1 runs everything against the minified build that is released.
+  await buildExtension({
+    outDir: extensionDir,
+    hubPorts: E2E_PORTS,
+    minify: process.env.CODEGENT_MINIFY === '1'
+  })
 
   const { mock, ...mockServer } = await startMock()
 

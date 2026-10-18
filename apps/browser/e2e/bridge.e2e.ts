@@ -1,4 +1,7 @@
+import fs from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { extensionIdFromKey } from '@codegent/hub'
 import type { JobEvent } from '@codegent/protocol'
 import { E2E_PORTS, sleep, startWorld, waitUntil, type World } from './harness'
 
@@ -27,6 +30,18 @@ afterEach(async () => {
     () => world.editor.peers[0]?.chatgptTabs === 0,
     'the tab count to drop to 0'
   ).catch(() => undefined)
+})
+
+describe('identity', () => {
+  it('has the id that follows from the key pinned in its manifest — the id the hub is told to allow', () => {
+    const { key } = JSON.parse(
+      fs.readFileSync(
+        fileURLToPath(new URL('../static/manifest.json', import.meta.url)),
+        'utf8'
+      )
+    )
+    expect(world.extensionId).toBe(extensionIdFromKey(key))
+  })
 })
 
 const REPLY = [

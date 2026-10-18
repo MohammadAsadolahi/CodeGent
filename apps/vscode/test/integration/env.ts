@@ -21,7 +21,12 @@ export const getApi = async (): Promise<CodeGentApi> => {
   const extension = vscode.extensions.getExtension<CodeGentApi>('codegent.codegent')
   if (!extension)
     throw new Error('The CodeGent extension is not installed in the test instance.')
-  return extension.isActive ? extension.exports : extension.activate()
+  const api = extension.isActive ? extension.exports : await extension.activate()
+  if (!api)
+    throw new Error(
+      'The extension did not return its test API (CODEGENT_TEST_API=1 is set by scripts/integration.mjs).'
+    )
+  return api
 }
 
 export const configuration = () => vscode.workspace.getConfiguration('codegent')
@@ -46,3 +51,11 @@ export const replaceWindowFunction = (
     window[name] = original
   }
 }
+
+/**
+ * Tests that replace functions of the `vscode` module (to answer dialogs nobody can click). That
+ * only reaches the extension when both share one `vscode` object — i.e. when the extension is loaded
+ * from its sources — so they are skipped when the installed package is tested (`--vsix`).
+ */
+export const itFromSources = process.env.CODEGENT_IT_VSIX ? it.skip : it
+export const describeFromSources = process.env.CODEGENT_IT_VSIX ? describe.skip : describe

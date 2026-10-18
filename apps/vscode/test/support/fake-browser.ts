@@ -26,9 +26,14 @@ export class FakeBrowser {
   private socket!: WebSocket
   onJob: (job: JobRequest, send: (event: object) => void) => void = () => {}
 
+  /**
+   * `origin` is the extension the browser claims to be. In the integration tests the hub only
+   * accepts the bundled extension, whose origin the harness passes in CODEGENT_IT_EXT_ORIGIN.
+   */
   constructor(
     private readonly port: number,
-    readonly id = newId()
+    readonly id = newId(),
+    private readonly origin = process.env.CODEGENT_IT_EXT_ORIGIN || EXT_ORIGIN
   ) {}
 
   async connect(): Promise<this> {
@@ -41,7 +46,7 @@ export class FakeBrowser {
       ext: '0'
     })
     this.socket = new WebSocket(`ws://127.0.0.1:${this.port}/ws?${query}`, {
-      origin: EXT_ORIGIN
+      origin: this.origin
     })
     this.socket.on('message', (raw) => {
       const message = JSON.parse(raw.toString())

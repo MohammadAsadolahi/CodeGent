@@ -5,13 +5,22 @@
   "description": "Connects ChatGPT in your browser to the CodeGent VS Code extension, so a free ChatGPT account can drive agentic coding.",
   "version": "0.0.0",
   "minimum_chrome_version": "116",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAkqBkaeFsM8YN3/R8ii9mhKWdYgT60cVBQc3VFQxIB0/W+45yWLmUzFXilrRp8aI576I1dUCxNSfpi/VgU++nM2vAJ4AI/x8MOcLwn3ZHkRAWdfKNHf4p+UY+ao6LkV6zWJBwG+M3od4RR+IXdB6qGH3KzxadLXCxteaq/enVgfyD62bfics/lMiDlmNiGf0u8uOhkWlMAEGHlXuhl9B3tacRo5Vf7KV5RKxvk2/wEf3jvc8P+B7cvjNjVOf0Bs8bl/o52Hyw7vvM4BDqNlReJp1sZY0iPDH6Ob96LclltlXbR9K4Qr2MkCSmOaPAN3YBtFsgkTOXr7luNWNCtlZ36QIDAQAB",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "permissions": ["storage", "alarms", "scripting"],
   "host_permissions": [
     "https://chatgpt.com/*",
     "https://chat.openai.com/*",
     "http://127.0.0.1/*"
   ],
-  "background": { "service_worker": "background.js" },
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
@@ -19,5 +28,12 @@
       "run_at": "document_idle"
     }
   ],
-  "action": { "default_title": "CodeGent", "default_popup": "popup.html" }
+  "action": {
+    "default_title": "CodeGent",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  }
 }
