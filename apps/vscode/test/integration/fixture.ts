@@ -42,9 +42,10 @@ export const installRunHooks = (): RunContext => {
     await api.waitFor((state) => !state.run || state.run.state !== 'running', 15_000)
     browser.close()
     await api.waitFor((state) => state.connection.browsers.length === 0)
-    for (const key of ['autoApply', 'autoContinue', 'git.push', 'git.commit', 'verifyCommand', 'diagnosticsWaitSeconds']) {
+    for (const key of ['autoApply', 'autoContinue', 'git.push', 'git.commit', 'verifyCommand']) {
       await setSetting(key, undefined)
     }
+    await setSetting('diagnosticsWaitSeconds', 0) // the test instance's own default (see scripts/integration.mjs)
     await vscode.commands.executeCommand('workbench.action.closeAllEditors')
   })
 
