@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { newId, type JobEvent, type JobRequest } from '@codegent/protocol'
 import { runJob, type RunnerTiming } from '../../src/content/runner'
-import { codeBlock, redesignAssistantTurn } from '../fixtures/chatgpt-dom'
+import {
+  bareAssistantTurn,
+  codeBlock,
+  exchangeHtml,
+  redesignCodeBlock
+} from '../fixtures/chatgpt-dom'
 import { FakeChat, type ChatLayout, type FakeChatOptions } from '../fixtures/fake-chat'
 
 const FAST: RunnerTiming = {
@@ -76,142 +81,156 @@ const failure = (events: JobEvent[]) => {
 
 /** History that shows up late, the way a reopened conversation renders. */
 const staleReply = (kind: ChatLayout): string =>
-  kind === 'legacy'
-    ? '<section><div data-message-author-role="assistant" data-message-id="old-1"><div class="markdown"><p>Stale reply.</p></div></div></section>'
-    : redesignAssistantTurn('<p>Stale reply.</p>', 'complete')
+  ({
+    legacy:
+      '<section><div data-message-author-role="assistant" data-message-id="old-1"><div class="markdown"><p>Stale reply.</p></div></div></section>',
+    bare: bareAssistantTurn('<p>Stale reply.</p>', 'complete'),
+    redesign: exchangeHtml({
+      n: 0,
+      state: 'complete',
+      user: 'an earlier question',
+      assistant: { id: 'old-1', html: '<p>Stale reply.</p>' }
+    })
+  })[kind]
 
-describe.each(['legacy', 'redesign'] as const)('a successful run (%s page)', (kind) => {
-  beforeEach(() => {
-    layout = kind
-  })
-  const reply =
-    '<p>Done.</p><h3>Updated file: <code>src/a.ts</code></h3>' +
-    codeBlock('ts', 'export const a = 1')
+describe.each(['legacy', 'redesign', 'bare'] as const)(
+  'a successful run (%s page)',
+  (kind) => {
+    beforeEach(() => {
+      layout = kind
+    })
+    const reply =
+      '<p>Done.</p><h3>Updated file: <code>src/a.ts</code></h3>' +
+      (kind === 'redesign'
+        ? redesignCodeBlock('TypeScript', 'export const a = 1')
+        : codeBlock('ts', 'export const a = 1'))
 
-  it('types the prompt, sends it and returns the reply as markdown', async () => {
-    const job = makeJob({ text: 'Line one\nLine two with `code` and ```fence```' })
-    const { events, chat } = await run(job, { reply })
+    it('types the prompt, sends it and returns the reply as markdown', async () => {
+      const job = makeJob({ text: 'Line one\nLine two with `code` and ```fence```' })
+      const { events, chat } = await run(job, { reply })
 
-    expect(kinds(events)).toEqual([
-      'progress:tab-ready',
-      'progress:filled',
-      'progress:submitted',
-      'progress:generating',
-      'completed'
-    ])
-    expect(chat.sent).toEqual([job.text])
-    const done = terminal(events)
-    expect(done.kind).toBe('completed')
-    if (done.kind === 'completed') {
-      expect(done.markdown).toBe(
-        'Done.\n\n### Updated file: `src/a.ts`\n\n```ts\nexport const a = 1\n```'
+      expect(kinds(events)).toEqual([
+        'progress:tab-ready',
+        'progress:filled',
+        'progress:submitted',
+        'progress:generating',
+        'completed'
+      ])
+      expect(chat.sent).toEqual([job.text])
+      const done = terminal(events)
+      expect(done.kind).toBe('completed')
+      if (done.kind === 'completed') {
+        // The redesigned page does not tell the language of a code block.
+        expect(done.markdown).toBe(
+          `Done.\n\n### Updated file: \`src/a.ts\`\n\n\`\`\`${kind === 'redesign' ? '' : 'ts'}\nexport const a = 1\n\`\`\``
+        )
+        expect(done.conversationUrl).toBe(document.location.href)
+        if (kind !== 'bare') expect(done.messageId).toMatch(/^msg-/)
+        expect(done.durationMs).toBeGreaterThan(0)
+      }
+    })
+
+    it('does not mistake its own prompt for the reply, even when the reply starts alike', async () => {
+      const job = makeJob({ text: 'Hello' })
+      const { events } = await run(job, { reply: '<p>Hello! How can I help?</p>' })
+      const done = terminal(events)
+      expect(done.kind === 'completed' && done.markdown).toBe('Hello! How can I help?')
+    })
+
+    it('returns only the new reply when the conversation already has history', async () => {
+      const job = makeJob({ newChat: false })
+      const { events } = await run(job, {
+        reply: '<p>New answer.</p>',
+        existing: [
+          { role: 'user', html: 'earlier question', id: 'u1' },
+          { role: 'assistant', html: '<p>Old answer.</p>', id: 'a1' }
+        ]
+      })
+      const done = terminal(events)
+      expect(done.kind === 'completed' && done.markdown).toBe('New answer.')
+    })
+
+    it('waits for a restored conversation to render before taking its snapshot', async () => {
+      history.pushState({}, '', '/c/restored-1')
+      const job = makeJob({ newChat: false })
+      const { events } = await run(
+        job,
+        { reply: '<p>Fresh.</p>' },
+        {
+          setup: () => {
+            setTimeout(() => {
+              document
+                .getElementById('thread')!
+                .insertAdjacentHTML('afterbegin', staleReply(kind))
+            }, 120)
+          }
+        }
       )
-      expect(done.conversationUrl).toBe(document.location.href)
-      if (kind === 'legacy') expect(done.messageId).toMatch(/^msg-/)
-      expect(done.durationMs).toBeGreaterThan(0)
-    }
-  })
-
-  it('does not mistake its own prompt for the reply, even when the reply starts alike', async () => {
-    const job = makeJob({ text: 'Hello' })
-    const { events } = await run(job, { reply: '<p>Hello! How can I help?</p>' })
-    const done = terminal(events)
-    expect(done.kind === 'completed' && done.markdown).toBe('Hello! How can I help?')
-  })
-
-  it('returns only the new reply when the conversation already has history', async () => {
-    const job = makeJob({ newChat: false })
-    const { events } = await run(job, {
-      reply: '<p>New answer.</p>',
-      existing: [
-        { role: 'user', html: 'earlier question', id: 'u1' },
-        { role: 'assistant', html: '<p>Old answer.</p>', id: 'a1' }
-      ]
+      const done = terminal(events)
+      expect(done.kind === 'completed' && done.markdown).toBe('Fresh.')
     })
-    const done = terminal(events)
-    expect(done.kind === 'completed' && done.markdown).toBe('New answer.')
-  })
 
-  it('waits for a restored conversation to render before taking its snapshot', async () => {
-    history.pushState({}, '', '/c/restored-1')
-    const job = makeJob({ newChat: false })
-    const { events } = await run(
-      job,
-      { reply: '<p>Fresh.</p>' },
-      {
-        setup: () => {
-          setTimeout(() => {
-            document
-              .getElementById('thread')!
-              .insertAdjacentHTML('afterbegin', staleReply(kind))
-          }, 120)
+    it('keeps going through a "Continue generating" prompt', async () => {
+      const { events } = await run(makeJob(), {
+        reply: '<p>Part one. Part two.</p>',
+        continueButton: true
+      })
+      const done = terminal(events)
+      expect(done.kind === 'completed' && done.markdown).toBe('Part one. Part two.')
+    })
+
+    it('still completes when the page shows no streaming indicators (degraded detection)', async () => {
+      const { events } = await run(makeJob(), {
+        reply: '<p>No stop button here.</p>',
+        streamingIndicators: false
+      })
+      const done = terminal(events)
+      expect(done.kind === 'completed' && done.markdown).toBe('No stop button here.')
+      expect(kinds(events)).not.toContain('progress:generating')
+    })
+
+    it('completes even when a "streaming" hint never clears after the reply is done', async () => {
+      const { events } = await run(makeJob(), {
+        reply: '<p>Finished.</p>',
+        stuckTurnState: 'streaming'
+      })
+      const done = terminal(events)
+      expect(done.kind === 'completed' && done.markdown).toBe('Finished.')
+    })
+
+    it('sends with the Enter key when the send button does nothing', async () => {
+      const { events, chat } = await run(makeJob(), {
+        flakyButton: true,
+        reply: '<p>ok</p>'
+      })
+      expect(terminal(events).kind).toBe('completed')
+      expect(chat.sent).toHaveLength(1)
+    })
+
+    it('waits for the user to send when autoSubmit is off', async () => {
+      const job = makeJob({ autoSubmit: false })
+      const { events, chat } = await run(
+        job,
+        { reply: '<p>manual</p>' },
+        {
+          setup: (c) => {
+            // The user reviews the filled prompt for a moment and then presses send.
+            setTimeout(() => c.submit(), 200)
+          }
         }
-      }
-    )
-    const done = terminal(events)
-    expect(done.kind === 'completed' && done.markdown).toBe('Fresh.')
-  })
-
-  it('keeps going through a "Continue generating" prompt', async () => {
-    const { events } = await run(makeJob(), {
-      reply: '<p>Part one. Part two.</p>',
-      continueButton: true
+      )
+      expect(kinds(events).slice(0, 3)).toEqual([
+        'progress:tab-ready',
+        'progress:filled',
+        'progress:submitted'
+      ])
+      expect(terminal(events).kind).toBe('completed')
+      expect(chat.sent).toEqual([job.text])
     })
-    const done = terminal(events)
-    expect(done.kind === 'completed' && done.markdown).toBe('Part one. Part two.')
-  })
+  }
+)
 
-  it('still completes when the page shows no streaming indicators (degraded detection)', async () => {
-    const { events } = await run(makeJob(), {
-      reply: '<p>No stop button here.</p>',
-      streamingIndicators: false
-    })
-    const done = terminal(events)
-    expect(done.kind === 'completed' && done.markdown).toBe('No stop button here.')
-    expect(kinds(events)).not.toContain('progress:generating')
-  })
-
-  it('completes even when a "streaming" hint never clears after the reply is done', async () => {
-    const { events } = await run(makeJob(), {
-      reply: '<p>Finished.</p>',
-      stuckTurnState: 'streaming'
-    })
-    const done = terminal(events)
-    expect(done.kind === 'completed' && done.markdown).toBe('Finished.')
-  })
-
-  it('sends with the Enter key when the send button does nothing', async () => {
-    const { events, chat } = await run(makeJob(), {
-      flakyButton: true,
-      reply: '<p>ok</p>'
-    })
-    expect(terminal(events).kind).toBe('completed')
-    expect(chat.sent).toHaveLength(1)
-  })
-
-  it('waits for the user to send when autoSubmit is off', async () => {
-    const job = makeJob({ autoSubmit: false })
-    const { events, chat } = await run(
-      job,
-      { reply: '<p>manual</p>' },
-      {
-        setup: (c) => {
-          // The user reviews the filled prompt for a moment and then presses send.
-          setTimeout(() => c.submit(), 200)
-        }
-      }
-    )
-    expect(kinds(events).slice(0, 3)).toEqual([
-      'progress:tab-ready',
-      'progress:filled',
-      'progress:submitted'
-    ])
-    expect(terminal(events).kind).toBe('completed')
-    expect(chat.sent).toEqual([job.text])
-  })
-})
-
-describe.each(['legacy', 'redesign'] as const)('failures (%s page)', (kind) => {
+describe.each(['legacy', 'redesign', 'bare'] as const)('failures (%s page)', (kind) => {
   beforeEach(() => {
     layout = kind
   })
@@ -312,6 +331,7 @@ describe('robustness against a page that is not quite what we expect', () => {
   })
 
   it('reports an answer without readable text instead of completing with an empty reply', async () => {
+    layout = 'bare' // a turn the page marks only by its state: the whole turn is converted
     const { events } = await run(makeJob(), {
       reply: '<span class="sr-only">only for screen readers</span>'
     })

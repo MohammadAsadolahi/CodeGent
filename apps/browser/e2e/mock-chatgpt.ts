@@ -65,7 +65,7 @@ export interface ReplyPlan {
 }
 
 /** Which generation of the ChatGPT page the mock imitates (see test/fixtures/chatgpt-dom.ts). */
-export type MockLayout = 'legacy' | 'redesign'
+export type MockLayout = 'legacy' | 'redesign' | 'bare'
 
 export class MockChatGpt {
   readonly sent: string[] = []

@@ -6,8 +6,8 @@
  * fence long enough that the code can never close it) and plain lines. Reading the DOM instead
  * of the clipboard needs no user gesture and no clipboard permission.
  */
-import { normalizeSpace } from './dom-utils'
-import { ASSISTANT_MESSAGE } from './selectors'
+import { hasReadableText, normalizeSpace } from './dom-utils'
+import { ASSISTANT_MESSAGE, outermost } from './selectors'
 
 const BLOCK_TAGS = new Set([
   'address',
@@ -159,6 +159,89 @@ function extractCode(pre: Element): { language: string; code: string } {
   return { language, code }
 }
 
+/** Elements inside which a `<code>` is a word of a sentence, not a block of code. */
+const SENTENCE_CONTEXT = new Set([
+  'p',
+  'li',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'td',
+  'th',
+  'a',
+  'strong',
+  'b',
+  'em',
+  'i',
+  'del',
+  's',
+  'strike',
+  'summary',
+  'label',
+  'button',
+  'figcaption'
+])
+
+/**
+ * A `<code>` that is a block of code rather than a word in a sentence. The page used to put every
+ * block in a `<pre>`; now a block is a labelled container around a bare `<code>`. Such a code
+ * element spans several lines, or stands alone outside any sentence (a one-line file is still a
+ * block). Inline code has sentence context or text beside it.
+ */
+const isBlockCode = (code: Element): boolean => {
+  if ((code.textContent ?? '').includes('\n')) return true
+  for (let parent = code.parentElement; parent; parent = parent.parentElement) {
+    if (SENTENCE_CONTEXT.has(parent.localName)) return false
+  }
+  const beside = Array.from(code.parentElement?.childNodes ?? []).some((node) =>
+    node === code
+      ? false
+      : node.nodeType === Node.TEXT_NODE
+        ? (node.textContent ?? '').trim() !== ''
+        : node.nodeType === Node.ELEMENT_NODE && hasReadableText(node as Element)
+  )
+  return !beside
+}
+
+const holdsBlockCode = (el: Element): boolean =>
+  Array.from(el.querySelectorAll('code')).some(isBlockCode)
+
+const CODE_LABEL = /^[\w+#.\- ]{1,32}$/
+
+/** The text of `el` without its buttons and icons. */
+const labelOf = (el: Element): string => {
+  const clone = el.cloneNode(true) as Element
+  for (const chrome of Array.from(clone.querySelectorAll('button, svg'))) chrome.remove()
+  return normalizeSpace(clone.textContent ?? '')
+}
+
+/**
+ * The strip above a block of code that names its language beside a Copy button. It is page
+ * chrome, not part of the reply, so it must not show up as a line of prose.
+ */
+const isCodeHeader = (el: Element): boolean => {
+  const next = el.nextElementSibling
+  return (
+    next !== null &&
+    !SENTENCE_CONTEXT.has(el.localName) &&
+    el.querySelector('button') !== null &&
+    el.querySelector('code') === null &&
+    CODE_LABEL.test(labelOf(el)) &&
+    (next.localName === 'code' ? isBlockCode(next) : holdsBlockCode(next))
+  )
+}
+
+function renderCodeElement(code: Element): string {
+  const language = code.className.toString().match(/(?:^|\s)language-([^\s]+)/)?.[1] ?? ''
+  let text = (code.textContent ?? '').replace(/\r\n/g, '\n')
+  if (text.endsWith('\n')) text = text.slice(0, -1)
+  const fence = '`'.repeat(Math.max(3, longestBacktickRun(text) + 1))
+  return `${fence}${language}\n${text}\n${fence}`
+}
+
 function renderPre(pre: Element): string {
   const { language, code } = extractCode(pre)
   const fence = '`'.repeat(Math.max(3, longestBacktickRun(code) + 1))
@@ -250,13 +333,20 @@ function renderBlocks(parent: Node): string[] {
     }
     if (child.nodeType !== Node.ELEMENT_NODE) continue
     const el = child as Element
-    if (SKIPPED_TAGS.has(el.localName)) continue
+    if (SKIPPED_TAGS.has(el.localName) || isCodeHeader(el)) continue
     if (isKatex(el) && isDisplayMath(el)) {
       flush()
       blocks.push(`$$\n${texOf(el)}\n$$`)
+    } else if (el.localName === 'code' && isBlockCode(el)) {
+      flush()
+      blocks.push(renderCodeElement(el))
     } else if (BLOCK_TAGS.has(el.localName)) {
       flush()
       blocks.push(...renderBlockElement(el))
+    } else if (holdsBlockCode(el)) {
+      // An inline wrapper (a span, a link …) around a block of code: look inside it.
+      flush()
+      blocks.push(...renderBlocks(el))
     } else {
       inline = append(inline, renderInline(el))
     }
@@ -270,26 +360,35 @@ export const elementToMarkdown = (root: Element): string =>
 
 /**
  * A copy of `element` without what a reader never sees: screen-reader-only labels ("ChatGPT
- * said:"), hidden elements and decorative icons. Used when a whole conversation turn has to be
- * converted because the page marks neither its message nor its body.
+ * said:"), hidden elements, decorative icons and the parts the page itself leaves out when it
+ * copies a message. Used when a message has to be converted whose body the page does not mark.
  */
 const withoutChrome = (element: Element): Element => {
   const clone = element.cloneNode(true) as Element
   for (const hidden of Array.from(
-    clone.querySelectorAll('.sr-only, [hidden], [aria-hidden="true"]')
+    clone.querySelectorAll(
+      '.sr-only, [hidden], [aria-hidden="true"], [data-conversation-role], [data-markdown-copy="exclude"]'
+    )
   ))
     hidden.remove()
   return clone
 }
 
-/** The parts of `element` that hold the reply text: marked message bodies, or the element itself. */
+/**
+ * The parts of `element` that hold the reply text, from most to least specific: the body the page
+ * marks as markdown (`.markdown`, or the element the page copies from — `data-markdown-copy`),
+ * else the message with its chrome removed.
+ */
 const replyBodies = (element: Element): Element[] => {
   const messages = element.matches(ASSISTANT_MESSAGE)
     ? [element]
     : Array.from(element.querySelectorAll(ASSISTANT_MESSAGE))
   return (messages.length > 0 ? messages : [element]).flatMap((message) => {
-    const bodies = Array.from(message.querySelectorAll('.markdown'))
-    return bodies.length > 0 ? bodies : [withoutChrome(message)]
+    for (const marker of ['.markdown', '[data-markdown-copy="contents"]']) {
+      const bodies = outermost(Array.from(message.querySelectorAll(marker)))
+      if (bodies.length > 0) return bodies
+    }
+    return [withoutChrome(message)]
   })
 }
 

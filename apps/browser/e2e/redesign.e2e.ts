@@ -35,7 +35,7 @@ const REPLY = [
   '',
   '### Updated file: `src/greeting.ts`',
   '',
-  '```ts',
+  '```',
   '<<<<<<< SEARCH',
   'export const greet = () => "hi"',
   '=======',
@@ -52,7 +52,7 @@ describe('the redesigned ChatGPT page', () => {
     const prompt = [
       'Task: add a greeting.',
       '',
-      '```ts',
+      '```',
       'const x = 1',
       '```',
       '',

@@ -20,10 +20,15 @@ import {
   type FillStrategyName
 } from '../../src/content/fill'
 import {
-  STOP_ICON_PATH,
+  EXCHANGE_BODY,
+  SEND_ICON,
+  STOP_ICON,
+  bareAssistantTurn,
+  bareUserTurn,
   escapeHtml,
-  redesignAssistantTurn,
-  redesignUserTurn
+  exchangeAssistantParts,
+  exchangeFooter,
+  exchangeHtml
 } from '../../test/fixtures/chatgpt-dom'
 import { renderMarkdown } from './render'
 
@@ -54,8 +59,13 @@ const call = async <T>(path: string, body?: unknown): Promise<T> => {
 
 const state = {
   loggedOut: false,
-  /** 'legacy': test ids and per-message roles. 'redesign': the page since October 2026. */
-  layout: 'legacy' as 'legacy' | 'redesign',
+  /**
+   * 'legacy': test ids and per-message roles. 'redesign': the page captured on 2026-10-18, one
+   * container per exchange. 'bare': an invented minimal page for the generic fallback.
+   */
+  layout: 'legacy' as 'legacy' | 'redesign' | 'bare',
+  /** Exchanges drawn so far (the redesigned page numbers them). */
+  exchanges: 0,
   thread: [] as Turn[],
   conversationId: null as string | null,
   generating: false
@@ -100,14 +110,21 @@ view.dom.id = 'prompt-textarea'
 
 function renderActions(): void {
   const hasText = composerText(view).trim() !== ''
-  if (state.layout === 'redesign') {
-    // One button that is "send" when idle and "stop" while a reply streams; no test ids.
-    const path = state.generating ? STOP_ICON_PATH : 'M10 4l5 6h-4v6H9v-6H5z'
+  if (state.layout !== 'legacy') {
+    // One button that is "send" when idle and "stop" while a reply streams. The captured page
+    // labels it "Send" and shows only a square icon while streaming; the invented one also relabels.
+    const bare = state.layout === 'bare'
+    const label = state.generating
+      ? bare
+        ? ' aria-label="Stop generating"'
+        : ''
+      : ` aria-label="${bare ? 'Send message' : 'Send'}"`
+    const extra = bare
+      ? ' data-composer-submit data-send-label="Send message" data-stop-label="Stop generating"'
+      : ''
     actionsEl.innerHTML =
-      `<button type="submit" data-composer-submit data-send-label="Send message" data-stop-label="Stop generating" ` +
-      `aria-label="${state.generating ? 'Stop generating' : 'Send message'}"` +
-      `${state.generating || hasText ? '' : ' aria-disabled="true"'}>` +
-      `<svg viewBox="0 0 20 20"><path d="${path}"/></svg></button>`
+      `<button type="submit"${extra}${label}${state.generating || hasText ? '' : ' disabled'}>` +
+      `${state.generating ? STOP_ICON : SEND_ICON}</button>`
     actionsEl.querySelector('button')!.addEventListener('click', (event) => {
       event.preventDefault()
       if (state.generating) {
@@ -142,11 +159,11 @@ const turnHtml = (
   streamingState?: 'streaming' | 'complete',
   partial?: string
 ): string => {
-  if (state.layout === 'redesign') {
+  if (state.layout === 'bare') {
     return turn.role === 'user'
-      ? redesignUserTurn(turn.text)
-      : redesignAssistantTurn(
-          renderMarkdown(partial ?? turn.text),
+      ? bareUserTurn(turn.text)
+      : bareAssistantTurn(
+          renderMarkdown(partial ?? turn.text, style()),
           streamingState ?? 'complete'
         )
   }
@@ -159,9 +176,34 @@ const turnHtml = (
   return (
     `<section data-testid="conversation-turn" data-turn="assistant" data-talvt-turn-state="${streamingState ?? 'complete'}">` +
     `<div data-message-author-role="assistant" data-message-id="${turn.id}"><div class="flex w-full flex-col gap-1">` +
-    `<div class="markdown prose">${renderMarkdown(partial ?? turn.text)}</div></div></div></section>`
+    `<div class="markdown prose">${renderMarkdown(partial ?? turn.text, style())}</div></div></div></section>`
   )
 }
+
+/** The redesigned page draws a user message and the reply to it as one container. */
+const exchangesHtml = (thread: Turn[]): string => {
+  const parts: string[] = []
+  for (let i = 0; i < thread.length; i++) {
+    const user = thread[i]!
+    const reply = thread[i + 1]?.role === 'assistant' ? thread[i + 1] : undefined
+    state.exchanges += 1
+    parts.push(
+      exchangeHtml({
+        n: state.exchanges,
+        state: 'complete',
+        user: user.text,
+        assistant: reply
+          ? { id: reply.id, html: renderMarkdown(reply.text, style()) }
+          : undefined
+      })
+    )
+    if (reply) i += 1
+  }
+  return parts.join('')
+}
+
+/** The redesigned page draws code blocks without `<pre>`. */
+const style = (): 'pre' | 'bare' => (state.layout === 'redesign' ? 'bare' : 'pre')
 
 const saveThread = (): void => {
   if (state.conversationId)
@@ -180,7 +222,15 @@ function submit(): void {
   }
   const user: Turn = { role: 'user', text, id: `user-${uid()}` }
   state.thread.push(user)
-  threadEl.insertAdjacentHTML('beforeend', turnHtml(user))
+  if (state.layout === 'redesign') {
+    state.exchanges += 1
+    threadEl.insertAdjacentHTML(
+      'beforeend',
+      exchangeHtml({ n: state.exchanges, state: 'streaming', user: text })
+    )
+  } else {
+    threadEl.insertAdjacentHTML('beforeend', turnHtml(user))
+  }
   void streamAnswer()
 }
 
@@ -192,15 +242,25 @@ async function streamAnswer(): Promise<void> {
 
   await sleep(60)
   if (!state.generating) return // stopped before the first token
-  threadEl.insertAdjacentHTML('beforeend', turnHtml(turn, 'streaming', ''))
+  if (state.layout === 'redesign') {
+    threadEl.lastElementChild!.insertAdjacentHTML(
+      'beforeend',
+      exchangeAssistantParts(state.exchanges, turn.id, '')
+    )
+  } else {
+    threadEl.insertAdjacentHTML('beforeend', turnHtml(turn, 'streaming', ''))
+  }
   const section = threadEl.lastElementChild as HTMLElement
-  const body = section.querySelector('.markdown, [data-body]') as HTMLElement
+  const body = section.querySelector(
+    `.markdown, [data-body], ${EXCHANGE_BODY}`
+  ) as HTMLElement
 
   const lines = plan.markdown.split('\n')
   for (let step = 1; step <= plan.chunks; step++) {
     if (!state.generating) return
     body.innerHTML = renderMarkdown(
-      lines.slice(0, Math.ceil((lines.length * step) / plan.chunks)).join('\n')
+      lines.slice(0, Math.ceil((lines.length * step) / plan.chunks)).join('\n'),
+      style()
     )
     await sleep(plan.chunkMs)
   }
@@ -209,8 +269,10 @@ async function streamAnswer(): Promise<void> {
     await sleep(100)
   }
   if (!state.generating) return
-  body.innerHTML = renderMarkdown(plan.markdown)
+  body.innerHTML = renderMarkdown(plan.markdown, style())
   section.setAttribute('data-talvt-turn-state', 'complete')
+  if (state.layout === 'redesign')
+    section.insertAdjacentHTML('beforeend', exchangeFooter())
   state.thread.push(turn)
   saveThread()
   state.generating = false
@@ -220,7 +282,7 @@ async function streamAnswer(): Promise<void> {
 function renderAuth(): void {
   authEl.innerHTML = !state.loggedOut
     ? ''
-    : state.layout === 'redesign'
+    : state.layout !== 'legacy'
       ? '<button>Log in</button><button>Sign up for free</button>'
       : '<button data-testid="login-button">Log in</button><button data-testid="signup-button">Sign up</button>'
 }
@@ -233,16 +295,19 @@ if (reopened) {
   if (saved) {
     state.thread = JSON.parse(saved) as Turn[]
     setTimeout(() => {
-      threadEl.innerHTML = state.thread.map((t) => turnHtml(t)).join('')
+      threadEl.innerHTML =
+        state.layout === 'redesign'
+          ? exchangesHtml(state.thread)
+          : state.thread.map((t) => turnHtml(t)).join('')
     }, 350)
   }
 }
 
-void call<{ loggedOut: boolean; layout: 'legacy' | 'redesign' }>('config').then(
+void call<{ loggedOut: boolean; layout: typeof state.layout }>('config').then(
   (config) => {
     state.loggedOut = config.loggedOut
     state.layout = config.layout
-    if (state.layout === 'redesign') view.dom.removeAttribute('id') // no #prompt-textarea any more
+    if (state.layout !== 'legacy') view.dom.removeAttribute('id') // no #prompt-textarea any more
     renderAuth()
     renderActions()
   }

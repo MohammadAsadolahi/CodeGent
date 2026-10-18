@@ -37,8 +37,15 @@ export const STOP_BUTTON_SELECTORS = [
 /** The square "stop" glyph, used when the button has neither a test id nor a label. */
 const STOP_ICON_PATH = 'path[d^="M4.5 5.75C4.5 5.05964"]'
 
-export const ASSISTANT_MESSAGE = '[data-message-author-role="assistant"]'
-export const USER_MESSAGE = '[data-message-author-role="user"]'
+/**
+ * One message of the conversation. The page used to mark each message with its author; since the
+ * October 2026 redesign a turn is one container holding the user's message, the assistant's and a
+ * row of action buttons, and each message is a "search unit" whose key ends in its author.
+ */
+export const ASSISTANT_MESSAGE =
+  '[data-message-author-role="assistant"], [data-content-search-unit-key$=":assistant"]'
+export const USER_MESSAGE =
+  '[data-message-author-role="user"], [data-content-search-unit-key$=":user"]'
 
 /**
  * What a conversation turn looks like. Listed from the newest markup to the oldest; a turn is
@@ -139,14 +146,34 @@ export const findStopButton = (doc: Document): Located<HTMLElement> | null => {
   return null
 }
 
+/** The elements of `elements` that are not inside another one of them (so nothing is counted twice). */
+export const outermost = <T extends Element>(elements: readonly T[]): T[] => {
+  const all = new Set<Element>(elements)
+  return elements.filter((element) => {
+    for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+      if (all.has(parent)) return false
+    }
+    return true
+  })
+}
+
 export const listAssistantMessages = (doc: Document): HTMLElement[] =>
-  Array.from(doc.querySelectorAll<HTMLElement>(ASSISTANT_MESSAGE))
+  outermost(Array.from(doc.querySelectorAll<HTMLElement>(ASSISTANT_MESSAGE)))
 
 export const listUserMessages = (doc: Document): HTMLElement[] =>
-  Array.from(doc.querySelectorAll<HTMLElement>(USER_MESSAGE))
+  outermost(Array.from(doc.querySelectorAll<HTMLElement>(USER_MESSAGE)))
 
-export const messageId = (element: Element): string | undefined =>
-  element.getAttribute('data-message-id') ?? undefined
+/** A stable identity for a message when the page provides one. */
+export const messageId = (element: Element): string | undefined => {
+  const id =
+    element.getAttribute('data-message-id') ??
+    element
+      .querySelector('[data-chatgpt-selection-message-id]')
+      ?.getAttribute('data-chatgpt-selection-message-id') ??
+    element.getAttribute('data-chatgpt-search-message-ids')?.split(/\s+/)[0] ??
+    element.getAttribute('data-content-search-unit-key')
+  return id || undefined
+}
 
 // ── conversation turns ───────────────────────────────────────────────────────────────────────
 /** The conversation turns in document order (outermost match only, so nothing is counted twice). */
@@ -156,13 +183,7 @@ export const listTurns = (doc: Document): HTMLElement[] => {
   let found = scope ? Array.from(scope.querySelectorAll<HTMLElement>(selector)) : []
   if (found.length === 0 && doc.body)
     found = Array.from(doc.body.querySelectorAll<HTMLElement>(selector))
-  const all = new Set(found)
-  return found.filter((element) => {
-    for (let parent = element.parentElement; parent; parent = parent.parentElement) {
-      if (all.has(parent)) return false
-    }
-    return true
-  })
+  return outermost(found)
 }
 
 /** 'user' / 'assistant' when the turn says so (on itself or on the message inside it). */

@@ -1,16 +1,27 @@
 import {
-  STOP_ICON_PATH,
+  EXCHANGE_BODY,
+  SEND_ICON,
+  STOP_ICON,
   assistantMessage,
+  bareAssistantTurn,
+  bareUserTurn,
   escapeHtml,
-  redesignAssistantTurn,
-  redesignUserTurn,
+  exchangeAssistantParts,
+  exchangeFooter,
+  exchangeHtml,
   userMessage
 } from './chatgpt-dom'
 
-export type ChatLayout = 'legacy' | 'redesign'
+/**
+ * Which generation of the ChatGPT page to imitate:
+ * - `legacy`: test ids and an author attribute on every message
+ * - `redesign`: the page captured on 2026-10-18 — one container per exchange, one send/stop button
+ * - `bare`: an invented minimal page (turns marked only by a state attribute) that tests the
+ *   generic fallback
+ */
+export type ChatLayout = 'legacy' | 'redesign' | 'bare'
 
 export interface FakeChatOptions {
-  /** Which generation of the ChatGPT page to imitate (default: the one with test ids and roles). */
   layout?: ChatLayout
   /** HTML placed inside the assistant's reply body. */
   reply?: string
@@ -31,17 +42,15 @@ export interface FakeChatOptions {
   silent?: boolean
   /** Keep the turn-state attribute at this value after the reply (a marker that never clears). */
   stuckTurnState?: string
-  /** Show the reply in markup the extension cannot recognise as a conversation turn. */
+  /** Show the reply in markup the extension cannot recognise as part of the conversation. */
   unmarkedReply?: boolean
 }
 
-const BODY = '.markdown, [data-body]'
+const BODY = '.markdown, [data-body], [data-markdown-copy="contents"]'
 
 /**
  * A stand-in for the ChatGPT page: a contenteditable composer whose send button enables on input,
- * a conversation list, and a reply that streams in behind a stop button. The `redesign` layout
- * follows the page as it looks since October 2026: a single send/stop button, no test ids, no
- * author attributes on messages.
+ * a conversation list, and a reply that streams in behind a stop button.
  */
 export class FakeChat {
   readonly sent: string[] = []
@@ -51,6 +60,7 @@ export class FakeChat {
   private readonly layout: ChatLayout
   private stopButton: HTMLButtonElement | null = null
   private stopMode = false
+  private exchanges = 0
   private timers: ReturnType<typeof setTimeout>[] = []
   stopClicks = 0
 
@@ -64,31 +74,34 @@ export class FakeChat {
         ? '<header><button data-testid="login-button">Log in</button></header>'
         : '<header><button>Log in</button><button>Sign up for free</button></header>'
       : '<header></header>'
-    doc.body.innerHTML =
-      this.layout === 'legacy'
-        ? header +
-          '<main><div id="thread"></div><form id="composer-form">' +
-          '<div id="prompt-textarea" class="ProseMirror" contenteditable="true"></div>' +
-          '<button data-testid="send-button" aria-label="Send prompt" disabled>Send</button></form></main>'
-        : header +
-          '<main><div id="thread"></div>' +
-          '<form id="composer-form"><div contenteditable="true" role="textbox"></div>' +
-          '<div data-composer-trailing><button type="submit" data-composer-submit aria-disabled="true" ' +
-          'aria-label="Send message" data-send-label="Send message" data-stop-label="Stop generating">' +
-          '<svg viewBox="0 0 20 20"><path d="M10 4l5 6h-4v6H9v-6H5z"/></svg></button></div></form></main>'
+    const composer = {
+      legacy:
+        '<form id="composer-form">' +
+        '<div id="prompt-textarea" class="ProseMirror" contenteditable="true"></div>' +
+        '<button data-testid="send-button" aria-label="Send prompt" disabled>Send</button></form>',
+      // The send button of the captured page: a submit button labelled "Send", no data attributes.
+      redesign:
+        '<form id="composer-form" data-composer-placement="thread" data-chatgpt-composer="">' +
+        '<div class="ProseMirror" contenteditable="true"></div>' +
+        `<button type="submit" aria-label="Send" disabled>${SEND_ICON}</button></form>`,
+      bare:
+        '<form id="composer-form"><div contenteditable="true" role="textbox"></div>' +
+        '<div data-composer-trailing><button type="submit" data-composer-submit aria-disabled="true" ' +
+        'aria-label="Send message" data-send-label="Send message" data-stop-label="Stop generating">' +
+        `${SEND_ICON}</button></div></form>`
+    }[this.layout]
+    doc.body.innerHTML = `${header}<main><div id="thread"></div>${composer}</main>`
     this.list = doc.getElementById('thread')!
     this.composer = doc.querySelector('[contenteditable="true"]')!
     this.sendButton = doc.querySelector(
-      this.layout === 'legacy' ? '[data-testid="send-button"]' : 'button[data-composer-submit]'
+      this.layout === 'legacy'
+        ? '[data-testid="send-button"]'
+        : 'form button[type="submit"]'
     )!
 
     for (const item of options.existing ?? []) {
-      this.list.insertAdjacentHTML(
-        'beforeend',
-        item.role === 'user'
-          ? this.userHtml(item.html, item.id)
-          : this.assistantHtml(item.html, { id: item.id, turnState: 'complete' })
-      )
+      if (item.role === 'user') this.addUser(item.html, 'complete', item.id)
+      else this.addAssistant(item.html, { id: item.id, state: 'complete' })
     }
 
     this.composer.addEventListener('input', () => this.syncButton())
@@ -98,29 +111,87 @@ export class FakeChat {
       if (!this.options.flakyButton) this.submit()
     })
     this.composer.addEventListener('keydown', (event) => {
-      if ((event as KeyboardEvent).key === 'Enter' && this.options.enterSubmits !== false) {
+      if (
+        (event as KeyboardEvent).key === 'Enter' &&
+        this.options.enterSubmits !== false
+      ) {
         event.preventDefault()
         this.submit()
       }
     })
   }
 
-  private userHtml(text: string, id?: string): string {
-    return this.layout === 'legacy' ? userMessage(text, id) : redesignUserTurn(text)
+  // ── building the conversation ────────────────────────────────────────────────────────────────
+  private addUser(text: string, state: string, id?: string): void {
+    if (this.layout === 'legacy') {
+      this.list.insertAdjacentHTML('beforeend', userMessage(text, id))
+    } else if (this.layout === 'bare') {
+      this.list.insertAdjacentHTML('beforeend', bareUserTurn(text))
+    } else {
+      this.exchanges += 1
+      this.list.insertAdjacentHTML(
+        'beforeend',
+        exchangeHtml({ n: this.exchanges, state, user: text })
+      )
+    }
   }
 
-  private assistantHtml(html: string, options: { id?: string; turnState?: string }): string {
-    return this.layout === 'legacy'
-      ? assistantMessage(html, options)
-      : redesignAssistantTurn(html, options.turnState)
+  /** Adds the assistant's message; returns the element that holds the turn and the reply body. */
+  private addAssistant(
+    html: string,
+    options: { id?: string; state?: string }
+  ): { turn: HTMLElement; body: HTMLElement } {
+    const id = options.id ?? 'msg-' + Math.random().toString(36).slice(2, 10)
+    if (this.options.unmarkedReply) {
+      this.list.insertAdjacentHTML(
+        'beforeend',
+        '<div class="mystery"><div data-body></div></div>'
+      )
+    } else if (this.layout === 'legacy') {
+      this.list.insertAdjacentHTML(
+        'beforeend',
+        assistantMessage(html, { id, turnState: options.state })
+      )
+    } else if (this.layout === 'bare') {
+      this.list.insertAdjacentHTML('beforeend', bareAssistantTurn(html, options.state))
+    } else {
+      let turn = this.list.lastElementChild as HTMLElement | null
+      if (
+        !turn?.hasAttribute('data-talvt-turn-state') ||
+        turn.querySelector(EXCHANGE_BODY)
+      ) {
+        this.exchanges += 1
+        this.list.insertAdjacentHTML(
+          'beforeend',
+          exchangeHtml({ n: this.exchanges, state: options.state ?? 'complete' })
+        )
+        turn = this.list.lastElementChild as HTMLElement
+      }
+      turn.insertAdjacentHTML(
+        'beforeend',
+        exchangeAssistantParts(this.exchanges, id, html)
+      )
+      if (options.state) turn.setAttribute('data-talvt-turn-state', options.state)
+      if (options.state === 'complete')
+        turn.insertAdjacentHTML('beforeend', exchangeFooter())
+    }
+    const turn = this.list.lastElementChild as HTMLElement
+    return { turn, body: turn.querySelector(BODY) as HTMLElement }
+  }
+
+  private completeTurn(turn: HTMLElement): void {
+    turn.setAttribute('data-talvt-turn-state', this.options.stuckTurnState ?? 'complete')
+    if (this.layout === 'redesign') turn.insertAdjacentHTML('beforeend', exchangeFooter())
   }
 
   private syncButton(): void {
     const empty = (this.composer.textContent ?? '').trim() === ''
-    if (this.layout === 'legacy') this.sendButton.disabled = empty
-    else this.sendButton.setAttribute('aria-disabled', String(empty))
+    if (this.layout === 'bare')
+      this.sendButton.setAttribute('aria-disabled', String(empty))
+    else this.sendButton.disabled = empty
   }
 
+  // ── what the user and the page do ────────────────────────────────────────────────────────────
   /** What a user pressing "send" does. */
   submit(): void {
     if (this.stopMode) return
@@ -129,7 +200,10 @@ export class FakeChat {
     this.sent.push(text)
     this.composer.textContent = ''
     this.syncButton()
-    this.list.insertAdjacentHTML('beforeend', this.userHtml(text))
+    this.addUser(
+      text,
+      this.options.streamingIndicators === false ? 'complete' : 'streaming'
+    )
     if (this.options.silent) {
       this.showStop()
       return
@@ -149,12 +223,16 @@ export class FakeChat {
 
   private showStop(): void {
     if (this.options.streamingIndicators === false) return
-    if (this.layout === 'redesign') {
-      // The one button turns into the stop button: new label, square icon.
+    if (this.layout !== 'legacy') {
+      // The one button turns into the stop button. The captured page shows only a square icon;
+      // the invented page also changes the label.
       this.stopMode = true
-      this.sendButton.setAttribute('aria-label', 'Stop generating')
+      this.sendButton.disabled = false
       this.sendButton.removeAttribute('aria-disabled')
-      this.sendButton.innerHTML = `<svg viewBox="0 0 20 20"><path d="${STOP_ICON_PATH}"/></svg>`
+      if (this.layout === 'bare')
+        this.sendButton.setAttribute('aria-label', 'Stop generating')
+      else this.sendButton.removeAttribute('aria-label')
+      this.sendButton.innerHTML = STOP_ICON
       return
     }
     this.stopButton = this.doc.createElement('button')
@@ -167,11 +245,14 @@ export class FakeChat {
   }
 
   private hideStop(): void {
-    if (this.layout === 'redesign') {
+    if (this.layout !== 'legacy') {
       if (!this.stopMode) return
       this.stopMode = false
-      this.sendButton.setAttribute('aria-label', 'Send message')
-      this.sendButton.innerHTML = '<svg viewBox="0 0 20 20"><path d="M10 4l5 6h-4v6H9v-6H5z"/></svg>'
+      this.sendButton.setAttribute(
+        'aria-label',
+        this.layout === 'bare' ? 'Send message' : 'Send'
+      )
+      this.sendButton.innerHTML = SEND_ICON
       this.syncButton()
       return
     }
@@ -191,38 +272,19 @@ export class FakeChat {
     const reply = this.options.reply ?? '<p>OK</p>'
     const chunks = Math.max(1, this.options.streamChunks ?? 3)
     const chunkMs = this.options.chunkMs ?? 15
-    const id =
-      'msg-' +
-      (this.list.querySelectorAll(BODY).length + 1) +
-      '-' +
-      Math.random().toString(36).slice(2, 7)
-
-    this.list.insertAdjacentHTML(
-      'beforeend',
-      this.options.unmarkedReply
-        ? '<div class="mystery"><div data-body></div></div>'
-        : this.assistantHtml('', {
-            id,
-            // Without streaming indicators a turn is born in its final state (the redesign
-            // always marks turns; the old page recognised them by their role instead).
-            turnState:
-              this.options.streamingIndicators === false
-                ? this.layout === 'redesign'
-                  ? 'complete'
-                  : undefined
-                : 'streaming'
-          })
-    )
-    const turn = this.list.lastElementChild as HTMLElement
-    const body = turn.querySelector(BODY) as HTMLElement
+    const indicators = this.options.streamingIndicators !== false
+    const { turn, body } = this.addAssistant('', {
+      // Without streaming indicators a turn is born in its final state (the new pages always mark
+      // their turns; the old page recognised them by their author instead).
+      state: indicators ? 'streaming' : this.layout === 'legacy' ? undefined : 'complete'
+    })
     this.showStop()
 
     const reveal = (upTo: number) => (body.innerHTML = reply.slice(0, upTo))
     const finish = () => {
       body.innerHTML = reply
       this.hideStop()
-      if (this.options.streamingIndicators !== false && !this.options.unmarkedReply)
-        turn.setAttribute('data-talvt-turn-state', this.options.stuckTurnState ?? 'complete')
+      if (indicators && !this.options.unmarkedReply) this.completeTurn(turn)
     }
 
     for (let i = 1; i <= chunks; i++) {

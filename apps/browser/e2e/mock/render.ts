@@ -1,4 +1,4 @@
-import { codeBlock, escapeHtml } from '../../test/fixtures/chatgpt-dom'
+import { codeBlock, escapeHtml, redesignCodeBlock } from '../../test/fixtures/chatgpt-dom'
 
 const inline = (text: string): string =>
   escapeHtml(text)
@@ -6,7 +6,11 @@ const inline = (text: string): string =>
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
 
 /** A small markdown renderer that emits ChatGPT-like markup (code blocks with header + Copy). */
-export const renderMarkdown = (markdown: string): string => {
+/** `bare` draws code the way the redesigned page does (no `<pre>`), `pre` the way it used to. */
+export const renderMarkdown = (
+  markdown: string,
+  codeStyle: 'pre' | 'bare' = 'pre'
+): string => {
   const lines = markdown.split('\n')
   const out: string[] = []
   let i = 0
@@ -29,7 +33,12 @@ export const renderMarkdown = (markdown: string): string => {
         i++
       }
       i++ // closing fence
-      out.push(codeBlock(fence[2] || 'plaintext', body.join('\n')))
+      const language = fence[2] || 'plaintext'
+      out.push(
+        codeStyle === 'bare'
+          ? redesignCodeBlock(language, body.join('\n'))
+          : codeBlock(language, body.join('\n'))
+      )
       continue
     }
     const heading = /^(#{1,6})\s+(.*)$/.exec(line)

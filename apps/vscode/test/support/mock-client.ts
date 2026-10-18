@@ -42,7 +42,7 @@ export interface MockLog {
   sent: string[]
   stopClicks: number
   loggedOut: boolean
-  layout: 'legacy' | 'redesign'
+  layout: 'legacy' | 'redesign' | 'bare'
   queued: number
 }
 
@@ -61,7 +61,7 @@ export class MockChatGpt {
     await call(this.port, '/__mock/control/set', { loggedOut })
   }
   /** Which generation of the ChatGPT page the pretend site imitates. */
-  async setLayout(layout: 'legacy' | 'redesign'): Promise<void> {
+  async setLayout(layout: 'legacy' | 'redesign' | 'bare'): Promise<void> {
     await call(this.port, '/__mock/control/set', { layout })
   }
   log(): Promise<MockLog> {

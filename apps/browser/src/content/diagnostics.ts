@@ -131,12 +131,15 @@ export const runSelfTest = async (
       messageId(last) !== undefined,
       messageId(last) ?? 'data-message-id missing'
     )
+    const marker = ['.markdown', '[data-markdown-copy="contents"]'].find((selector) =>
+      last.querySelector(selector)
+    )
     check(
       'Reply body',
-      last.querySelector('.markdown') !== null,
-      last.querySelector('.markdown')
-        ? '.markdown found'
-        : 'no .markdown element; falling back to the whole message'
+      marker !== undefined,
+      marker
+        ? `found via ${marker}`
+        : 'no marked body (.markdown / data-markdown-copy); falling back to the whole message'
     )
     check(
       'Code blocks readable',

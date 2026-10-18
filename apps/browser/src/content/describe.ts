@@ -12,6 +12,7 @@ import {
   findSendButton,
   findStopButton,
   listTurns,
+  outermost,
   turnRole,
   turnState,
   visibleOverlayText
@@ -85,7 +86,7 @@ const KEPT_ATTRIBUTES = new Set([
 ])
 
 const outlineOf = (element: Element, depth: number, state: { nodes: number }): string => {
-  if (state.nodes++ > 350) return '…'
+  if (state.nodes++ > 450) return '…'
   const attributes = element
     .getAttributeNames()
     .filter(
@@ -123,6 +124,27 @@ const outlineOf = (element: Element, depth: number, state: { nodes: number }): s
 }
 
 /**
+ * How code is marked up in the last reply: a code block is where a reply stops being plain text,
+ * and the one thing the edit parser cannot do without.
+ */
+const codeSamples = (doc: Document): string[] => {
+  const found = outermost(
+    Array.from(
+      doc.querySelectorAll(
+        'pre, [data-code-block], .cm-editor, [class*="code-block" i], [class*="codeblock" i]'
+      )
+    )
+  )
+  if (found.length === 0) {
+    const inline = Array.from(doc.querySelectorAll('code')).filter((code) =>
+      (code.textContent ?? '').includes('\n')
+    )
+    found.push(...outermost(inline))
+  }
+  return found.slice(-2).map((element) => outlineOf(element, 6, { nodes: 0 }))
+}
+
+/**
  * A readable outline of the message box with its buttons and of the last two turns: tag names,
  * `data-`/`aria-` attributes and the first words of each text node. Meant to be copied from the
  * popup into a bug report when the page layout has changed.
@@ -132,11 +154,14 @@ export const pageOutline = (doc: Document): string => {
   const form =
     composer?.closest('form') ?? composer?.parentElement?.parentElement?.parentElement
   const turns = listTurns(doc)
+  const code = codeSamples(doc)
   return [
     describePage(doc),
     '--- message box area ---',
     form ? outlineOf(form, 7, { nodes: 0 }) : '(message box not found)',
     `--- last two turns (${turns.length} in total) ---`,
-    ...turns.slice(-2).map((turn) => outlineOf(turn, 8, { nodes: 0 }))
+    ...turns.slice(-2).map((turn) => outlineOf(turn, 14, { nodes: 0 })),
+    `--- code blocks (${code.length} shown, last first) ---`,
+    ...code.reverse()
   ].join('\n')
 }

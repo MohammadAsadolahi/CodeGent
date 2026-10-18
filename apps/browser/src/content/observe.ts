@@ -1,6 +1,6 @@
 import type { JobFailureCode } from '@codegent/protocol'
 import { describePage } from './describe'
-import { AbortedError, normalizeSpace, truncate } from './dom-utils'
+import { AbortedError, hasReadableText, normalizeSpace, truncate } from './dom-utils'
 import {
   detectBlockingBanner,
   findContinueButton,
@@ -64,16 +64,41 @@ export const freshAssistantMessages = (
   return all.slice(snapshot.assistantCount)
 }
 
-/** Whether a turn is (a copy of) the prompt we just sent, judged by its first words. */
-const echoesPrompt = (turn: Element, promptText: string): boolean => {
+/**
+ * What a turn contributes to the reply when the page does not mark its messages. A turn may hold
+ * only the assistant's answer, only our prompt, or both (the page wraps one exchange in a single
+ * container): whatever follows our prompt inside it is the answer, and a turn that does not
+ * contain the prompt is taken whole.
+ */
+const replyPartsOf = (turn: HTMLElement, promptText: string): HTMLElement[] => {
   const head = normalizeSpace(promptText).slice(0, 60)
-  return head !== '' && normalizeSpace(turn.textContent ?? '').includes(head)
+  const holds = (element: Element) =>
+    normalizeSpace(element.textContent ?? '').includes(head)
+  if (head === '' || !holds(turn)) return [turn]
+
+  // Walk down to the smallest element that still contains the whole start of our prompt.
+  let prompt: HTMLElement = turn
+  for (;;) {
+    const inner = Array.from(prompt.children).find(holds) as HTMLElement | undefined
+    if (!inner) break
+    prompt = inner
+  }
+  const parts: HTMLElement[] = []
+  for (
+    let node = prompt;
+    node !== turn && node.parentElement;
+    node = node.parentElement
+  ) {
+    for (let next = node.nextElementSibling; next; next = next.nextElementSibling) {
+      if (hasReadableText(next)) parts.push(next as HTMLElement)
+    }
+  }
+  return parts
 }
 
 /**
- * New assistant turns, for pages whose messages carry no author attribute. Turns only ever
- * append during a run, so everything after the ones that existed at send time is new; the first
- * of them is our own prompt unless the page says otherwise.
+ * New assistant output, for pages whose messages carry no author marker. Turns only ever append
+ * during a run, so everything after the ones that existed at send time is new.
  */
 export const freshAssistantTurns = (
   doc: Document,
@@ -90,10 +115,13 @@ export const freshAssistantTurns = (
   const fresh = usable
     ? turns.filter((_, index) => !known.has(keys[index]!))
     : turns.slice(snapshot.turnCount)
-  return fresh.filter((turn, index) => {
+  // Our own message is in the first new turn (alone, or together with the reply); a later turn
+  // is taken whole even if it happens to repeat the first words of the prompt.
+  return fresh.flatMap((turn, index) => {
     const role = turnRole(turn)
-    if (role !== undefined) return role === 'assistant'
-    return !(index === 0 && echoesPrompt(turn, promptText))
+    if (role === 'user') return []
+    if (role === 'assistant' || index > 0) return [turn]
+    return replyPartsOf(turn, promptText)
   })
 }
 
@@ -244,7 +272,6 @@ export const waitForReply = (
         if (
           sawStopButton &&
           !generating &&
-          !hinted &&
           now - lastStopAt > noReplyGraceMs &&
           !visibleOverlayText(doc)
         ) {

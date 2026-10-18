@@ -74,3 +74,30 @@ export const queryVisible = (
 
 export const truncate = (text: string, max: number): string =>
   text.length <= max ? text : `${text.slice(0, max - 1)}…`
+
+const NOT_READ = 'button, svg, script, style, .sr-only, [hidden], [aria-hidden="true"]'
+
+/**
+ * Whether `element` shows any text a reader would read: buttons, icons, screen-reader labels and
+ * hidden parts do not count (so a row of action buttons is not mistaken for a reply).
+ */
+export const hasReadableText = (element: Element): boolean => {
+  if (element.matches(NOT_READ)) return false
+  const walker = element.ownerDocument.createTreeWalker(
+    element,
+    NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+    {
+      acceptNode: (node) => {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          return (node as Element).matches(NOT_READ)
+            ? NodeFilter.FILTER_REJECT
+            : NodeFilter.FILTER_SKIP
+        }
+        return (node.textContent ?? '').trim() === ''
+          ? NodeFilter.FILTER_SKIP
+          : NodeFilter.FILTER_ACCEPT
+      }
+    }
+  )
+  return walker.nextNode() !== null
+}

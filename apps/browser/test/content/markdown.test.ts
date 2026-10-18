@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { elementToMarkdown, messagesToMarkdown } from '../../src/content/markdown'
-import { assistantMessage, codeBlock, setBody } from '../fixtures/chatgpt-dom'
+import {
+  assistantMessage,
+  codeBlock,
+  redesignCodeBlock,
+  setBody
+} from '../fixtures/chatgpt-dom'
 
 const md = (html: string): string => {
   const root = document.createElement('div')
@@ -162,5 +167,64 @@ describe('messagesToMarkdown', () => {
       document.querySelectorAll('[data-message-author-role="assistant"]')
     )
     expect(messagesToMarkdown(messages)).toBe('Only.')
+  })
+})
+
+describe('code blocks without a <pre> (the redesigned page)', () => {
+  it('turns the labelled container around a bare <code> into a fenced block, indentation intact', () => {
+    const code = 'export const a = {\n  b: 1\n}'
+    expect(md(`<p>Here:</p>${redesignCodeBlock('TypeScript', code)}<p>Done.</p>`)).toBe(
+      `Here:\n\n\`\`\`\n${code}\n\`\`\`\n\nDone.`
+    )
+  })
+
+  it('keeps a one-line file a block, not inline code', () => {
+    expect(
+      md(redesignCodeBlock('Plain text', 'CodeGent live end-to-end check passed.'))
+    ).toBe('```\nCodeGent live end-to-end check passed.\n```')
+  })
+
+  it('does not show the language strip as a line of text', () => {
+    expect(md(redesignCodeBlock('Python', 'print(1)'))).not.toMatch(/Python|Copy/)
+  })
+
+  it('keeps a short line of prose before a code block when it has no Copy button', () => {
+    expect(md('<div>Example</div><div><code>x = 1\ny = 2</code></div>')).toBe(
+      'Example\n\n```\nx = 1\ny = 2\n```'
+    )
+  })
+
+  it('finds a block of code inside inline wrappers', () => {
+    expect(md('<span><span><code>a\nb</code></span></span>')).toBe('```\na\nb\n```')
+  })
+
+  it('takes the language from the class of the <code> when it has one', () => {
+    expect(md('<div><code class="language-ts">let a</code></div>')).toBe(
+      '```ts\nlet a\n```'
+    )
+  })
+
+  it('uses a fence longer than any backtick run inside the code', () => {
+    expect(md('<div><code>a\n```\nb</code></div>')).toBe('````\na\n```\nb\n````')
+  })
+
+  it('still renders inline code inside sentences, lists and headings as inline code', () => {
+    expect(md('<p>Call <code>greet()</code> now</p>')).toBe('Call `greet()` now')
+    expect(md('<ul><li><code>one</code></li></ul>')).toBe('- `one`')
+    expect(md('<h3>Updated file: <code>src/a.ts</code></h3>')).toBe(
+      '### Updated file: `src/a.ts`'
+    )
+    // …also in a layout whose paragraphs are plain divs, because text stands beside the code.
+    expect(md('<div>Use <code>foo</code> here</div>')).toBe('Use `foo` here')
+  })
+
+  it('reads the exact reply the real page produced in the probe run', () => {
+    const reply =
+      '<h3>Created file: <code>docs/probe.md</code></h3>' +
+      redesignCodeBlock('Plain text', 'hello from the probe\nsecond line') +
+      '<p>CODEGENT_STATUS: done</p>'
+    expect(md(reply)).toBe(
+      '### Created file: `docs/probe.md`\n\n```\nhello from the probe\nsecond line\n```\n\nCODEGENT_STATUS: done'
+    )
   })
 })
