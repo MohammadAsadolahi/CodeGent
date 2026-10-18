@@ -36,6 +36,8 @@ export interface SelfTestReport {
   at: string
   ok: boolean
   checks: SelfTestCheck[]
+  /** Structure of the message box and the last turns, for pasting into a bug report. */
+  outline?: string
 }
 
 export interface PopupStatus {

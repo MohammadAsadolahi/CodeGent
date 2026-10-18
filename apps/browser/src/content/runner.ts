@@ -3,7 +3,7 @@ import { AbortedError, sleep, truncate, waitFor } from './dom-utils'
 import { fillComposer, type FillOptions } from './fill'
 import { messagesToMarkdown } from './markdown'
 import {
-  freshAssistantMessages,
+  freshReplyElements,
   ReplyError,
   takeSnapshot,
   waitForReply,
@@ -17,8 +17,10 @@ import {
   isConversationUrl,
   isStreaming,
   listAssistantMessages,
+  listTurns,
   listUserMessages,
-  messageId
+  messageId,
+  turnKey
 } from './selectors'
 import { submissionConfirmed, submitPrompt } from './submit'
 
@@ -142,7 +144,10 @@ const waitForConversationSettled = async (
   let lastCount = -1
   let lastChange = Date.now()
   while (Date.now() < limit) {
-    const count = listAssistantMessages(doc).length + listUserMessages(doc).length
+    const count = Math.max(
+      listAssistantMessages(doc).length + listUserMessages(doc).length,
+      listTurns(doc).length
+    )
     if (count !== lastCount) {
       lastCount = count
       lastChange = Date.now()
@@ -192,6 +197,7 @@ export const runJob = async (job: JobRequest, deps: RunnerDeps): Promise<void> =
     if (job.autoSubmit) {
       const sent = await submitPrompt(doc, composer, {
         userMessagesBefore: snapshot.userCount,
+        turnsBefore: snapshot.turnCount,
         signal,
         confirmTimeoutMs: deps.timing?.submitConfirmMs
       })
@@ -199,7 +205,7 @@ export const runJob = async (job: JobRequest, deps: RunnerDeps): Promise<void> =
         throw new ReplyError('submit-failed', sent.detail ?? 'The prompt was not sent.')
     } else {
       const sent = await waitFor(
-        () => submissionConfirmed(doc, composer, snapshot.userCount),
+        () => submissionConfirmed(doc, composer, snapshot.userCount, snapshot.turnCount),
         { timeoutMs: remaining(), intervalMs: 200, signal }
       )
       if (!sent) {
@@ -215,18 +221,19 @@ export const runJob = async (job: JobRequest, deps: RunnerDeps): Promise<void> =
       ...deps.wait,
       snapshot,
       signal,
+      promptText: job.text,
       timeoutMs: remaining(),
       onGenerating: () => emit({ kind: 'progress', stage: 'generating' })
     })
     const messages = reply.messages.length
       ? reply.messages
-      : freshAssistantMessages(doc, snapshot)
+      : freshReplyElements(doc, snapshot, job.text)
     const last = messages.at(-1)
     emit({
       kind: 'completed',
       markdown: messagesToMarkdown(messages),
       conversationUrl: doc.location.href,
-      messageId: last ? messageId(last) : undefined,
+      messageId: last ? (messageId(last) ?? turnKey(last))?.slice(0, 100) || undefined : undefined,
       durationMs: Date.now() - startedAt
     })
   } catch (error) {

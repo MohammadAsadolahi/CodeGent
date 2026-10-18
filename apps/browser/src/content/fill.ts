@@ -152,7 +152,7 @@ export const fillComposer = async (
       () => {
         if (!composerHolds(composer, text)) return false
         if (!options.requireSendEnabled) return true
-        const button = findSendButton(doc)
+        const button = findSendButton(doc, composer)
         if (!button) return false
         sendButtonSeen = true
         return isButtonEnabled(button.element)

@@ -42,10 +42,23 @@ const refresh = async (): Promise<void> => {
   }
 }
 
+/** The report as plain text, so it can be pasted into a bug report. */
+const reportAsText = (report: SelfTestReport): string =>
+  [
+    `CodeGent self-test ${report.at} ${report.url}`,
+    ...report.checks.map((c) => `${c.ok ? '✓' : '✗'} ${c.name} — ${c.detail}`),
+    ...(report.outline ? ['', report.outline] : [])
+  ].join('
+')
+
+let reportText = ''
+
 const showReport = (report: SelfTestReport | { error: string }): void => {
   const list = $('report')
   list.hidden = false
   list.replaceChildren()
+  reportText = 'error' in report ? '' : reportAsText(report)
+  $('copyreport').hidden = reportText === ''
   if ('error' in report) {
     const item = document.createElement('li')
     item.innerHTML = '<span class="fail">✗</span><div><div class="name"></div></div>'
@@ -69,6 +82,17 @@ const showReport = (report: SelfTestReport | { error: string }): void => {
 $('reconnect').addEventListener('click', async () => {
   await ask({ type: 'popup:reconnect' })
   setTimeout(refresh, 600)
+})
+
+$('copyreport').addEventListener('click', async () => {
+  const button = $<HTMLButtonElement>('copyreport')
+  try {
+    await navigator.clipboard.writeText(reportText)
+    button.textContent = 'Copied'
+  } catch {
+    button.textContent = 'Copy failed'
+  }
+  setTimeout(() => (button.textContent = 'Copy report'), 1_500)
 })
 
 $('selftest').addEventListener('click', async () => {

@@ -1,4 +1,6 @@
 import type { SelfTestCheck, SelfTestReport } from '../shared/messages'
+import { pageOutline } from './describe'
+import { normalizeSpace } from './dom-utils'
 import { clearComposer, fillComposer } from './fill'
 import {
   COMPOSER_SELECTORS,
@@ -8,9 +10,13 @@ import {
   findComposer,
   findSendButton,
   findStopButton,
-  isStreaming,
+  hasStreamingMarkers,
+  isGenerating,
   listAssistantMessages,
-  messageId
+  listTurns,
+  messageId,
+  turnRole,
+  turnState
 } from './selectors'
 
 /**
@@ -60,7 +66,7 @@ export const runSelfTest = async (
         ? `strategy “${result.strategy}”${result.sendButtonSeen ? ', send button enabled' : ', send button not detected'}`
         : (result.detail ?? 'failed')
     )
-    const send = findSendButton(doc)
+    const send = findSendButton(doc, composer.element)
     check(
       'Send button',
       send !== null,
@@ -68,7 +74,7 @@ export const runSelfTest = async (
     )
     await clearComposer(composer.element)
   } else {
-    const send = findSendButton(doc)
+    const send = findSendButton(doc, composer?.element)
     check(
       'Send button',
       send !== null,
@@ -77,18 +83,44 @@ export const runSelfTest = async (
   }
 
   const stop = findStopButton(doc)
+  const generating = isGenerating(doc)
+  const hinted = hasStreamingMarkers(doc)
   check(
     'Idle (no reply streaming)',
-    !isStreaming(doc),
+    !generating && !hinted,
     stop
       ? `stop button via “${stop.selector}”`
-      : isStreaming(doc)
-        ? 'streaming signals present'
+      : hinted
+        ? 'a streaming hint is present on the page (no stop button)'
         : 'idle'
   )
 
+  const turns = listTurns(doc)
+  check(
+    'Conversation turns',
+    true,
+    turns.length
+      ? `${turns.length} on the page; last: ${turns
+          .slice(-3)
+          .map((turn) => `${turnRole(turn) ?? 'role unknown'}/${turnState(turn) ?? 'no state'}`)
+          .join(', ')}`
+      : 'none on the page (normal for a new chat)'
+  )
+  const readable = turns.filter(
+    (turn) => turnRole(turn) !== 'user' && normalizeSpace(turn.textContent ?? '') !== ''
+  )
+  if (turns.length > 0) {
+    check(
+      'Reply readable',
+      readable.length > 0,
+      readable.length > 0
+        ? `${readable.length} turn(s) with text that are not yours`
+        : 'turns exist but none has text outside your own messages'
+    )
+  }
+
   const assistants = listAssistantMessages(doc)
-  check('Assistant messages', true, `${assistants.length} on the page`)
+  check('Assistant messages', true, `${assistants.length} marked as such on the page`)
   const last = assistants.at(-1)
   if (last) {
     check(
@@ -130,6 +162,7 @@ export const runSelfTest = async (
     url: doc.location.href,
     at: new Date().toISOString(),
     ok: checks.every((c) => c.ok),
-    checks
+    checks,
+    outline: pageOutline(doc)
   }
 }

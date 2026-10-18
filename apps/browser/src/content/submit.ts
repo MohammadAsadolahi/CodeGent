@@ -4,6 +4,7 @@ import {
   findSendButton,
   findStopButton,
   isButtonEnabled,
+  listTurns,
   listUserMessages
 } from './selectors'
 
@@ -28,13 +29,18 @@ export const pressEnter = (el: HTMLElement): void => {
   el.dispatchEvent(new KeyboardEvent('keyup', init))
 }
 
-/** The message left the composer: a new user turn exists, generation started, or the box emptied. */
+/**
+ * The message left the composer: a new user message or turn exists, generation started, or the
+ * box emptied. `turnsBefore` is the number of turns on the page when the prompt was typed.
+ */
 export const submissionConfirmed = (
   doc: Document,
   composer: HTMLElement,
-  userMessagesBefore: number
+  userMessagesBefore: number,
+  turnsBefore = Number.POSITIVE_INFINITY
 ): boolean =>
   listUserMessages(doc).length > userMessagesBefore ||
+  listTurns(doc).length > turnsBefore ||
   findStopButton(doc) !== null ||
   normalizeSpace(readComposerText(composer)) === ''
 
@@ -46,19 +52,33 @@ export const submissionConfirmed = (
 export const submitPrompt = async (
   doc: Document,
   composer: HTMLElement,
-  options: { userMessagesBefore: number; signal?: AbortSignal; confirmTimeoutMs?: number }
+  options: {
+    userMessagesBefore: number
+    turnsBefore?: number
+    signal?: AbortSignal
+    confirmTimeoutMs?: number
+  }
 ): Promise<SubmitResult> => {
-  const { signal, userMessagesBefore } = options
+  const { signal, userMessagesBefore, turnsBefore } = options
   const confirmTimeout = options.confirmTimeoutMs ?? 4_000
-  const confirmed = () => submissionConfirmed(doc, composer, userMessagesBefore)
+  const confirmed = () => submissionConfirmed(doc, composer, userMessagesBefore, turnsBefore)
 
-  const button = await waitFor(
-    () => {
-      const found = findSendButton(doc)
-      return found && isButtonEnabled(found.element) ? found.element : null
-    },
-    { timeoutMs: 6_000, intervalMs: 80, signal }
-  )
+  // A send button that exists but is still disabled may enable any moment, so it is worth
+  // waiting for; one that is not on the page at all is not — the Enter key does the same job.
+  const present = await waitFor(() => findSendButton(doc, composer), {
+    timeoutMs: 1_500,
+    intervalMs: 80,
+    signal
+  })
+  const button = present
+    ? await waitFor(
+        () => {
+          const found = findSendButton(doc, composer)
+          return found && isButtonEnabled(found.element) ? found.element : null
+        },
+        { timeoutMs: 6_000, intervalMs: 80, signal }
+      )
+    : null
   if (button) {
     button.click()
     if (await waitFor(confirmed, { timeoutMs: confirmTimeout, intervalMs: 80, signal })) {

@@ -7,6 +7,7 @@
  * of the clipboard needs no user gesture and no clipboard permission.
  */
 import { normalizeSpace } from './dom-utils'
+import { ASSISTANT_MESSAGE } from './selectors'
 
 const BLOCK_TAGS = new Set([
   'address',
@@ -267,13 +268,39 @@ function renderBlocks(parent: Node): string[] {
 export const elementToMarkdown = (root: Element): string =>
   renderBlocks(root).join('\n\n').trim()
 
-/** Markdown for one or more assistant message elements, in document order. */
+/**
+ * A copy of `element` without what a reader never sees: screen-reader-only labels ("ChatGPT
+ * said:"), hidden elements and decorative icons. Used when a whole conversation turn has to be
+ * converted because the page marks neither its message nor its body.
+ */
+const withoutChrome = (element: Element): Element => {
+  const clone = element.cloneNode(true) as Element
+  for (const hidden of Array.from(
+    clone.querySelectorAll('.sr-only, [hidden], [aria-hidden="true"]')
+  ))
+    hidden.remove()
+  return clone
+}
+
+/** The parts of `element` that hold the reply text: marked message bodies, or the element itself. */
+const replyBodies = (element: Element): Element[] => {
+  const messages = element.matches(ASSISTANT_MESSAGE)
+    ? [element]
+    : Array.from(element.querySelectorAll(ASSISTANT_MESSAGE))
+  return (messages.length > 0 ? messages : [element]).flatMap((message) => {
+    const bodies = Array.from(message.querySelectorAll('.markdown'))
+    return bodies.length > 0 ? bodies : [withoutChrome(message)]
+  })
+}
+
+/** Markdown for one or more assistant message elements (or whole turns), in document order. */
 export const messagesToMarkdown = (messages: readonly Element[]): string =>
   messages
-    .map((message) => {
-      const bodies = message.querySelectorAll('.markdown')
-      if (bodies.length === 0) return elementToMarkdown(message)
-      return Array.from(bodies, (body) => elementToMarkdown(body)).join('\n\n')
-    })
+    .map((message) =>
+      replyBodies(message)
+        .map((body) => elementToMarkdown(body))
+        .filter((text) => text !== '')
+        .join('\n\n')
+    )
     .filter((text) => text !== '')
     .join('\n\n')

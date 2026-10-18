@@ -122,6 +122,10 @@ button.secondary {
   background: transparent;
   border: 1px solid var(--line);
 }
+button.wide {
+  width: 100%;
+  margin-top: 10px;
+}
 button:disabled {
   opacity: 0.6;
   cursor: default;
