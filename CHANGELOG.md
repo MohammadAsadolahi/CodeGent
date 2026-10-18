@@ -9,6 +9,9 @@
   every edit). The reply is now read from the assistant's message in that container (with a fallback:
   whatever follows your prompt), code blocks are recognised in both forms, the send button is found
   without a test id, and sign-in is recognised by the page's buttons.
+- A reply that says `done` and only recaps the changed files as headings, with no content under them,
+  now ends the run at once (the ignored headings are shown as a note on the step) instead of costing
+  another round trip. A finished run is announced as _Done — the task is complete_.
 - A run no longer waits silently for a reply it cannot see: when generation has visibly ended and
   nothing readable is on the page it fails within seconds, and every timeout names what the page looked
   like (`[Page: …]`, structure only).
