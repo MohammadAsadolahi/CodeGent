@@ -54,7 +54,7 @@ export const describePage = (doc: Document): string => {
   const overlay = visibleOverlayText(doc)
   return [
     `path=${doc.location.pathname.replace(/\/c\/[\w-]+/, '/c/…')}`,
-    `composer=${composer ? `${composer.element.localName} via ${composer.selector.slice(0, 40)}` : 'none'}`,
+    `composer=${composer ? `${composer.element.localName} via ${composer.selector.slice(0, 60)}` : 'none'}`,
     `send=${send ? describeButton(send.element) : 'none'}`,
     `stop=${stop ? stop.selector.slice(0, 48) : 'none'}`,
     `turns=${turns.length}` +
@@ -92,7 +92,10 @@ const outlineOf = (element: Element, depth: number, state: { nodes: number }): s
       (name) =>
         name.startsWith('data-') || name.startsWith('aria-') || KEPT_ATTRIBUTES.has(name)
     )
-    .map((name) => `${name}=${JSON.stringify((element.getAttribute(name) ?? '').slice(0, 40))}`)
+    .map(
+      (name) =>
+        `${name}=${JSON.stringify((element.getAttribute(name) ?? '').slice(0, 40))}`
+    )
     .join(' ')
   let line = `<${element.localName}${attributes ? ` ${attributes}` : ''}>`
   if (element.localName === 'svg') {

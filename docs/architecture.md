@@ -105,6 +105,14 @@ The prompt's own format example is parsed in a test, so the prompt and the parse
   (stop button gone, turn complete, text stable), converts the answer DOM to markdown with correctly
   sized code fences, and detects sign-in walls, challenges, rate limits and banners. All selectors live
   in one module with ordered fallbacks, and the popup's **Test ChatGPT page** reports which match.
+  The reply is found as "the turns after the one that was there when the prompt was sent" — by author
+  role when the page marks it, otherwise by position, with the prompt's own turn recognised by its first
+  words — so it does not depend on any single attribute. The stop button is the only signal that
+  _proves_ a reply is still streaming; other hints (a streaming class, a turn that is not in a final
+  state) can go stale and only delay acceptance by a few seconds. A run never waits silently for a reply
+  it cannot see: once generation has visibly ended and nothing readable is on the page, it fails within
+  seconds, and every timeout carries `[Page: …]`, a structure-only description of the page (counts,
+  attribute names, text lengths — never conversation text).
 - A killed service worker is woken by the page: open ChatGPT tabs ping it every 10 s.
 - Tests never touch the real site: Chromium resolves `chatgpt.com` to a local HTTPS mock with a real
   ProseMirror composer.
@@ -135,5 +143,8 @@ The prompt's own format example is parsed in a test, so the prompt and the parse
 | webview               | jsdom, with a fake of VS Code's webview API; hostile strings must render as text                                                                                                                                                                |
 | VS Code extension     | Inside a real VS Code (`@vscode/test-electron`, isolated profile): first against a scripted browser speaking the real protocol, then against the real browser extension in Chromium and the mock page — the whole product except ChatGPT itself |
 
-What cannot be tested offline is ChatGPT's real page and GitHub connector; that is what the popup's
-self-test and a manual first run are for.
+The mock ChatGPT page exists in two generations — the one with test ids and per-message author
+attributes, and the October 2026 redesign (one send/stop button, no test ids, turns marked only by
+`data-talvt-turn-state`) — and the browser tests run against both. What cannot be tested offline is
+ChatGPT's real page and GitHub connector; `npm run test:live` is the opt-in test for that (it sends real
+messages from the signed-in account), next to the popup's self-test.

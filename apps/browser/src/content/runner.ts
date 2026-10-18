@@ -1,5 +1,6 @@
 import type { JobEvent, JobRequest } from '@codegent/protocol'
 import { AbortedError, sleep, truncate, waitFor } from './dom-utils'
+import { describePage } from './describe'
 import { fillComposer, type FillOptions } from './fill'
 import { messagesToMarkdown } from './markdown'
 import {
@@ -15,7 +16,7 @@ import {
   findComposer,
   findStopButton,
   isConversationUrl,
-  isStreaming,
+  isGenerating,
   listAssistantMessages,
   listTurns,
   listUserMessages,
@@ -112,14 +113,14 @@ const waitForUsablePage = async (
 
 const waitForIdle = async (deps: RunnerDeps, budgetMs: number): Promise<void> => {
   const { doc, signal } = deps
-  const idle = await waitFor(() => !isStreaming(doc), {
+  const idle = await waitFor(() => !isGenerating(doc), {
     timeoutMs: Math.min(deps.timing?.idleWaitMs ?? 120_000, budgetMs),
     intervalMs: 100,
     signal
   })
   if (idle) return
   stopGeneration(doc)
-  const stopped = await waitFor(() => !isStreaming(doc), {
+  const stopped = await waitFor(() => !isGenerating(doc), {
     timeoutMs: Math.min(4_000, Math.max(300, deps.timing?.idleWaitMs ?? 4_000)),
     intervalMs: 100,
     signal
@@ -228,12 +229,22 @@ export const runJob = async (job: JobRequest, deps: RunnerDeps): Promise<void> =
     const messages = reply.messages.length
       ? reply.messages
       : freshReplyElements(doc, snapshot, job.text)
+    const markdown = messagesToMarkdown(messages)
+    if (markdown === '') {
+      throw new ReplyError(
+        'page-error',
+        'ChatGPT replied, but no text could be read from its answer (the layout of the ' +
+          `site may have changed). [Page: ${describePage(doc)}]`
+      )
+    }
     const last = messages.at(-1)
     emit({
       kind: 'completed',
-      markdown: messagesToMarkdown(messages),
+      markdown,
       conversationUrl: doc.location.href,
-      messageId: last ? (messageId(last) ?? turnKey(last))?.slice(0, 100) || undefined : undefined,
+      messageId: last
+        ? (messageId(last) ?? turnKey(last))?.slice(0, 100) || undefined
+        : undefined,
       durationMs: Date.now() - startedAt
     })
   } catch (error) {

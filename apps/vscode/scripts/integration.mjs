@@ -3,7 +3,11 @@
 //   protocol  the extension against a scripted browser that speaks the real protocol
 //   chain     the extension against the REAL browser extension in a real Chromium, talking to a
 //             pretend chatgpt.com (the whole product, minus the actual ChatGPT)
-// Usage: node scripts/integration.mjs [title filter] [--suite=protocol|chain] [--vsix]
+//   live      (opt-in, never part of the default run) the extension against the REAL chatgpt.com
+//             through the browser that is already open and signed in: it sends real messages.
+//             The repository is a clone of this one; pushes go to a local bare repository only.
+//             `npm run test:live` (CODEGENT_LIVE_TASK=<task> to try another task)
+// Usage: node scripts/integration.mjs [title filter] [--suite=protocol|chain|live] [--vsix]
 //   --vsix                                      test the package made by `npm run package`, installed
 //                                               like a user would (protocol suite only)
 //   CODEGENT_VSCODE=<path to Code.exe / code>   use a specific VS Code (default: the installed one,
@@ -124,7 +128,8 @@ if (useVsix) {
 } else {
   // CODEGENT_MINIFY=1 runs everything against the minified build that is released.
   await buildAll({
-    hubPorts: TEST_PORTS,
+    // The live suite talks to the hub and browser extension the user already runs.
+    hubPorts: wantedSuite === 'live' ? undefined : TEST_PORTS,
     production: process.env.CODEGENT_MINIFY === '1'
   })
 }
@@ -163,7 +168,7 @@ await build({
   target: 'node20',
   logLevel: 'warning'
 })
-const { githubLikeRepo } = createRequire(import.meta.url)(
+const { githubLikeRepo, cloneOfRealRepo } = createRequire(import.meta.url)(
   path.join(outTest, 'git-fixture.js')
 )
 
@@ -181,11 +186,15 @@ const runSuite = async (suite) => {
   let chain
   try {
     await stopTestHubs()
-    githubLikeRepo(sandbox, 'work', {
-      'README.md': '# Demo project\n',
-      'src/greeting.txt': 'hello\nworld\n',
-      'src/keep.txt': 'untouched\n'
-    })
+    if (suite === 'live') {
+      cloneOfRealRepo(sandbox, 'work', path.resolve(root, '..', '..'))
+    } else {
+      githubLikeRepo(sandbox, 'work', {
+        'README.md': '# Demo project\n',
+        'src/greeting.txt': 'hello\nworld\n',
+        'src/keep.txt': 'untouched\n'
+      })
+    }
 
     const userData = path.join(sandbox, 'user-data')
     fs.mkdirSync(path.join(userData, 'User'), { recursive: true })
@@ -193,7 +202,7 @@ const runSuite = async (suite) => {
       path.join(userData, 'User', 'settings.json'),
       JSON.stringify(
         {
-          'codegent.advanced.hubPorts': TEST_PORTS,
+          ...(suite === 'live' ? {} : { 'codegent.advanced.hubPorts': TEST_PORTS }),
           'codegent.diagnosticsWaitSeconds': 0,
           'security.workspace.trust.enabled': false,
           'telemetry.telemetryLevel': 'off',
@@ -297,8 +306,10 @@ const runSuite = async (suite) => {
 }
 
 let ok = true
-for (const suite of ['protocol', 'chain']) {
-  if (wantedSuite && wantedSuite !== suite) continue
+for (const suite of ['protocol', 'chain', 'live']) {
+  // `live` sends real messages, so it only ever runs when asked for by name.
+  if (suite === 'live' ? wantedSuite !== 'live' : wantedSuite && wantedSuite !== suite)
+    continue
   // The package carries the browser extension for the real ports; the chain suite uses test ports.
   if (suite === 'chain' && (useVsix || process.env.CODEGENT_IT_NO_BROWSER)) continue
   ok = (await runSuite(suite)) && ok

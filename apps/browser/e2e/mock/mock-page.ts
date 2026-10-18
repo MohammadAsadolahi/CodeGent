@@ -19,7 +19,12 @@ import {
   fillComposer,
   type FillStrategyName
 } from '../../src/content/fill'
-import { escapeHtml } from '../../test/fixtures/chatgpt-dom'
+import {
+  STOP_ICON_PATH,
+  escapeHtml,
+  redesignAssistantTurn,
+  redesignUserTurn
+} from '../../test/fixtures/chatgpt-dom'
 import { renderMarkdown } from './render'
 
 interface Turn {
@@ -49,6 +54,8 @@ const call = async <T>(path: string, body?: unknown): Promise<T> => {
 
 const state = {
   loggedOut: false,
+  /** 'legacy': test ids and per-message roles. 'redesign': the page since October 2026. */
+  layout: 'legacy' as 'legacy' | 'redesign',
   thread: [] as Turn[],
   conversationId: null as string | null,
   generating: false
@@ -93,6 +100,24 @@ view.dom.id = 'prompt-textarea'
 
 function renderActions(): void {
   const hasText = composerText(view).trim() !== ''
+  if (state.layout === 'redesign') {
+    // One button that is "send" when idle and "stop" while a reply streams; no test ids.
+    const path = state.generating ? STOP_ICON_PATH : 'M10 4l5 6h-4v6H9v-6H5z'
+    actionsEl.innerHTML =
+      `<button type="submit" data-composer-submit data-send-label="Send message" data-stop-label="Stop generating" ` +
+      `aria-label="${state.generating ? 'Stop generating' : 'Send message'}"` +
+      `${state.generating || hasText ? '' : ' aria-disabled="true"'}>` +
+      `<svg viewBox="0 0 20 20"><path d="${path}"/></svg></button>`
+    actionsEl.querySelector('button')!.addEventListener('click', (event) => {
+      event.preventDefault()
+      if (state.generating) {
+        void call('stop', {})
+        state.generating = false
+        renderActions()
+      } else if (hasText) submit()
+    })
+    return
+  }
   if (state.generating) {
     actionsEl.innerHTML =
       '<button type="button" data-testid="stop-button" aria-label="Stop streaming">Stop</button>'
@@ -117,6 +142,14 @@ const turnHtml = (
   streamingState?: 'streaming' | 'complete',
   partial?: string
 ): string => {
+  if (state.layout === 'redesign') {
+    return turn.role === 'user'
+      ? redesignUserTurn(turn.text)
+      : redesignAssistantTurn(
+          renderMarkdown(partial ?? turn.text),
+          streamingState ?? 'complete'
+        )
+  }
   if (turn.role === 'user') {
     return (
       `<section data-testid="conversation-turn" data-turn="user"><div data-message-author-role="user" data-message-id="${turn.id}">` +
@@ -161,7 +194,7 @@ async function streamAnswer(): Promise<void> {
   if (!state.generating) return // stopped before the first token
   threadEl.insertAdjacentHTML('beforeend', turnHtml(turn, 'streaming', ''))
   const section = threadEl.lastElementChild as HTMLElement
-  const body = section.querySelector('.markdown') as HTMLElement
+  const body = section.querySelector('.markdown, [data-body]') as HTMLElement
 
   const lines = plan.markdown.split('\n')
   for (let step = 1; step <= plan.chunks; step++) {
@@ -185,9 +218,11 @@ async function streamAnswer(): Promise<void> {
 }
 
 function renderAuth(): void {
-  authEl.innerHTML = state.loggedOut
-    ? '<button data-testid="login-button">Log in</button><button data-testid="signup-button">Sign up</button>'
-    : ''
+  authEl.innerHTML = !state.loggedOut
+    ? ''
+    : state.layout === 'redesign'
+      ? '<button>Log in</button><button>Sign up for free</button>'
+      : '<button data-testid="login-button">Log in</button><button data-testid="signup-button">Sign up</button>'
 }
 
 // Reopening /c/<id> restores history asynchronously, like the real app.
@@ -203,10 +238,15 @@ if (reopened) {
   }
 }
 
-void call<{ loggedOut: boolean }>('config').then((config) => {
-  state.loggedOut = config.loggedOut
-  renderAuth()
-})
+void call<{ loggedOut: boolean; layout: 'legacy' | 'redesign' }>('config').then(
+  (config) => {
+    state.loggedOut = config.loggedOut
+    state.layout = config.layout
+    if (state.layout === 'redesign') view.dom.removeAttribute('id') // no #prompt-textarea any more
+    renderAuth()
+    renderActions()
+  }
+)
 renderActions()
 
 // ── direct hooks used by the fill-strategy tests (run in a plain page) ───────────────────────
@@ -214,12 +254,12 @@ renderActions()
   composerText: () => composerText(view),
   /** Runs the extension's own fill logic against this real ProseMirror editor. */
   async fill(text: string, strategies: FillStrategyName[]) {
-    const composer = document.getElementById('prompt-textarea')!
+    const composer = view.dom as HTMLElement
     const result = await fillComposer(composer, text, {
       strategies,
       requireSendEnabled: true
     })
     return { result, holds: composerHolds(composer, text), text: composerText(view) }
   },
-  clear: () => clearComposer(document.getElementById('prompt-textarea')!)
+  clear: () => clearComposer(view.dom as HTMLElement)
 }

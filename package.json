@@ -22,6 +22,7 @@
     "format:check": "prettier --check .",
     "icons": "node scripts/make-icons.mjs",
     "package": "npm run package -w apps/vscode",
+    "test:live": "npm run test:live -w apps/vscode",
     "test:package": "npm run test:package -w apps/vscode"
   },
   "devDependencies": {

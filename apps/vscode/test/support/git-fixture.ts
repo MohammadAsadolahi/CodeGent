@@ -68,3 +68,28 @@ export const githubLikeRepo = (
   git(dir, 'push', '-q', '-u', 'origin', 'main')
   return attachRepo(parent, name)
 }
+
+/**
+ * A clone of a real repository for the live test: the fetch URL is the repository's real address
+ * (so ChatGPT's GitHub connector reads the genuine code and the prompt names the right
+ * repository), while pushes go to a local bare repository and can never reach GitHub.
+ */
+export const cloneOfRealRepo = (
+  parent: string,
+  name: string,
+  source: string
+): { dir: string; bare: string } => {
+  const dir = path.join(parent, name)
+  const bare = path.join(parent, `${name}.git`)
+  const upstream = git(source, 'remote', 'get-url', 'origin')
+  git(parent, 'clone', '-q', '--no-hardlinks', source, dir)
+  git(dir, 'config', 'user.email', 'tester@example.com')
+  git(dir, 'config', 'user.name', 'Tester')
+  git(dir, 'config', 'core.autocrlf', 'false')
+  git(dir, 'config', 'commit.gpgsign', 'false')
+  git(parent, 'init', '-q', '--bare', '-b', 'main', bare)
+  git(dir, 'remote', 'set-url', 'origin', upstream)
+  git(dir, 'remote', 'set-url', '--push', 'origin', bare)
+  git(dir, 'push', '-q', '-u', 'origin', 'main')
+  return { dir, bare }
+}

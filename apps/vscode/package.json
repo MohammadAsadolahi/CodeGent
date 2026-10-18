@@ -38,7 +38,8 @@
     "build": "node scripts/build.mjs",
     "test:integration": "node scripts/integration.mjs",
     "package": "node scripts/package.mjs",
-    "test:package": "node scripts/integration.mjs --vsix"
+    "test:package": "node scripts/integration.mjs --vsix",
+    "test:live": "node scripts/integration.mjs --suite=live"
   },
   "dependencies": {
     "@codegent/engine": "*",

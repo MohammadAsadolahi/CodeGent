@@ -61,7 +61,8 @@ export const submitPrompt = async (
 ): Promise<SubmitResult> => {
   const { signal, userMessagesBefore, turnsBefore } = options
   const confirmTimeout = options.confirmTimeoutMs ?? 4_000
-  const confirmed = () => submissionConfirmed(doc, composer, userMessagesBefore, turnsBefore)
+  const confirmed = () =>
+    submissionConfirmed(doc, composer, userMessagesBefore, turnsBefore)
 
   // A send button that exists but is still disabled may enable any moment, so it is worth
   // waiting for; one that is not on the page at all is not — the Enter key does the same job.

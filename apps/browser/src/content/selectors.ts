@@ -123,7 +123,11 @@ export const findStopButton = (doc: Document): Located<HTMLElement> | null => {
   // The single send/stop button announces its stop state through the label it advertises.
   for (const button of doc.querySelectorAll('button[data-composer-submit]')) {
     const stopLabel = button.getAttribute('data-stop-label')
-    if (stopLabel && button.getAttribute('aria-label') === stopLabel && isVisible(button)) {
+    if (
+      stopLabel &&
+      button.getAttribute('aria-label') === stopLabel &&
+      isVisible(button)
+    ) {
       return { element: button, selector: 'button[data-composer-submit] (stop label)' }
     }
   }
@@ -163,7 +167,8 @@ export const listTurns = (doc: Document): HTMLElement[] => {
 
 /** 'user' / 'assistant' when the turn says so (on itself or on the message inside it). */
 export const turnRole = (turn: Element): string | undefined => {
-  const own = turn.getAttribute('data-turn') ?? turn.getAttribute('data-message-author-role')
+  const own =
+    turn.getAttribute('data-turn') ?? turn.getAttribute('data-message-author-role')
   const inner = turn
     .querySelector('[data-message-author-role]')
     ?.getAttribute('data-message-author-role')

@@ -44,7 +44,9 @@ export const takeSnapshot = (doc: Document): Snapshot => {
       .filter((id): id is string => id !== undefined),
     assistantCount: assistants.length,
     userCount: listUserMessages(doc).length,
-    turnKeys: turns.map((t) => turnKey(t)).filter((key): key is string => key !== undefined),
+    turnKeys: turns
+      .map((t) => turnKey(t))
+      .filter((key): key is string => key !== undefined),
     turnCount: turns.length
   }
 }
@@ -175,7 +177,8 @@ export const waitForReply = (
       trace.push(`+${Math.round((now - startedAt) / 1000)}s ${entry}`)
       if (trace.length > 12) trace.shift()
     }
-    const diagnosis = () => `[Page: ${describePage(doc)}. Seen: ${trace.join(' → ') || 'nothing'}]`
+    const diagnosis = () =>
+      `[Page: ${describePage(doc)}. Seen: ${trace.join(' → ') || 'nothing'}]`
 
     const cleanup = () => {
       finished = true

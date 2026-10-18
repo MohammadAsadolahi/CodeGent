@@ -31,6 +31,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var git_fixture_exports = {};
 __export(git_fixture_exports, {
   attachRepo: () => attachRepo,
+  cloneOfRealRepo: () => cloneOfRealRepo,
   git: () => git,
   githubLikeRepo: () => githubLikeRepo,
   write: () => write
@@ -82,9 +83,25 @@ var githubLikeRepo = (parent, name, files) => {
   git(dir, "push", "-q", "-u", "origin", "main");
   return attachRepo(parent, name);
 };
+var cloneOfRealRepo = (parent, name, source) => {
+  const dir = import_node_path.default.join(parent, name);
+  const bare = import_node_path.default.join(parent, `${name}.git`);
+  const upstream = git(source, "remote", "get-url", "origin");
+  git(parent, "clone", "-q", "--no-hardlinks", source, dir);
+  git(dir, "config", "user.email", "tester@example.com");
+  git(dir, "config", "user.name", "Tester");
+  git(dir, "config", "core.autocrlf", "false");
+  git(dir, "config", "commit.gpgsign", "false");
+  git(parent, "init", "-q", "--bare", "-b", "main", bare);
+  git(dir, "remote", "set-url", "origin", upstream);
+  git(dir, "remote", "set-url", "--push", "origin", bare);
+  git(dir, "push", "-q", "-u", "origin", "main");
+  return { dir, bare };
+};
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   attachRepo,
+  cloneOfRealRepo,
   git,
   githubLikeRepo,
   write

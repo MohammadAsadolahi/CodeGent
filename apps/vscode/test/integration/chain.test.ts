@@ -91,6 +91,30 @@ describe('the whole chain, with the real browser extension', function () {
     assert.ok(api.state().connection.chatgptTabs >= 1)
   })
 
+  it('does the same against the redesigned ChatGPT page (one send/stop button, no test ids)', async function () {
+    this.timeout(120_000)
+    await mock.setLayout('redesign')
+    await mock.queueReply(
+      chatReply(
+        'Added the notes.',
+        [
+          createdFile('redesign.txt', 'works'),
+          updatedFile('README.md', '# Demo project', '# Demo project (redesign)')
+        ],
+        'done'
+      )
+    )
+
+    await start('Create redesign.txt and touch the README')
+
+    assert.equal(run().outcome, 'done', JSON.stringify(run()))
+    assert.equal(read('redesign.txt'), 'works\n')
+    assert.match(read('README.md'), /# Demo project \(redesign\)/)
+    const { sent } = await mock.log()
+    assert.equal(sent.length, 1)
+    assert.ok(sent[0]!.includes('Create redesign.txt'), sent[0])
+  })
+
   it('continues in the same conversation, sending each result back', async function () {
     this.timeout(120_000)
     await mock.queueReply(

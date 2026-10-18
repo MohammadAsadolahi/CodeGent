@@ -48,8 +48,7 @@ const reportAsText = (report: SelfTestReport): string =>
     `CodeGent self-test ${report.at} ${report.url}`,
     ...report.checks.map((c) => `${c.ok ? '✓' : '✗'} ${c.name} — ${c.detail}`),
     ...(report.outline ? ['', report.outline] : [])
-  ].join('
-')
+  ].join('\n')
 
 let reportText = ''
 

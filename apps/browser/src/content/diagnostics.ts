@@ -102,7 +102,10 @@ export const runSelfTest = async (
     turns.length
       ? `${turns.length} on the page; last: ${turns
           .slice(-3)
-          .map((turn) => `${turnRole(turn) ?? 'role unknown'}/${turnState(turn) ?? 'no state'}`)
+          .map(
+            (turn) =>
+              `${turnRole(turn) ?? 'role unknown'}/${turnState(turn) ?? 'no state'}`
+          )
           .join(', ')}`
       : 'none on the page (normal for a new chat)'
   )

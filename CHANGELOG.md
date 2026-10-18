@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: with ChatGPT's page as redesigned in October 2026 (no test ids, no author attribute on
+  messages, one button for send and stop) a run typed and sent the prompt but never recognised the
+  finished reply, so it ended with _did not finish replying in time_ after the full timeout. The reply
+  is now found by position in the conversation as well as by author role, the send button is found
+  without a test id, and sign-in is recognised by the page's buttons.
+- A run no longer waits silently for a reply it cannot see: when generation has visibly ended and
+  nothing readable is on the page it fails within seconds, and every timeout names what the page looked
+  like (`[Page: …]`, structure only).
+- The popup's _Test ChatGPT page_ report now includes the outline of the message box and the last
+  turns, with a **Copy report** button for bug reports.
+- Tests: the mock ChatGPT page exists in both page generations; `npm run test:live` (opt-in) runs the
+  whole loop against the real chatgpt.com.
+
 ## 0.1.0
 
 First version.

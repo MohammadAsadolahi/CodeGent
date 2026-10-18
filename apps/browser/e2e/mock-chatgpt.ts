@@ -64,10 +64,14 @@ export interface ReplyPlan {
   hold?: boolean
 }
 
+/** Which generation of the ChatGPT page the mock imitates (see test/fixtures/chatgpt-dom.ts). */
+export type MockLayout = 'legacy' | 'redesign'
+
 export class MockChatGpt {
   readonly sent: string[] = []
   stopClicks = 0
   loggedOut = false
+  layout: MockLayout = 'legacy'
   private queue: ReplyPlan[] = []
   private released = false
 
@@ -105,7 +109,7 @@ export class MockChatGpt {
         this.stopClicks += 1
         return json({})
       case '/__mock/config':
-        return json({ loggedOut: this.loggedOut })
+        return json({ loggedOut: this.loggedOut, layout: this.layout })
       case '/__mock/released':
         return json({ released: this.released })
       // Control endpoints for tests that run in another process.
@@ -117,20 +121,28 @@ export class MockChatGpt {
       case '/__mock/control/release':
         this.release()
         return json({})
-      case '/__mock/control/set':
-        this.loggedOut = Boolean(JSON.parse(request.body || '{}').loggedOut)
+      case '/__mock/control/set': {
+        const settings = JSON.parse(request.body || '{}') as {
+          loggedOut?: boolean
+          layout?: MockLayout
+        }
+        if (settings.loggedOut !== undefined) this.loggedOut = Boolean(settings.loggedOut)
+        if (settings.layout) this.layout = settings.layout
         return json({})
+      }
       case '/__mock/control/log':
         return json({
           sent: this.sent,
           stopClicks: this.stopClicks,
           loggedOut: this.loggedOut,
+          layout: this.layout,
           queued: this.queue.length
         })
       case '/__mock/control/reset':
         this.sent.length = 0
         this.stopClicks = 0
         this.loggedOut = false
+        this.layout = 'legacy'
         this.queue = []
         this.released = false
         return json({})

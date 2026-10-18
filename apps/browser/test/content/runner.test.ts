@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { newId, type JobEvent, type JobRequest } from '@codegent/protocol'
 import { runJob, type RunnerTiming } from '../../src/content/runner'
-import { codeBlock } from '../fixtures/chatgpt-dom'
-import { FakeChat, type FakeChatOptions } from '../fixtures/fake-chat'
+import { codeBlock, redesignAssistantTurn } from '../fixtures/chatgpt-dom'
+import { FakeChat, type ChatLayout, type FakeChatOptions } from '../fixtures/fake-chat'
 
 const FAST: RunnerTiming = {
   composerTimeoutMs: 300,
@@ -13,7 +13,13 @@ const FAST: RunnerTiming = {
   historyStableMs: 80,
   submitConfirmMs: 250
 }
-const WAIT = { settleMs: 80, degradedSettleMs: 200, pollMs: 15 }
+const WAIT = {
+  settleMs: 80,
+  degradedSettleMs: 200,
+  softSettleMs: 200,
+  noReplyGraceMs: 200,
+  pollMs: 15
+}
 
 const makeJob = (overrides: Partial<JobRequest> = {}): JobRequest => ({
   jobId: newId(),
@@ -28,9 +34,11 @@ const makeJob = (overrides: Partial<JobRequest> = {}): JobRequest => ({
 })
 
 let chat: FakeChat | undefined
+let layout: ChatLayout = 'legacy'
 afterEach(() => {
   chat?.dispose()
   chat = undefined
+  layout = 'legacy'
   history.pushState({}, '', '/')
 })
 
@@ -39,7 +47,7 @@ const run = async (
   options: FakeChatOptions = {},
   control: { abortAfterMs?: number; setup?: (chat: FakeChat) => void } = {}
 ) => {
-  chat = new FakeChat(document, options)
+  chat = new FakeChat(document, { layout, ...options })
   control.setup?.(chat)
   const events: JobEvent[] = []
   const controller = new AbortController()
@@ -59,7 +67,23 @@ const terminal = (events: JobEvent[]) => events.at(-1)!
 const kinds = (events: JobEvent[]) =>
   events.map((e) => (e.kind === 'progress' ? `progress:${e.stage}` : e.kind))
 
-describe('a successful run', () => {
+const failure = (events: JobEvent[]) => {
+  const last = terminal(events)
+  if (last.kind !== 'failed')
+    throw new Error(`expected failure, got ${JSON.stringify(last)}`)
+  return last
+}
+
+/** History that shows up late, the way a reopened conversation renders. */
+const staleReply = (kind: ChatLayout): string =>
+  kind === 'legacy'
+    ? '<section><div data-message-author-role="assistant" data-message-id="old-1"><div class="markdown"><p>Stale reply.</p></div></div></section>'
+    : redesignAssistantTurn('<p>Stale reply.</p>', 'complete')
+
+describe.each(['legacy', 'redesign'] as const)('a successful run (%s page)', (kind) => {
+  beforeEach(() => {
+    layout = kind
+  })
   const reply =
     '<p>Done.</p><h3>Updated file: <code>src/a.ts</code></h3>' +
     codeBlock('ts', 'export const a = 1')
@@ -83,9 +107,16 @@ describe('a successful run', () => {
         'Done.\n\n### Updated file: `src/a.ts`\n\n```ts\nexport const a = 1\n```'
       )
       expect(done.conversationUrl).toBe(document.location.href)
-      expect(done.messageId).toMatch(/^msg-/)
+      if (kind === 'legacy') expect(done.messageId).toMatch(/^msg-/)
       expect(done.durationMs).toBeGreaterThan(0)
     }
+  })
+
+  it('does not mistake its own prompt for the reply, even when the reply starts alike', async () => {
+    const job = makeJob({ text: 'Hello' })
+    const { events } = await run(job, { reply: '<p>Hello! How can I help?</p>' })
+    const done = terminal(events)
+    expect(done.kind === 'completed' && done.markdown).toBe('Hello! How can I help?')
   })
 
   it('returns only the new reply when the conversation already has history', async () => {
@@ -108,14 +139,11 @@ describe('a successful run', () => {
       job,
       { reply: '<p>Fresh.</p>' },
       {
-        setup: (c) => {
-          // History arrives late, as it does when a conversation tab is reopened.
+        setup: () => {
           setTimeout(() => {
-            const thread = document.getElementById('thread')!
-            thread.insertAdjacentHTML(
-              'afterbegin',
-              '<section><div data-message-author-role="assistant" data-message-id="old-1"><div class="markdown"><p>Stale reply.</p></div></div></section>'
-            )
+            document
+              .getElementById('thread')!
+              .insertAdjacentHTML('afterbegin', staleReply(kind))
           }, 120)
         }
       }
@@ -141,6 +169,15 @@ describe('a successful run', () => {
     const done = terminal(events)
     expect(done.kind === 'completed' && done.markdown).toBe('No stop button here.')
     expect(kinds(events)).not.toContain('progress:generating')
+  })
+
+  it('completes even when a "streaming" hint never clears after the reply is done', async () => {
+    const { events } = await run(makeJob(), {
+      reply: '<p>Finished.</p>',
+      stuckTurnState: 'streaming'
+    })
+    const done = terminal(events)
+    expect(done.kind === 'completed' && done.markdown).toBe('Finished.')
   })
 
   it('sends with the Enter key when the send button does nothing', async () => {
@@ -174,13 +211,10 @@ describe('a successful run', () => {
   })
 })
 
-describe('failures', () => {
-  const failure = (events: JobEvent[]) => {
-    const last = terminal(events)
-    if (last.kind !== 'failed')
-      throw new Error(`expected failure, got ${JSON.stringify(last)}`)
-    return last
-  }
+describe.each(['legacy', 'redesign'] as const)('failures (%s page)', (kind) => {
+  beforeEach(() => {
+    layout = kind
+  })
 
   it('reports login-required when the page shows login buttons', async () => {
     const { events } = await run(makeJob(), { loggedOut: true })
@@ -192,18 +226,6 @@ describe('failures', () => {
     const { events } = await run(makeJob(), { loggedOut: false })
     expect(failure(events).code).toBe('page-error')
     expect(failure(events).message).toMatch(/verification challenge/)
-  })
-
-  it('reports composer-not-found when the page has no message box', async () => {
-    document.body.innerHTML = '<main><p>nothing here</p></main>'
-    const events: JobEvent[] = []
-    await runJob(makeJob(), {
-      doc: document,
-      emit: (e) => events.push(e),
-      signal: new AbortController().signal,
-      timing: FAST
-    })
-    expect(failure(events).code).toBe('composer-not-found')
   })
 
   it('reports rate limits shown as a dialog when no reply arrives', async () => {
@@ -225,7 +247,7 @@ describe('failures', () => {
     expect(failure(events).message).toMatch(/usage cap/)
   })
 
-  it('times out when ChatGPT never finishes, naming any dialog it is showing', async () => {
+  it('times out when ChatGPT never finishes, naming any dialog and what the page looked like', async () => {
     const job = makeJob({ timeoutMs: 700 })
     const { events } = await run(
       job,
@@ -237,6 +259,8 @@ describe('failures', () => {
     const f = failure(events)
     expect(f.code).toBe('timeout')
     expect(f.message).toMatch(/Allow ChatGPT to use GitHub/)
+    expect(f.message).toMatch(/Page: .*turns=1/)
+    expect(f.message).toMatch(/Seen: .*generating/)
   })
 
   it('cancels mid-run: reports cancelled and presses ChatGPT’s stop button', async () => {
@@ -248,6 +272,67 @@ describe('failures', () => {
   it('fails with submit-failed when neither the button nor Enter sends', async () => {
     const { events } = await run(makeJob(), { flakyButton: true, enterSubmits: false })
     expect(failure(events).code).toBe('submit-failed')
+  })
+
+  it('fails fast, naming the page, when the reply is shown in markup it cannot read', async () => {
+    const started = Date.now()
+    const { events } = await run(makeJob({ timeoutMs: 20_000 }), {
+      reply: '<p>You cannot see me.</p>',
+      unmarkedReply: true
+    })
+    const f = failure(events)
+    expect(f.code).toBe('page-error')
+    expect(f.message).toMatch(/could not find its reply/)
+    expect(f.message).toMatch(/Page: .*composer=/)
+    expect(Date.now() - started).toBeLessThan(3_000)
+  })
+})
+
+describe('robustness against a page that is not quite what we expect', () => {
+  beforeEach(() => {
+    layout = 'redesign'
+  })
+
+  it('does not wait for a stale “streaming” hint from an old turn before sending', async () => {
+    const { events } = await run(
+      makeJob({ newChat: false }),
+      { reply: '<p>Sent anyway.</p>' },
+      {
+        setup: () =>
+          document
+            .getElementById('thread')!
+            .insertAdjacentHTML(
+              'beforeend',
+              '<div data-talvt-turn-state="streaming"><p>left over</p></div>'
+            )
+      }
+    )
+    const done = terminal(events)
+    expect(done.kind === 'completed' && done.markdown).toBe('Sent anyway.')
+  })
+
+  it('reports an answer without readable text instead of completing with an empty reply', async () => {
+    const { events } = await run(makeJob(), {
+      reply: '<span class="sr-only">only for screen readers</span>'
+    })
+    const f = failure(events)
+    expect(f.code).toBe('page-error')
+    expect(f.message).toMatch(/no text could be read/)
+    expect(f.message).toMatch(/Page: .*turns=2/)
+  })
+})
+
+describe('failures that do not depend on the page layout', () => {
+  it('reports composer-not-found when the page has no message box', async () => {
+    document.body.innerHTML = '<main><p>nothing here</p></main>'
+    const events: JobEvent[] = []
+    await runJob(makeJob(), {
+      doc: document,
+      emit: (e) => events.push(e),
+      signal: new AbortController().signal,
+      timing: FAST
+    })
+    expect(failure(events).code).toBe('composer-not-found')
   })
 
   it('reports busy when a previous reply cannot be stopped', async () => {
