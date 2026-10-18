@@ -4,8 +4,10 @@
 // ChatGPT account and needs the CodeGent browser extension loaded in a browser that is open
 // (the extension finds the hub by itself). Run it with `npm run test:live`; set
 // CODEGENT_LIVE_TASK to try another task. The repository is a clone of this one made for the run:
-// ChatGPT reads the real code through its GitHub connector, but everything the run commits is
-// pushed to a local bare repository only.
+// ChatGPT reads the real code through its GitHub connector. Nothing is pushed (the connector
+// could not see a commit that only exists here, and ChatGPT would rightly answer "blocked"): the
+// run commits locally and the follow-up messages carry the result, and the clone's push address
+// is a local bare repository as a second guard.
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -45,7 +47,7 @@ describe('LIVE: the whole agent loop on the real chatgpt.com', function () {
 
   after(async () => {
     await api.send({ type: 'stop' })
-    for (const key of ['replyTimeoutSeconds', 'maxSteps'])
+    for (const key of ['replyTimeoutSeconds', 'maxSteps', 'git.push'])
       await setSetting(key, undefined)
   })
 
@@ -53,6 +55,7 @@ describe('LIVE: the whole agent loop on the real chatgpt.com', function () {
     this.timeout(25 * 60_000)
     await setSetting('replyTimeoutSeconds', 900)
     await setSetting('maxSteps', 6)
+    await setSetting('git.push', false)
 
     const upstream = git(dir, 'remote', 'get-url', 'origin')
     const repoName = /github\.com[/:]([^/]+\/[^/.]+)/.exec(upstream)?.[1]
@@ -60,7 +63,9 @@ describe('LIVE: the whole agent loop on the real chatgpt.com', function () {
     await api.setPublishingConsent(repoName, 'allow')
     await api.send({ type: 'refreshRepo' })
     const base = git(dir, 'rev-parse', 'HEAD')
-    log(`repository ${repoName} @ ${base.slice(0, 7)} (pushes go to ${bare})`)
+    log(
+      `repository ${repoName} @ ${base.slice(0, 7)} (committing locally; pushing is off, and the push address is ${bare})`
+    )
 
     const task = process.env.CODEGENT_LIVE_TASK || DEFAULT_TASK
     log(`task: ${task.replace(/\n/g, ' ⏎ ')}`)
@@ -92,6 +97,8 @@ describe('LIVE: the whole agent loop on the real chatgpt.com', function () {
       )
       if (step.summary)
         log(`  ChatGPT: ${step.summary.replace(/\s+/g, ' ').slice(0, 300)}`)
+      for (const edit of step.edits)
+        for (const error of edit.errors) log(`  ${edit.path}: ${error}`)
       for (const problem of step.problems) log(`  problem: ${problem}`)
     }
     log(`conversation: ${run.conversationUrl}`)
@@ -116,9 +123,9 @@ describe('LIVE: the whole agent loop on the real chatgpt.com', function () {
       /(\/\/[^\n]*|\/\*[^\n]*\*\/)\n(export const MAX_ID_CHARS = 100)/
     )
 
-    // And committed; the push went to the local bare repository, not to GitHub.
+    // And committed locally; nothing was pushed.
     assert.match(git(dir, 'log', '-1', '--format=%s'), /^codegent: /)
     assert.notEqual(git(dir, 'rev-parse', 'HEAD'), base)
-    assert.equal(git(bare, 'rev-parse', 'main'), git(dir, 'rev-parse', 'HEAD'))
+    assert.equal(git(bare, 'rev-parse', 'main'), base, 'nothing may be pushed')
   })
 })

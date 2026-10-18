@@ -105,10 +105,14 @@ The prompt's own format example is parsed in a test, so the prompt and the parse
   (stop button gone, turn complete, text stable), converts the answer DOM to markdown with correctly
   sized code fences, and detects sign-in walls, challenges, rate limits and banners. All selectors live
   in one module with ordered fallbacks, and the popup's **Test ChatGPT page** reports which match.
-  The reply is found as "the turns after the one that was there when the prompt was sent" — by author
-  role when the page marks it, otherwise by position, with the prompt's own turn recognised by its first
-  words — so it does not depend on any single attribute. The stop button is the only signal that
-  _proves_ a reply is still streaming; other hints (a streaming class, a turn that is not in a final
+  The page draws one container per exchange (your message, the agent's activity, the assistant's message,
+  a row of buttons); the reply is the assistant's message in it, found by the markers the page puts on
+  messages (the author attribute it used to carry, or the `…:assistant` search-unit key it carries now)
+  and read from the body the page itself copies from (`data-markdown-copy`). When no marker is left, the
+  reply is whatever follows the prompt's own text inside the first new container, so a future redesign
+  degrades instead of breaking. Code blocks are recognised without `<pre>`: a `<code>` that spans lines or
+  stands alone outside a sentence is a block, and the language strip with the Copy button is page chrome.
+  The stop button is the only signal that _proves_ a reply is still streaming; other hints (a streaming class, a turn that is not in a final
   state) can go stale and only delay acceptance by a few seconds. A run never waits silently for a reply
   it cannot see: once generation has visibly ended and nothing readable is on the page, it fails within
   seconds, and every timeout carries `[Page: …]`, a structure-only description of the page (counts,
@@ -143,8 +147,9 @@ The prompt's own format example is parsed in a test, so the prompt and the parse
 | webview               | jsdom, with a fake of VS Code's webview API; hostile strings must render as text                                                                                                                                                                |
 | VS Code extension     | Inside a real VS Code (`@vscode/test-electron`, isolated profile): first against a scripted browser speaking the real protocol, then against the real browser extension in Chromium and the mock page — the whole product except ChatGPT itself |
 
-The mock ChatGPT page exists in two generations — the one with test ids and per-message author
-attributes, and the October 2026 redesign (one send/stop button, no test ids, turns marked only by
-`data-talvt-turn-state`) — and the browser tests run against both. What cannot be tested offline is
+The mock ChatGPT page exists in three generations — the one with test ids and per-message author
+attributes, the page as captured on 2026-10-18 (one container per exchange, one send/stop button,
+no `<pre>` around code), and an invented minimal one that exercises the generic fallback — and the
+browser tests run against all of them. What cannot be tested offline is
 ChatGPT's real page and GitHub connector; `npm run test:live` is the opt-in test for that (it sends real
 messages from the signed-in account), next to the popup's self-test.

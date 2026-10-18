@@ -82,7 +82,9 @@ export const cloneOfRealRepo = (
   const dir = path.join(parent, name)
   const bare = path.join(parent, `${name}.git`)
   const upstream = git(source, 'remote', 'get-url', 'origin')
-  git(parent, 'clone', '-q', '--no-hardlinks', source, dir)
+  // Line-ending conversion must be off while the files are checked out, not only afterwards:
+  // switching it off later would make every file look modified.
+  git(parent, 'clone', '-q', '--no-hardlinks', '-c', 'core.autocrlf=false', source, dir)
   git(dir, 'config', 'user.email', 'tester@example.com')
   git(dir, 'config', 'user.name', 'Tester')
   git(dir, 'config', 'core.autocrlf', 'false')

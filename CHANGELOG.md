@@ -2,10 +2,12 @@
 
 ## Unreleased
 
-- Fixed: with ChatGPT's page as redesigned in October 2026 (no test ids, no author attribute on
-  messages, one button for send and stop) a run typed and sent the prompt but never recognised the
-  finished reply, so it ended with _did not finish replying in time_ after the full timeout. The reply
-  is now found by position in the conversation as well as by author role, the send button is found
+- Fixed: with ChatGPT's page as redesigned in October 2026 a run typed and sent the prompt but never
+  recognised the finished reply, so it ended with _did not finish replying in time_ after the full
+  timeout. The page no longer has test ids or an author attribute on messages, draws one container for
+  your message and the reply together, and draws code blocks without `<pre>` (which would have hidden
+  every edit). The reply is now read from the assistant's message in that container (with a fallback:
+  whatever follows your prompt), code blocks are recognised in both forms, the send button is found
   without a test id, and sign-in is recognised by the page's buttons.
 - A run no longer waits silently for a reply it cannot see: when generation has visibly ended and
   nothing readable is on the page it fails within seconds, and every timeout names what the page looked

@@ -87,7 +87,7 @@ var cloneOfRealRepo = (parent, name, source) => {
   const dir = import_node_path.default.join(parent, name);
   const bare = import_node_path.default.join(parent, `${name}.git`);
   const upstream = git(source, "remote", "get-url", "origin");
-  git(parent, "clone", "-q", "--no-hardlinks", source, dir);
+  git(parent, "clone", "-q", "--no-hardlinks", "-c", "core.autocrlf=false", source, dir);
   git(dir, "config", "user.email", "tester@example.com");
   git(dir, "config", "user.name", "Tester");
   git(dir, "config", "core.autocrlf", "false");
