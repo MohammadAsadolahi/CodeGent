@@ -25,3 +25,16 @@ export const configuration = () => vscode.workspace.getConfiguration('codegent')
 export const setSetting = async (key: string, value: unknown): Promise<void> => {
   await configuration().update(key, value, vscode.ConfigurationTarget.Global)
 }
+
+/**
+ * Replaces one of VS Code's `window.*` functions (to answer a dialog that nobody can click in a
+ * test). Returns the function that puts the original back.
+ */
+export const replaceWindowFunction = (name: 'showInformationMessage' | 'showQuickPick', replacement: (...args: any[]) => unknown): (() => void) => {
+  const window = vscode.window as unknown as Record<string, unknown>
+  const original = window[name]
+  window[name] = replacement
+  return () => {
+    window[name] = original
+  }
+}

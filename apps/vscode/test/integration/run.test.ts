@@ -2,60 +2,30 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import * as vscode from 'vscode'
-import type { CodeGentApi } from '../../src/app'
-import { FakeBrowser, until } from '../support/fake-browser'
+import { until } from '../support/fake-browser'
 import { git, write } from '../support/git-fixture'
 import { chatReply, createdFile, updatedFile } from '../support/replies'
-import { getApi, setSetting, workRepo } from './env'
-
-const REPO = 'octo/project'
-const CONVERSATION = 'https://chatgpt.com/c/test-conversation'
+import { setSetting, workRepo } from './env'
+import { CONVERSATION, installRunHooks, REPO } from './fixture'
 
 describe('an agent run in VS Code', () => {
-  let api: CodeGentApi
-  let browser: FakeBrowser
+  const ctx = installRunHooks()
   const repo = workRepo()
   const file = (relative: string) => path.join(repo.dir, ...relative.split('/'))
   const read = (relative: string) => fs.readFileSync(file(relative), 'utf8')
 
   /** Starts a run; resolves when it has finished or paused (the panel does not wait for this). */
-  const start = (task: string) => api.send({ type: 'start', task })
-  const run = () => api.state().run!
-
-  before(async () => {
-    api = await getApi()
-    await api.waitFor((state) => state.connection.hub === 'connected', 30_000)
-  })
-
-  beforeEach(async () => {
-    repo.reset()
-    await api.send({ type: 'dismissRun' })
-    await api.send({ type: 'clearHistory' })
-    await api.setPublishingConsent(REPO, 'allow')
-    await api.send({ type: 'refreshRepo' })
-    browser = await new FakeBrowser(api.hub().port!).connect()
-    await api.waitFor((state) => state.connection.browsers.length === 1)
-  })
-
-  afterEach(async () => {
-    await api.send({ type: 'stop' })
-    await api.waitFor((state) => !state.run || state.run.state !== 'running', 15_000)
-    browser.close()
-    await api.waitFor((state) => state.connection.browsers.length === 0)
-    for (const key of ['autoApply', 'autoContinue', 'git.push', 'git.commit', 'verifyCommand', 'diagnosticsWaitSeconds']) {
-      await setSetting(key, undefined)
-    }
-    await vscode.commands.executeCommand('workbench.action.closeAllEditors')
-  })
+  const start = (task: string) => ctx.api.send({ type: 'start', task })
+  const run = () => ctx.api.state().run!
 
   it("applies ChatGPT's reply, commits only that file and pushes it to GitHub", async () => {
-    browser.answerWith(() => chatReply('I added the greeting file.', [createdFile('hello.txt', 'Hello from CodeGent')], 'done'))
+    ctx.browser.answerWith(() => chatReply('I added the greeting file.', [createdFile('hello.txt', 'Hello from CodeGent')], 'done'))
 
     await start('Create hello.txt')
 
     // What ChatGPT was asked.
-    assert.equal(browser.jobs.length, 1)
-    const job = browser.jobs[0]!
+    assert.equal(ctx.browser.jobs.length, 1)
+    const job = ctx.browser.jobs[0]!
     assert.equal(job.newChat, true)
     assert.equal(job.autoSubmit, true)
     assert.equal(job.chatUrl, 'https://chatgpt.com/')
@@ -70,7 +40,7 @@ describe('an agent run in VS Code', () => {
     assert.equal(git(repo.dir, 'status', '--porcelain'), '')
 
     // What the panel shows.
-    const state = api.state()
+    const state = ctx.api.state()
     assert.equal(run().state, 'finished')
     assert.equal(run().outcome, 'done')
     assert.equal(run().conversationUrl, CONVERSATION)
@@ -86,7 +56,7 @@ describe('an agent run in VS Code', () => {
   })
 
   it('continues over several steps in one conversation, reporting each result back', async () => {
-    browser.answerWith((_job, index) =>
+    ctx.browser.answerWith((_job, index) =>
       [
         chatReply('Start with the notes file.', [createdFile('notes.txt', 'one\ntwo')], 'continue'),
         chatReply('Fix the second line.', [updatedFile('notes.txt', 'two', 'three')], 'continue'),
@@ -96,15 +66,15 @@ describe('an agent run in VS Code', () => {
 
     await start('Write the notes')
 
-    assert.equal(browser.jobs.length, 3)
+    assert.equal(ctx.browser.jobs.length, 3)
     assert.deepEqual(
-      browser.jobs.map((job) => job.newChat),
+      ctx.browser.jobs.map((job) => job.newChat),
       [true, false, false]
     )
-    assert.equal(new Set(browser.jobs.map((job) => job.sessionId)).size, 1, 'one conversation')
-    assert.match(browser.jobs[1]!.text, /step 1/)
-    assert.ok(browser.jobs[1]!.text.includes('notes.txt'), 'the result of step 1 mentions the file')
-    assert.match(browser.jobs[2]!.text, /step 2/)
+    assert.equal(new Set(ctx.browser.jobs.map((job) => job.sessionId)).size, 1, 'one conversation')
+    assert.match(ctx.browser.jobs[1]!.text, /step 1/)
+    assert.ok(ctx.browser.jobs[1]!.text.includes('notes.txt'), 'the result of step 1 mentions the file')
+    assert.match(ctx.browser.jobs[2]!.text, /step 2/)
 
     assert.equal(read('notes.txt'), 'one\nthree\n')
     assert.equal(git(repo.dir, 'rev-list', '--count', `${repo.base}..HEAD`), '2')
@@ -116,11 +86,11 @@ describe('an agent run in VS Code', () => {
   it('leaves your own uncommitted work alone', async () => {
     write(repo.dir, 'src/keep.txt', 'untouched\nmy work in progress\n') // a tracked file with local changes
     write(repo.dir, 'mine.txt', 'not committed yet\n') // and a new file
-    await api.send({ type: 'refreshRepo' })
-    const status = api.state().repo
+    await ctx.api.send({ type: 'refreshRepo' })
+    const status = ctx.api.state().repo
     assert.equal(status.ok && status.dirtyCount, 2)
 
-    browser.answerWith(() => chatReply('Added the greeting.', [createdFile('hello.txt', 'hi')], 'done'))
+    ctx.browser.answerWith(() => chatReply('Added the greeting.', [createdFile('hello.txt', 'hi')], 'done'))
     await start('Create hello.txt')
 
     assert.equal(run().outcome, 'done')
@@ -135,7 +105,7 @@ describe('an agent run in VS Code', () => {
     await editor.edit((edit) => edit.insert(new vscode.Position(0, 0), '// unsaved idea\n'))
     assert.equal(document.isDirty, true)
 
-    browser.answerWith((_job, index) =>
+    ctx.browser.answerWith((_job, index) =>
       [
         chatReply('Changing the file.', [updatedFile('src/keep.txt', 'untouched', 'changed')], 'done'),
         chatReply('Understood, leaving it.', [], 'done')
@@ -148,7 +118,7 @@ describe('an agent run in VS Code', () => {
     assert.match(first.edits[0]!.errors.join(' '), /uncommitted local changes/)
     assert.equal(fs.readFileSync(file('src/keep.txt'), 'utf8'), 'untouched\n', 'the file on disk is unchanged')
     assert.ok(document.getText().startsWith('// unsaved idea'), 'the unsaved text is still in the editor')
-    assert.ok(browser.jobs[1]!.text.includes('left alone'), 'ChatGPT is told why')
+    assert.ok(ctx.browser.jobs[1]!.text.includes('left alone'), 'ChatGPT is told why')
     assert.equal(git(repo.dir, 'rev-list', '--count', `${repo.base}..HEAD`), '0', 'nothing was committed')
 
     await vscode.commands.executeCommand('workbench.action.files.revert')
@@ -156,11 +126,11 @@ describe('an agent run in VS Code', () => {
 
   it('shows the proposal and waits for approval when auto-apply is off', async () => {
     await setSetting('autoApply', false)
-    await api.waitFor((state) => !state.toggles.autoApply)
-    browser.answerWith(() => chatReply('Added the greeting.', [createdFile('hello.txt', 'Hello from CodeGent')], 'done'))
+    await ctx.api.waitFor((state) => !state.toggles.autoApply)
+    ctx.browser.answerWith(() => chatReply('Added the greeting.', [createdFile('hello.txt', 'Hello from CodeGent')], 'done'))
 
     const finished = start('Create hello.txt')
-    const state = await api.waitFor((s) => s.review !== null)
+    const state = await ctx.api.waitFor((s) => s.review !== null)
     assert.deepEqual(
       state.review!.files.map((entry) => [entry.path, entry.kind, entry.added]),
       [['hello.txt', 'create', 1]]
@@ -168,7 +138,7 @@ describe('an agent run in VS Code', () => {
     assert.equal(fs.existsSync(file('hello.txt')), false, 'nothing is written before approval')
 
     // The diff opens in VS Code's diff editor, with the proposed text on the right.
-    await api.send({ type: 'openDiff', path: 'hello.txt' })
+    await ctx.api.send({ type: 'openDiff', path: 'hello.txt' })
     const diff = vscode.window.tabGroups.all
       .flatMap((group) => group.tabs)
       .map((tab) => tab.input)
@@ -178,7 +148,7 @@ describe('an agent run in VS Code', () => {
     assert.equal((await vscode.workspace.openTextDocument(diff.modified)).getText(), 'Hello from CodeGent\n')
     assert.equal((await vscode.workspace.openTextDocument(diff.original)).getText(), '')
 
-    await api.send({ type: 'decide', decision: 'apply' })
+    await ctx.api.send({ type: 'decide', decision: 'apply' })
     await finished
     assert.equal(read('hello.txt'), 'Hello from CodeGent\n')
     assert.equal(run().outcome, 'done')
@@ -187,8 +157,8 @@ describe('an agent run in VS Code', () => {
 
   it('applies nothing when the proposal is declined, and tells ChatGPT', async () => {
     await setSetting('autoApply', false)
-    await api.waitFor((state) => !state.toggles.autoApply)
-    browser.answerWith((_job, index) =>
+    await ctx.api.waitFor((state) => !state.toggles.autoApply)
+    ctx.browser.answerWith((_job, index) =>
       [
         chatReply('Added the greeting.', [createdFile('hello.txt', 'hi')], 'continue'),
         chatReply('Alright, I will stop here.', [], 'done')
@@ -196,66 +166,66 @@ describe('an agent run in VS Code', () => {
     )
 
     const finished = start('Create hello.txt')
-    await api.waitFor((s) => s.review !== null)
-    await api.send({ type: 'decide', decision: 'skip' })
+    await ctx.api.waitFor((s) => s.review !== null)
+    await ctx.api.send({ type: 'decide', decision: 'skip' })
     await finished
 
     assert.equal(fs.existsSync(file('hello.txt')), false)
     assert.equal(git(repo.dir, 'rev-list', '--count', `${repo.base}..HEAD`), '0')
-    assert.match(browser.jobs[1]!.text, /not to apply|declined/i)
+    assert.match(ctx.browser.jobs[1]!.text, /not to apply|declined/i)
     assert.equal(run().steps[0]!.decision, 'skip')
   })
 
   it('undoes a step in the working tree', async () => {
-    browser.answerWith(() => chatReply('Added the greeting.', [createdFile('hello.txt', 'hi')], 'done'))
+    ctx.browser.answerWith(() => chatReply('Added the greeting.', [createdFile('hello.txt', 'hi')], 'done'))
     await start('Create hello.txt')
     assert.equal(fs.existsSync(file('hello.txt')), true)
 
-    await api.send({ type: 'undo', step: 1 })
+    await ctx.api.send({ type: 'undo', step: 1 })
 
     assert.equal(fs.existsSync(file('hello.txt')), false)
     const step = run().steps[0]!
     assert.equal(step.undone, true)
     assert.equal(step.canUndo, false)
-    assert.match(api.state().notice?.text ?? '', /undone/)
+    assert.match(ctx.api.state().notice?.text ?? '', /undone/)
   })
 
   it('stops on request and cancels the message in the browser', async () => {
-    browser.onJob = () => {} // ChatGPT never answers
+    ctx.browser.onJob = () => {} // ChatGPT never answers
     const finished = start('Create hello.txt')
-    await until(() => browser.jobs.length === 1, 'the message to reach the browser')
+    await until(() => ctx.browser.jobs.length === 1, 'the message to reach the browser')
 
-    await api.send({ type: 'stop' })
+    await ctx.api.send({ type: 'stop' })
     await finished
 
     assert.equal(run().outcome, 'stopped')
-    await until(() => browser.cancels.length === 1, 'the cancel to reach the browser')
-    assert.equal(browser.cancels[0]!.jobId, browser.jobs[0]!.jobId)
+    await until(() => ctx.browser.cancels.length === 1, 'the cancel to reach the browser')
+    assert.equal(ctx.browser.cancels[0]!.jobId, ctx.browser.jobs[0]!.jobId)
   })
 
   it('commits locally when pushing is off, and pushes on request', async () => {
     await setSetting('git.push', false)
-    await api.waitFor((state) => !state.toggles.push)
-    browser.answerWith(() => chatReply('Added the greeting.', [createdFile('hello.txt', 'hi')], 'done'))
+    await ctx.api.waitFor((state) => !state.toggles.push)
+    ctx.browser.answerWith(() => chatReply('Added the greeting.', [createdFile('hello.txt', 'hi')], 'done'))
 
     await start('Create hello.txt')
 
     assert.equal(run().steps[0]!.publish?.state, 'committed')
     assert.equal(git(repo.bare, 'rev-parse', 'main'), repo.base, 'GitHub has not seen the commit')
-    await api.send({ type: 'refreshRepo' })
-    const status = api.state().repo
+    await ctx.api.send({ type: 'refreshRepo' })
+    const status = ctx.api.state().repo
     assert.equal(status.ok && status.ahead, 1)
 
-    await api.send({ type: 'pushNow' })
+    await ctx.api.send({ type: 'pushNow' })
     assert.equal(git(repo.bare, 'rev-parse', 'main'), git(repo.dir, 'rev-parse', 'HEAD'))
-    assert.match(api.state().notice?.text ?? '', /Pushed main/)
-    await api.waitFor((state) => state.repo.ok && state.repo.ahead === 0)
+    assert.match(ctx.api.state().notice?.text ?? '', /Pushed main/)
+    await ctx.api.waitFor((state) => state.repo.ok && state.repo.ahead === 0)
   })
 
   it('does not commit at all when committing is off', async () => {
     await setSetting('git.commit', false)
-    await api.waitFor((state) => !state.toggles.commit)
-    browser.answerWith(() => chatReply('Added the greeting.', [createdFile('hello.txt', 'hi')], 'done'))
+    await ctx.api.waitFor((state) => !state.toggles.commit)
+    ctx.browser.answerWith(() => chatReply('Added the greeting.', [createdFile('hello.txt', 'hi')], 'done'))
 
     await start('Create hello.txt')
 
@@ -267,7 +237,7 @@ describe('an agent run in VS Code', () => {
 
   it('pauses when ChatGPT reports a problem and carries on after Resume', async () => {
     let attempts = 0
-    browser.onJob = (_job, send) => {
+    ctx.browser.onJob = (_job, send) => {
       if (attempts++ === 0) return send({ kind: 'failed', code: 'rate-limited', message: 'ChatGPT says you are sending too many requests' })
       send({
         kind: 'completed',
@@ -282,10 +252,10 @@ describe('an agent run in VS Code', () => {
     assert.equal(run().canResume, true)
     assert.match(run().message ?? '', /too many requests/)
 
-    await api.send({ type: 'resume' })
+    await ctx.api.send({ type: 'resume' })
     assert.equal(run().outcome, 'done')
     assert.equal(read('hello.txt'), 'hi\n')
-    assert.equal(browser.jobs.length, 2)
+    assert.equal(ctx.browser.jobs.length, 2)
   })
 
   it('refuses to start while GitHub has commits that are not in the working tree', async () => {
@@ -294,18 +264,18 @@ describe('an agent run in VS Code', () => {
     git(repo.dir, 'commit', '-q', '-m', 'someone else')
     git(repo.dir, 'push', '-q', 'origin', 'main')
     git(repo.dir, 'reset', '-q', '--hard', repo.base) // the working tree is now behind GitHub
-    browser.answerWith(() => chatReply('Should never be asked.', [], 'done'))
+    ctx.browser.answerWith(() => chatReply('Should never be asked.', [], 'done'))
 
     await start('Create hello.txt')
 
-    assert.equal(api.state().run, null)
-    assert.equal(browser.jobs.length, 0)
-    assert.match(api.state().notice?.text ?? '', /Pull first/)
+    assert.equal(ctx.api.state().run, null)
+    assert.equal(ctx.browser.jobs.length, 0)
+    assert.match(ctx.api.state().notice?.text ?? '', /Pull first/)
   })
 
   it('runs the verify command and tells ChatGPT when it fails', async () => {
     await setSetting('verifyCommand', `node -e "console.log('VERIFY-MARKER'); process.exit(3)"`)
-    browser.answerWith((_job, index) =>
+    ctx.browser.answerWith((_job, index) =>
       [
         chatReply('Added the greeting.', [createdFile('hello.txt', 'hi')], 'done'),
         chatReply('Looking into it.', [], 'blocked')
@@ -318,8 +288,8 @@ describe('an agent run in VS Code', () => {
       { outcome: run().steps[0]!.verify?.outcome, exitCode: run().steps[0]!.verify?.exitCode },
       { outcome: 'failed', exitCode: 3 }
     )
-    assert.equal(browser.jobs.length, 2, 'a failing check keeps the run going instead of finishing')
-    assert.ok(browser.jobs[1]!.text.includes('VERIFY-MARKER'), 'the command output is sent back')
+    assert.equal(ctx.browser.jobs.length, 2, 'a failing check keeps the run going instead of finishing')
+    assert.ok(ctx.browser.jobs[1]!.text.includes('VERIFY-MARKER'), 'the command output is sent back')
   })
 
   it('reports the errors the language servers find in the changed files', async function () {
@@ -339,7 +309,7 @@ describe('an agent run in VS Code', () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors')
 
     await setSetting('diagnosticsWaitSeconds', 20)
-    browser.answerWith((_job, index) =>
+    ctx.browser.answerWith((_job, index) =>
       [
         chatReply('Added the module.', [createdFile('src/count.ts', 'export const count: number = "three"')], 'done'),
         chatReply('I will leave it.', [], 'blocked')
@@ -350,7 +320,7 @@ describe('an agent run in VS Code', () => {
     const diagnostics = run().steps[0]!.diagnostics
     assert.ok(diagnostics && diagnostics.errors >= 1, `expected an error in src/count.ts, got ${JSON.stringify(diagnostics)}`)
     assert.equal(diagnostics.items[0]!.path, 'src/count.ts')
-    assert.ok(browser.jobs[1]!.text.includes('src/count.ts'), 'the error is reported back')
+    assert.ok(ctx.browser.jobs[1]!.text.includes('src/count.ts'), 'the error is reported back')
 
     // The file was only shown for the analysis: nothing is left open, and the layout is as before.
     assert.deepEqual(

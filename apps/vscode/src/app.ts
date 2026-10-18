@@ -3,6 +3,7 @@ import path from 'node:path'
 import * as vscode from 'vscode'
 import { HUB_PORTS } from '@codegent/protocol'
 import type { BrowserInfo } from '@codegent/protocol'
+import { normalizeRepoPath } from '@codegent/engine'
 import { BridgeChat } from './bridge/bridge-chat'
 import { HubConnection } from './bridge/hub-connection'
 import { installBrowserExtension } from './browser-extension-installer'
@@ -434,9 +435,11 @@ export class App implements vscode.Disposable {
   private async openFile(file: string): Promise<void> {
     const root = this.repoStatus?.ok ? this.repoStatus.root : this.folderPath()
     if (!root) return
-    const target = path.join(root, ...file.split('/'))
-    if (!path.resolve(target).toLowerCase().startsWith(path.resolve(root).toLowerCase())) return
-    await vscode.window.showTextDocument(vscode.Uri.file(target), { preview: true })
+    // The path comes from the panel, which shows text that originates from ChatGPT: only plain
+    // repository-relative paths are opened.
+    const safe = normalizeRepoPath(file)
+    if (!safe.ok) return void this.notify({ kind: 'warning', text: `Cannot open "${file}": ${safe.reason}.` })
+    await vscode.window.showTextDocument(vscode.Uri.file(path.join(root, ...safe.path.split('/'))), { preview: true })
   }
 
   private openUrl(url: string): void {
