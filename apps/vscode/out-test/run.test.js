@@ -4316,11 +4316,13 @@ describe("an agent run in VS Code", () => {
     await typescript.activate();
     write(repo.dir, "warmup.ts", 'export const warmup: number = "text"\n');
     const document = await vscode2.workspace.openTextDocument(vscode2.Uri.file(file("warmup.ts")));
+    await vscode2.window.showTextDocument(document, { preserveFocus: true });
     await until(
       () => vscode2.languages.getDiagnostics(document.uri).length > 0,
       `the TypeScript server to start (language ${document.languageId})`,
       12e4
     );
+    await vscode2.commands.executeCommand("workbench.action.closeAllEditors");
     await setSetting("diagnosticsWaitSeconds", 20);
     browser.answerWith(
       (_job, index) => [
@@ -4333,5 +4335,10 @@ describe("an agent run in VS Code", () => {
     import_strict.default.ok(diagnostics && diagnostics.errors >= 1, `expected an error in src/count.ts, got ${JSON.stringify(diagnostics)}`);
     import_strict.default.equal(diagnostics.items[0].path, "src/count.ts");
     import_strict.default.ok(browser.jobs[1].text.includes("src/count.ts"), "the error is reported back");
+    import_strict.default.deepEqual(
+      vscode2.window.tabGroups.all.flatMap((group) => group.tabs),
+      []
+    );
+    import_strict.default.equal(vscode2.window.tabGroups.all.length, 1);
   });
 });

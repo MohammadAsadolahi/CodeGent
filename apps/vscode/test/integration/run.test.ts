@@ -330,11 +330,13 @@ describe('an agent run in VS Code', () => {
     await typescript.activate()
     write(repo.dir, 'warmup.ts', 'export const warmup: number = "text"\n')
     const document = await vscode.workspace.openTextDocument(vscode.Uri.file(file('warmup.ts')))
+    await vscode.window.showTextDocument(document, { preserveFocus: true })
     await until(
       () => vscode.languages.getDiagnostics(document.uri).length > 0,
       `the TypeScript server to start (language ${document.languageId})`,
       120_000
     )
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors')
 
     await setSetting('diagnosticsWaitSeconds', 20)
     browser.answerWith((_job, index) =>
@@ -349,5 +351,12 @@ describe('an agent run in VS Code', () => {
     assert.ok(diagnostics && diagnostics.errors >= 1, `expected an error in src/count.ts, got ${JSON.stringify(diagnostics)}`)
     assert.equal(diagnostics.items[0]!.path, 'src/count.ts')
     assert.ok(browser.jobs[1]!.text.includes('src/count.ts'), 'the error is reported back')
+
+    // The file was only shown for the analysis: nothing is left open, and the layout is as before.
+    assert.deepEqual(
+      vscode.window.tabGroups.all.flatMap((group) => group.tabs),
+      []
+    )
+    assert.equal(vscode.window.tabGroups.all.length, 1)
   })
 })

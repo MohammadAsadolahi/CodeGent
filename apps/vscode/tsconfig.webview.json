@@ -6,5 +6,5 @@
     "jsxImportSource": "preact",
     "types": []
   },
-  "include": ["webview", "src/ui/protocol.ts"]
+  "include": ["webview", "src/ui/protocol.ts", "test/webview"]
 }

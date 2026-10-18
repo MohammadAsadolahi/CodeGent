@@ -234,7 +234,7 @@
           "type": "number",
           "default": 8,
           "minimum": 0,
-          "description": "How long to let language servers analyse the changed files before their errors are collected."
+          "markdownDescription": "How long to let language servers analyse the files a step changed before their errors are collected. Language servers only look at files that are shown in an editor, so CodeGent briefly shows the changed files in a side editor group (without taking focus) and closes them again. Set to 0 to skip this; nothing is opened then."
         },
         "codegent.advanced.hubPorts": {
           "type": "array",

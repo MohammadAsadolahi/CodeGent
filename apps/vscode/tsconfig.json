@@ -5,5 +5,5 @@
     "types": ["node", "vscode", "mocha"]
   },
   "include": ["src", "test", "scripts"],
-  "exclude": ["webview"]
+  "exclude": ["webview", "test/webview"]
 }

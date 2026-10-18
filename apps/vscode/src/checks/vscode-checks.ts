@@ -14,6 +14,14 @@ export interface ChecksOptions {
 const MIN_WAIT_MS = 700
 const QUIET_MS = 1_200
 const BASELINE_WAIT_CAP_MS = 3_000
+/** More files than this are not shown for analysis (each one is briefly an editor tab). */
+const MAX_REVEALED_FILES = 12
+
+/** URIs of the text files that are open in some editor tab. */
+const openTabUris = (): string[] =>
+  vscode.window.tabGroups.all.flatMap((group) =>
+    group.tabs.flatMap((tab) => (tab.input instanceof vscode.TabInputText ? [tab.input.uri.toString()] : []))
+  )
 
 const codeOf = (code: vscode.Diagnostic['code']): string | undefined => {
   if (code === undefined) return undefined
@@ -58,11 +66,20 @@ export class VsCodeChecks implements ChecksPort {
     return runVerifyCommand({ command, cwd: this.options.root, timeoutMs, signal })
   }
 
-  /** Opens the files (which prompts language servers to analyse them) and waits for things to calm down. */
+  /**
+   * Language servers only analyse files that are shown in an editor, so the files are briefly
+   * revealed in a side group (without taking focus) while we wait for things to calm down, and
+   * closed again afterwards. With a wait of 0 nothing is opened and only what is already known
+   * is read.
+   */
   private async collect(paths: readonly string[], waitMs: number, signal: AbortSignal): Promise<DiagnosticItem[]> {
     const uris = paths.map((p) => this.uri(p))
-    await Promise.all(uris.map((uri) => Promise.resolve(vscode.workspace.openTextDocument(uri)).then(undefined, () => undefined)))
-    if (waitMs > 0) await this.settle(uris, waitMs, signal)
+    const revealed = waitMs > 0 ? await this.reveal(uris) : []
+    try {
+      if (waitMs > 0) await this.settle(uris, waitMs, signal)
+    } finally {
+      await this.release(revealed)
+    }
 
     const items: DiagnosticItem[] = []
     paths.forEach((relative, index) => {
@@ -80,6 +97,39 @@ export class VsCodeChecks implements ChecksPort {
       }
     })
     return items
+  }
+
+  /** Shows the files that are not on screen yet; returns the ones this call opened. */
+  private async reveal(uris: readonly vscode.Uri[]): Promise<string[]> {
+    const onScreen = new Set(openTabUris())
+    const opened: string[] = []
+    for (const uri of uris) {
+      if (opened.length >= MAX_REVEALED_FILES) break
+      const key = uri.toString()
+      if (onScreen.has(key)) continue
+      try {
+        const document = await vscode.workspace.openTextDocument(uri)
+        await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true, preview: false })
+        opened.push(key)
+      } catch (error) {
+        this.options.log?.(`could not open ${uri.fsPath} for analysis: ${(error as Error).message}`)
+      }
+    }
+    return opened
+  }
+
+  /** Closes the tabs `reveal` opened (and only those). */
+  private async release(opened: readonly string[]): Promise<void> {
+    if (opened.length === 0) return
+    const ours = new Set(opened)
+    const tabs = vscode.window.tabGroups.all
+      .flatMap((group) => group.tabs)
+      .filter((tab) => tab.input instanceof vscode.TabInputText && ours.has(tab.input.uri.toString()))
+    try {
+      await vscode.window.tabGroups.close(tabs, true)
+    } catch (error) {
+      this.options.log?.(`could not close the analysis tabs: ${(error as Error).message}`)
+    }
   }
 
   private settle(uris: readonly vscode.Uri[], maxMs: number, signal: AbortSignal): Promise<void> {
