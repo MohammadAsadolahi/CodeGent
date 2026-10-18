@@ -2,8 +2,9 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
+/** Runs git and returns its output without the trailing newline (leading spaces are kept: ` M file`). */
 export const git = (cwd: string, ...args: string[]): string =>
-  execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+  execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trimEnd()
 
 export const write = (cwd: string, file: string, content: string): void => {
   fs.mkdirSync(path.dirname(path.join(cwd, file)), { recursive: true })

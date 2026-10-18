@@ -43,7 +43,7 @@ var vscode = __toESM(require("vscode"));
 // apps/vscode/test/support/git-fixture.ts
 var import_node_child_process = require("node:child_process");
 var import_node_path = __toESM(require("node:path"));
-var git = (cwd, ...args) => (0, import_node_child_process.execFileSync)("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+var git = (cwd, ...args) => (0, import_node_child_process.execFileSync)("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trimEnd();
 var attachRepo = (parent, name) => {
   const dir = import_node_path.default.join(parent, name);
   const bare = import_node_path.default.join(parent, `${name}.git`);

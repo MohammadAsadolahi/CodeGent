@@ -52,6 +52,20 @@ const stopTestHubs = async () => {
 }
 
 const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'codegent-it-'))
+
+/** VS Code's helper processes can still be shutting down; leftovers in the temp folder are harmless. */
+const removeSandbox = async () => {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    try {
+      fs.rmSync(sandbox, { recursive: true, force: true })
+      return
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 500))
+    }
+  }
+  console.warn(`could not remove ${sandbox}; delete it by hand`)
+}
+
 let exitCode = 1
 try {
   await stopTestHubs() // a hub left over from an earlier run would be old code
@@ -95,7 +109,9 @@ try {
         'update.mode': 'none',
         'extensions.autoUpdate': false,
         'workbench.startupEditor': 'none',
-        'window.restoreWindows': 'none'
+        'window.restoreWindows': 'none',
+        'git.enabled': false,
+        'chat.disableAIFeatures': true
       },
       null,
       2
@@ -117,12 +133,14 @@ try {
       path.join(sandbox, 'work'),
       `--user-data-dir=${userData}`,
       `--extensions-dir=${path.join(sandbox, 'extensions')}`,
-      '--disable-extensions',
+      '--disable-extension=vscode.git',
       '--disable-workspace-trust'
     ],
     extensionTestsEnv: {
       CODEGENT_IT_DIR: sandbox,
       CODEGENT_IT_PORTS: TEST_PORTS.join(','),
+      // Optional: run only the tests whose title matches (`npm run test:integration -- "undo"`).
+      CODEGENT_IT_GREP: process.argv[2] ?? '',
       // Fetching the pretend GitHub address must fail at once instead of reaching the real one.
       GIT_ALLOW_PROTOCOL: 'file'
     }
@@ -132,6 +150,6 @@ try {
   console.error(error instanceof Error ? error.message : error)
 } finally {
   await stopTestHubs().catch((error) => console.error(error.message))
-  fs.rmSync(sandbox, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 })
+  await removeSandbox()
 }
 process.exit(exitCode)

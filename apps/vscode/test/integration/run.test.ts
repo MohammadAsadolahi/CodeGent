@@ -323,25 +323,31 @@ describe('an agent run in VS Code', () => {
   })
 
   it('reports the errors the language servers find in the changed files', async function () {
-    this.timeout(120_000)
-    // The built-in JSON language server has to be up before it can judge a new file.
-    const warmup = file('warmup.json')
-    write(repo.dir, 'warmup.json', '{ "a": ')
-    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(warmup))
-    await until(() => vscode.languages.getDiagnostics(document.uri).length > 0, 'the JSON language server to start', 60_000)
+    this.timeout(180_000)
+    // The built-in TypeScript server has to be up before it can judge a new file.
+    const typescript = vscode.extensions.getExtension('vscode.typescript-language-features')
+    if (!typescript) return this.skip()
+    await typescript.activate()
+    write(repo.dir, 'warmup.ts', 'export const warmup: number = "text"\n')
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(file('warmup.ts')))
+    await until(
+      () => vscode.languages.getDiagnostics(document.uri).length > 0,
+      `the TypeScript server to start (language ${document.languageId})`,
+      120_000
+    )
 
-    await setSetting('diagnosticsWaitSeconds', 15)
+    await setSetting('diagnosticsWaitSeconds', 20)
     browser.answerWith((_job, index) =>
       [
-        chatReply('Added the data file.', [createdFile('data.json', '{ "name": ')], 'done'),
+        chatReply('Added the module.', [createdFile('src/count.ts', 'export const count: number = "three"')], 'done'),
         chatReply('I will leave it.', [], 'blocked')
       ][index]!
     )
-    await start('Create data.json')
+    await start('Create src/count.ts')
 
     const diagnostics = run().steps[0]!.diagnostics
-    assert.ok(diagnostics && diagnostics.errors >= 1, `expected an error in data.json, got ${JSON.stringify(diagnostics)}`)
-    assert.equal(diagnostics!.items[0]!.path, 'data.json')
-    assert.ok(browser.jobs[1]!.text.includes('data.json'), 'the error is reported back')
+    assert.ok(diagnostics && diagnostics.errors >= 1, `expected an error in src/count.ts, got ${JSON.stringify(diagnostics)}`)
+    assert.equal(diagnostics.items[0]!.path, 'src/count.ts')
+    assert.ok(browser.jobs[1]!.text.includes('src/count.ts'), 'the error is reported back')
   })
 })

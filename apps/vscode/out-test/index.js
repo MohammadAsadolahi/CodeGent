@@ -38,6 +38,7 @@ var import_node_path = __toESM(require("node:path"));
 var import_mocha = __toESM(require("mocha"));
 var run = async () => {
   const mocha = new import_mocha.default({ ui: "bdd", color: false, timeout: 9e4, reporter: "spec" });
+  if (process.env.CODEGENT_IT_GREP) mocha.grep(process.env.CODEGENT_IT_GREP);
   for (const file of import_node_fs.default.readdirSync(__dirname).sort()) {
     if (file.endsWith(".test.js")) mocha.addFile(import_node_path.default.join(__dirname, file));
   }

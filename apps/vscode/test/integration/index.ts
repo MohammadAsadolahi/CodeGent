@@ -5,6 +5,7 @@ import Mocha from 'mocha'
 /** Entry point VS Code calls inside the extension host (see scripts/integration.mjs). */
 export const run = async (): Promise<void> => {
   const mocha = new Mocha({ ui: 'bdd', color: false, timeout: 90_000, reporter: 'spec' })
+  if (process.env.CODEGENT_IT_GREP) mocha.grep(process.env.CODEGENT_IT_GREP)
   for (const file of fs.readdirSync(__dirname).sort()) {
     if (file.endsWith('.test.js')) mocha.addFile(path.join(__dirname, file))
   }

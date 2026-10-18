@@ -1410,8 +1410,8 @@ var require_sender = __commonJS({
        * @param {Function} [generateMask] The function used to generate the masking
        *     key
        */
-      constructor(socket, extensions2, generateMask) {
-        this._extensions = extensions2 || {};
+      constructor(socket, extensions3, generateMask) {
+        this._extensions = extensions3 || {};
         if (generateMask) {
           this._generateMask = generateMask;
           this._maskBuffer = Buffer.alloc(4);
@@ -2236,9 +2236,9 @@ var require_extension = __commonJS({
       }
       return offers;
     }
-    function format(extensions2) {
-      return Object.keys(extensions2).map((extension2) => {
-        let configurations = extensions2[extension2];
+    function format(extensions3) {
+      return Object.keys(extensions3).map((extension2) => {
+        let configurations = extensions3[extension2];
         if (!Array.isArray(configurations)) configurations = [configurations];
         return configurations.map((params) => {
           return [extension2].concat(
@@ -2973,22 +2973,22 @@ var require_websocket = __commonJS({
             abortHandshake(websocket, socket, message);
             return;
           }
-          let extensions2;
+          let extensions3;
           try {
-            extensions2 = parse(secWebSocketExtensions);
+            extensions3 = parse(secWebSocketExtensions);
           } catch (err) {
             const message = "Invalid Sec-WebSocket-Extensions header";
             abortHandshake(websocket, socket, message);
             return;
           }
-          const extensionNames = Object.keys(extensions2);
+          const extensionNames = Object.keys(extensions3);
           if (extensionNames.length !== 1 || extensionNames[0] !== PerMessageDeflate2.extensionName) {
             const message = "Server indicated an extension that was not requested";
             abortHandshake(websocket, socket, message);
             return;
           }
           try {
-            perMessageDeflate.accept(extensions2[PerMessageDeflate2.extensionName]);
+            perMessageDeflate.accept(extensions3[PerMessageDeflate2.extensionName]);
           } catch (err) {
             const message = "Invalid Sec-WebSocket-Extensions header";
             abortHandshake(websocket, socket, message);
@@ -3554,7 +3554,7 @@ var require_websocket_server = __commonJS({
           }
         }
         const secWebSocketExtensions = req.headers["sec-websocket-extensions"];
-        const extensions2 = {};
+        const extensions3 = {};
         if (this.options.perMessageDeflate && secWebSocketExtensions !== void 0) {
           const perMessageDeflate = new PerMessageDeflate2({
             ...this.options.perMessageDeflate,
@@ -3565,7 +3565,7 @@ var require_websocket_server = __commonJS({
             const offers = extension2.parse(secWebSocketExtensions);
             if (offers[PerMessageDeflate2.extensionName]) {
               perMessageDeflate.accept(offers[PerMessageDeflate2.extensionName]);
-              extensions2[PerMessageDeflate2.extensionName] = perMessageDeflate;
+              extensions3[PerMessageDeflate2.extensionName] = perMessageDeflate;
             }
           } catch (err) {
             const message = "Invalid or unacceptable Sec-WebSocket-Extensions header";
@@ -3585,7 +3585,7 @@ var require_websocket_server = __commonJS({
                 return abortHandshake(socket, code || 401, message, headers);
               }
               this.completeUpgrade(
-                extensions2,
+                extensions3,
                 key,
                 protocols,
                 req,
@@ -3598,7 +3598,7 @@ var require_websocket_server = __commonJS({
           }
           if (!this.options.verifyClient(info)) return abortHandshake(socket, 401);
         }
-        this.completeUpgrade(extensions2, key, protocols, req, socket, head, cb);
+        this.completeUpgrade(extensions3, key, protocols, req, socket, head, cb);
       }
       /**
        * Upgrade the connection to WebSocket.
@@ -3613,7 +3613,7 @@ var require_websocket_server = __commonJS({
        * @throws {Error} If called more than once with the same socket
        * @private
        */
-      completeUpgrade(extensions2, key, protocols, req, socket, head, cb) {
+      completeUpgrade(extensions3, key, protocols, req, socket, head, cb) {
         if (!socket.readable || !socket.writable) return socket.destroy();
         if (socket[kWebSocket]) {
           throw new Error(
@@ -3636,13 +3636,13 @@ var require_websocket_server = __commonJS({
             ws._protocol = protocol;
           }
         }
-        if (extensions2[PerMessageDeflate2.extensionName]) {
-          const params = extensions2[PerMessageDeflate2.extensionName].params;
+        if (extensions3[PerMessageDeflate2.extensionName]) {
+          const params = extensions3[PerMessageDeflate2.extensionName].params;
           const value = extension2.format({
             [PerMessageDeflate2.extensionName]: [params]
           });
           headers.push(`Sec-WebSocket-Extensions: ${value}`);
-          ws._extensions = extensions2;
+          ws._extensions = extensions3;
         }
         this.emit("headers", headers, req);
         socket.write(headers.concat("\r\n").join("\r\n"));
@@ -3996,7 +3996,7 @@ var FakeBrowser = class {
 var import_node_child_process = require("node:child_process");
 var import_node_fs = __toESM(require("node:fs"));
 var import_node_path = __toESM(require("node:path"));
-var git = (cwd, ...args) => (0, import_node_child_process.execFileSync)("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+var git = (cwd, ...args) => (0, import_node_child_process.execFileSync)("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trimEnd();
 var write = (cwd, file, content) => {
   import_node_fs.default.mkdirSync(import_node_path.default.dirname(import_node_path.default.join(cwd, file)), { recursive: true });
   import_node_fs.default.writeFileSync(import_node_path.default.join(cwd, file), content);
@@ -4310,22 +4310,28 @@ describe("an agent run in VS Code", () => {
     import_strict.default.ok(browser.jobs[1].text.includes("VERIFY-MARKER"), "the command output is sent back");
   });
   it("reports the errors the language servers find in the changed files", async function() {
-    this.timeout(12e4);
-    const warmup = file("warmup.json");
-    write(repo.dir, "warmup.json", '{ "a": ');
-    const document = await vscode2.workspace.openTextDocument(vscode2.Uri.file(warmup));
-    await until(() => vscode2.languages.getDiagnostics(document.uri).length > 0, "the JSON language server to start", 6e4);
-    await setSetting("diagnosticsWaitSeconds", 15);
+    this.timeout(18e4);
+    const typescript = vscode2.extensions.getExtension("vscode.typescript-language-features");
+    if (!typescript) return this.skip();
+    await typescript.activate();
+    write(repo.dir, "warmup.ts", 'export const warmup: number = "text"\n');
+    const document = await vscode2.workspace.openTextDocument(vscode2.Uri.file(file("warmup.ts")));
+    await until(
+      () => vscode2.languages.getDiagnostics(document.uri).length > 0,
+      `the TypeScript server to start (language ${document.languageId})`,
+      12e4
+    );
+    await setSetting("diagnosticsWaitSeconds", 20);
     browser.answerWith(
       (_job, index) => [
-        chatReply("Added the data file.", [createdFile("data.json", '{ "name": ')], "done"),
+        chatReply("Added the module.", [createdFile("src/count.ts", 'export const count: number = "three"')], "done"),
         chatReply("I will leave it.", [], "blocked")
       ][index]
     );
-    await start("Create data.json");
+    await start("Create src/count.ts");
     const diagnostics = run().steps[0].diagnostics;
-    import_strict.default.ok(diagnostics && diagnostics.errors >= 1, `expected an error in data.json, got ${JSON.stringify(diagnostics)}`);
-    import_strict.default.equal(diagnostics.items[0].path, "data.json");
-    import_strict.default.ok(browser.jobs[1].text.includes("data.json"), "the error is reported back");
+    import_strict.default.ok(diagnostics && diagnostics.errors >= 1, `expected an error in src/count.ts, got ${JSON.stringify(diagnostics)}`);
+    import_strict.default.equal(diagnostics.items[0].path, "src/count.ts");
+    import_strict.default.ok(browser.jobs[1].text.includes("src/count.ts"), "the error is reported back");
   });
 });
