@@ -1,0 +1,31 @@
+{
+  "name": "codegent",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Seamless agentic coding on a free ChatGPT account: VS Code extension + browser extension + local hub.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "test:e2e": "npm run test:e2e --workspaces --if-present",
+    "test:watch": "vitest",
+    "build": "npm run build --workspaces --if-present",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "esbuild": "~0.25.12",
+    "jsdom": "^26.1.0",
+    "prettier": "^3.9.10",
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

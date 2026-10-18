@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "CodeGent Bridge",
+  "short_name": "CodeGent",
+  "description": "Connects ChatGPT in your browser to the CodeGent VS Code extension, so a free ChatGPT account can drive agentic coding.",
+  "version": "0.0.0",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage", "alarms", "scripting"],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": { "default_title": "CodeGent", "default_popup": "popup.html" }
+}

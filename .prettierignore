@@ -1,0 +1,10 @@
+node_modules
+dist
+out
+coverage
+.vscode-test
+.tmp
+package-lock.json
+*.vsix
+apps/browser/test/fixtures
+packages/engine/test/fixtures

@@ -1,0 +1,29 @@
+{
+  "name": "@codegent/browser-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CodeGent Bridge: connects ChatGPT in the browser to the CodeGent VS Code extension.",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "node scripts/build.mjs",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts"
+  },
+  "dependencies": {
+    "@codegent/protocol": "*"
+  },
+  "devDependencies": {
+    "@codegent/hub": "^0.1.0",
+    "@types/chrome": "^0.1.43",
+    "@types/ws": "^8.18.2",
+    "playwright-core": "^1.64.1",
+    "prosemirror-commands": "^1.7.2",
+    "prosemirror-keymap": "^1.2.3",
+    "prosemirror-model": "^1.25.12",
+    "prosemirror-schema-basic": "^1.2.5",
+    "prosemirror-state": "^1.4.4",
+    "prosemirror-view": "^1.42.6",
+    "selfsigned": "^3.0.1",
+    "ws": "^8.22.0"
+  }
+}

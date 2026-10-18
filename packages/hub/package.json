@@ -1,0 +1,21 @@
+{
+  "name": "@codegent/hub",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local relay that connects CodeGent editors with the browser extension.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "node scripts/build.mjs"
+  },
+  "dependencies": {
+    "@codegent/protocol": "*",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.2"
+  }
+}

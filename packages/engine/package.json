@@ -1,0 +1,19 @@
+{
+  "name": "@codegent/engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reply parsing, edit matching/applying, prompt building, git and the agent loop — everything that does not need VS Code.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@codegent/protocol": "*"
+  },
+  "devDependencies": {
+    "fast-check": "^3.23.2"
+  }
+}

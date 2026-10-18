@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CodeGent</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>CodeGent Bridge</h1>
+      <span id="version" class="muted"></span>
+    </header>
+
+    <section class="status" aria-live="polite">
+      <span id="dot" class="dot" aria-hidden="true"></span>
+      <div>
+        <strong id="state">Checking…</strong>
+        <p id="hint" class="muted"></p>
+      </div>
+    </section>
+
+    <dl>
+      <dt>Hub</dt>
+      <dd id="hub">–</dd>
+      <dt>ChatGPT tabs</dt>
+      <dd id="tabs">–</dd>
+      <dt>Active runs</dt>
+      <dd id="jobs">–</dd>
+      <dt>Browser id</dt>
+      <dd id="browserId" class="mono">–</dd>
+    </dl>
+
+    <label for="profile"
+      >Profile name <span class="muted">(shown in VS Code)</span></label
+    >
+    <input id="profile" type="text" maxlength="100" placeholder="e.g. Work" />
+
+    <div class="actions">
+      <button id="reconnect" type="button">Reconnect</button>
+      <button id="selftest" type="button" class="secondary">Test ChatGPT page</button>
+    </div>
+    <label class="check"
+      ><input id="probe" type="checkbox" checked /> Also type a test marker (nothing is
+      sent)</label
+    >
+
+    <ul id="report" class="report" hidden></ul>
+    <script src="popup.js"></script>
+  </body>
+</html>

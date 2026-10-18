@@ -1,0 +1,14 @@
+node_modules/
+dist/
+out/
+*.vsix
+*.zip
+coverage/
+.vscode-test/
+.tmp/
+*.log
+.DS_Store
+Thumbs.db
+.env
+.env.*
+roadmap.md

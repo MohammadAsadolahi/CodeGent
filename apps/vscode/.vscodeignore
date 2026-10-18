@@ -1,0 +1,10 @@
+**
+!package.json
+!README.md
+!CHANGELOG.md
+!LICENSE*
+!media/**
+!out/extension.js
+!out/hub.cjs
+!out/webview/**
+!out/browser-extension/**

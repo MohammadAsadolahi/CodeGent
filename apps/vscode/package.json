@@ -1,0 +1,253 @@
+{
+  "name": "codegent",
+  "displayName": "CodeGent",
+  "description": "Agentic coding on a free ChatGPT account. ChatGPT reads your GitHub repository, CodeGent applies its changes, checks them and reports back — step by step.",
+  "version": "0.1.0",
+  "publisher": "codegent",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Other"
+  ],
+  "keywords": [
+    "chatgpt",
+    "agent",
+    "ai",
+    "github",
+    "free"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "CodeGent writes files, runs git and can run the verify command you configured."
+    },
+    "virtualWorkspaces": false
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.webview.json",
+    "build": "node scripts/build.mjs",
+    "test:integration": "node scripts/integration.mjs",
+    "package": "node scripts/build.mjs --production && vsce package --no-dependencies --skip-license"
+  },
+  "dependencies": {
+    "@codegent/engine": "*",
+    "@codegent/hub": "*",
+    "@codegent/protocol": "*",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/vscode": "1.96.0",
+    "@types/ws": "^8.18.2",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.9.2",
+    "mocha": "^11.7.0",
+    "preact": "^10.29.8"
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "codegent",
+          "title": "CodeGent",
+          "icon": "media/activity-bar.svg"
+        }
+      ]
+    },
+    "views": {
+      "codegent": [
+        {
+          "type": "webview",
+          "id": "codegent.panel",
+          "name": "Agent",
+          "icon": "media/activity-bar.svg"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "codegent.focus",
+        "title": "Open Panel",
+        "category": "CodeGent",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "codegent.startRun",
+        "title": "Start Task…",
+        "category": "CodeGent",
+        "icon": "$(play)"
+      },
+      {
+        "command": "codegent.stopRun",
+        "title": "Stop",
+        "category": "CodeGent",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "codegent.resumeRun",
+        "title": "Resume",
+        "category": "CodeGent",
+        "icon": "$(debug-continue)"
+      },
+      {
+        "command": "codegent.undoStep",
+        "title": "Undo Last Step",
+        "category": "CodeGent",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "codegent.openBrowserExtensionFolder",
+        "title": "Show Browser Extension Folder",
+        "category": "CodeGent",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "codegent.restartHub",
+        "title": "Reconnect to the Browser (Restart Hub)",
+        "category": "CodeGent",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "codegent.showLog",
+        "title": "Show Log",
+        "category": "CodeGent",
+        "icon": "$(output)"
+      },
+      {
+        "command": "codegent.resetPublishingConsent",
+        "title": "Ask Again Before Committing and Pushing",
+        "category": "CodeGent"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "codegent.showLog",
+          "when": "view == codegent.panel",
+          "group": "navigation@2"
+        },
+        {
+          "command": "codegent.openBrowserExtensionFolder",
+          "when": "view == codegent.panel",
+          "group": "navigation@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "CodeGent",
+      "properties": {
+        "codegent.autoSubmit": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Send the prompt in the ChatGPT tab automatically. Turn this off to review the typed prompt and press Enter yourself.\n\nNote: driving a website automatically may not be permitted by that service's terms; check them before enabling."
+        },
+        "codegent.autoApply": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Apply ChatGPT's changes without asking. Every step is checkpointed and can be undone. When off, each step is shown for review first."
+        },
+        "codegent.autoContinue": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Send each step's result back to ChatGPT automatically so it continues on its own. When off, the run pauses after every step."
+        },
+        "codegent.git.commit": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Commit the files each step changed (only those files)."
+        },
+        "codegent.git.push": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Push after each commit. ChatGPT reads the repository from GitHub, so it only sees a step's changes once they are pushed."
+        },
+        "codegent.git.commitPrefix": {
+          "type": "string",
+          "default": "codegent: ",
+          "description": "Prefix of the commit messages CodeGent creates."
+        },
+        "codegent.maxSteps": {
+          "type": "number",
+          "default": 12,
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Stop a run after this many ChatGPT replies."
+        },
+        "codegent.maxFailedSteps": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 20,
+          "description": "Stop when this many steps in a row contained changes that could not be applied."
+        },
+        "codegent.allowEditingDirtyFiles": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Allow changes to files that have uncommitted modifications. Off by default: ChatGPT cannot see such changes and they would be committed together with CodeGent's."
+        },
+        "codegent.chatUrl": {
+          "type": "string",
+          "default": "https://chatgpt.com/",
+          "markdownDescription": "Where new conversations start. Use the URL of a ChatGPT *Project* to start inside it (for example one that already has the GitHub connector enabled). Only chatgpt.com is accepted."
+        },
+        "codegent.replyTimeoutSeconds": {
+          "type": "number",
+          "default": 600,
+          "minimum": 30,
+          "description": "How long to wait for ChatGPT to finish a reply."
+        },
+        "codegent.browserWaitSeconds": {
+          "type": "number",
+          "default": 40,
+          "minimum": 0,
+          "description": "How long to wait for the browser extension to connect before giving up on a message."
+        },
+        "codegent.conventions": {
+          "type": "string",
+          "default": "",
+          "editPresentation": "multilineText",
+          "markdownDescription": "Standing guidance added to the first message of every run (build tool, code style, things to avoid …)."
+        },
+        "codegent.verifyCommand": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "A command run in the repository after each step that changed files, for example `npm test`. Its result is sent to ChatGPT. Leave empty for none. Can only be set in your user settings."
+        },
+        "codegent.verifyTimeoutSeconds": {
+          "type": "number",
+          "default": 300,
+          "minimum": 5,
+          "scope": "machine",
+          "description": "Time limit for the verify command."
+        },
+        "codegent.diagnosticsWaitSeconds": {
+          "type": "number",
+          "default": 8,
+          "minimum": 0,
+          "description": "How long to let language servers analyse the changed files before their errors are collected."
+        },
+        "codegent.advanced.hubPorts": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1024,
+            "maximum": 65535
+          },
+          "default": [],
+          "scope": "machine",
+          "markdownDescription": "Local ports on which the hub looks for the browser extension. Leave empty to use the built-in range (47615–47619); the browser extension has to use the same ports."
+        }
+      }
+    }
+  }
+}
