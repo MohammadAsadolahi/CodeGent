@@ -6,7 +6,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright-core'
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 const svg = fs.readFileSync(path.join(root, 'apps/vscode/media/icon.svg'), 'utf8')
 
 const targets = [
