@@ -3712,7 +3712,7 @@ var require_websocket_server = __commonJS({
 var import_strict = __toESM(require("node:assert/strict"));
 var import_node_fs2 = __toESM(require("node:fs"));
 var import_node_path2 = __toESM(require("node:path"));
-var vscode2 = __toESM(require("vscode"));
+var vscode3 = __toESM(require("vscode"));
 
 // node_modules/ws/wrapper.mjs
 var import_stream = __toESM(require_stream(), 1);
@@ -4052,31 +4052,29 @@ var setSetting = async (key, value) => {
   await configuration().update(key, value, vscode.ConfigurationTarget.Global);
 };
 
-// apps/vscode/test/integration/run.test.ts
+// apps/vscode/test/integration/fixture.ts
+var vscode2 = __toESM(require("vscode"));
 var REPO = "octo/project";
 var CONVERSATION = "https://chatgpt.com/c/test-conversation";
-describe("an agent run in VS Code", () => {
-  let api;
-  let browser;
+var installRunHooks = () => {
+  const context = {};
   const repo = workRepo();
-  const file = (relative) => import_node_path2.default.join(repo.dir, ...relative.split("/"));
-  const read = (relative) => import_node_fs2.default.readFileSync(file(relative), "utf8");
-  const start = (task) => api.send({ type: "start", task });
-  const run = () => api.state().run;
   before(async () => {
-    api = await getApi();
-    await api.waitFor((state) => state.connection.hub === "connected", 3e4);
+    context.api = await getApi();
+    await context.api.waitFor((state) => state.connection.hub === "connected", 3e4);
   });
   beforeEach(async () => {
+    const { api } = context;
     repo.reset();
     await api.send({ type: "dismissRun" });
     await api.send({ type: "clearHistory" });
     await api.setPublishingConsent(REPO, "allow");
     await api.send({ type: "refreshRepo" });
-    browser = await new FakeBrowser(api.hub().port).connect();
+    context.browser = await new FakeBrowser(api.hub().port).connect();
     await api.waitFor((state) => state.connection.browsers.length === 1);
   });
   afterEach(async () => {
+    const { api, browser } = context;
     await api.send({ type: "stop" });
     await api.waitFor((state) => !state.run || state.run.state !== "running", 15e3);
     browser.close();
@@ -4086,11 +4084,22 @@ describe("an agent run in VS Code", () => {
     }
     await vscode2.commands.executeCommand("workbench.action.closeAllEditors");
   });
+  return context;
+};
+
+// apps/vscode/test/integration/run.test.ts
+describe("an agent run in VS Code", () => {
+  const ctx = installRunHooks();
+  const repo = workRepo();
+  const file = (relative) => import_node_path2.default.join(repo.dir, ...relative.split("/"));
+  const read = (relative) => import_node_fs2.default.readFileSync(file(relative), "utf8");
+  const start = (task) => ctx.api.send({ type: "start", task });
+  const run = () => ctx.api.state().run;
   it("applies ChatGPT's reply, commits only that file and pushes it to GitHub", async () => {
-    browser.answerWith(() => chatReply("I added the greeting file.", [createdFile("hello.txt", "Hello from CodeGent")], "done"));
+    ctx.browser.answerWith(() => chatReply("I added the greeting file.", [createdFile("hello.txt", "Hello from CodeGent")], "done"));
     await start("Create hello.txt");
-    import_strict.default.equal(browser.jobs.length, 1);
-    const job2 = browser.jobs[0];
+    import_strict.default.equal(ctx.browser.jobs.length, 1);
+    const job2 = ctx.browser.jobs[0];
     import_strict.default.equal(job2.newChat, true);
     import_strict.default.equal(job2.autoSubmit, true);
     import_strict.default.equal(job2.chatUrl, "https://chatgpt.com/");
@@ -4101,7 +4110,7 @@ describe("an agent run in VS Code", () => {
     import_strict.default.deepEqual(git(repo.dir, "show", "--name-only", "--format=", "HEAD").split("\n"), ["hello.txt"]);
     import_strict.default.equal(git(repo.bare, "rev-parse", "main"), git(repo.dir, "rev-parse", "HEAD"), "the commit reached GitHub");
     import_strict.default.equal(git(repo.dir, "status", "--porcelain"), "");
-    const state = api.state();
+    const state = ctx.api.state();
     import_strict.default.equal(run().state, "finished");
     import_strict.default.equal(run().outcome, "done");
     import_strict.default.equal(run().conversationUrl, CONVERSATION);
@@ -4116,7 +4125,7 @@ describe("an agent run in VS Code", () => {
     import_strict.default.equal(state.history[0].outcome, "done");
   });
   it("continues over several steps in one conversation, reporting each result back", async () => {
-    browser.answerWith(
+    ctx.browser.answerWith(
       (_job, index) => [
         chatReply("Start with the notes file.", [createdFile("notes.txt", "one\ntwo")], "continue"),
         chatReply("Fix the second line.", [updatedFile("notes.txt", "two", "three")], "continue"),
@@ -4124,15 +4133,15 @@ describe("an agent run in VS Code", () => {
       ][index]
     );
     await start("Write the notes");
-    import_strict.default.equal(browser.jobs.length, 3);
+    import_strict.default.equal(ctx.browser.jobs.length, 3);
     import_strict.default.deepEqual(
-      browser.jobs.map((job2) => job2.newChat),
+      ctx.browser.jobs.map((job2) => job2.newChat),
       [true, false, false]
     );
-    import_strict.default.equal(new Set(browser.jobs.map((job2) => job2.sessionId)).size, 1, "one conversation");
-    import_strict.default.match(browser.jobs[1].text, /step 1/);
-    import_strict.default.ok(browser.jobs[1].text.includes("notes.txt"), "the result of step 1 mentions the file");
-    import_strict.default.match(browser.jobs[2].text, /step 2/);
+    import_strict.default.equal(new Set(ctx.browser.jobs.map((job2) => job2.sessionId)).size, 1, "one conversation");
+    import_strict.default.match(ctx.browser.jobs[1].text, /step 1/);
+    import_strict.default.ok(ctx.browser.jobs[1].text.includes("notes.txt"), "the result of step 1 mentions the file");
+    import_strict.default.match(ctx.browser.jobs[2].text, /step 2/);
     import_strict.default.equal(read("notes.txt"), "one\nthree\n");
     import_strict.default.equal(git(repo.dir, "rev-list", "--count", `${repo.base}..HEAD`), "2");
     import_strict.default.equal(git(repo.bare, "rev-parse", "main"), git(repo.dir, "rev-parse", "HEAD"));
@@ -4142,10 +4151,10 @@ describe("an agent run in VS Code", () => {
   it("leaves your own uncommitted work alone", async () => {
     write(repo.dir, "src/keep.txt", "untouched\nmy work in progress\n");
     write(repo.dir, "mine.txt", "not committed yet\n");
-    await api.send({ type: "refreshRepo" });
-    const status = api.state().repo;
+    await ctx.api.send({ type: "refreshRepo" });
+    const status = ctx.api.state().repo;
     import_strict.default.equal(status.ok && status.dirtyCount, 2);
-    browser.answerWith(() => chatReply("Added the greeting.", [createdFile("hello.txt", "hi")], "done"));
+    ctx.browser.answerWith(() => chatReply("Added the greeting.", [createdFile("hello.txt", "hi")], "done"));
     await start("Create hello.txt");
     import_strict.default.equal(run().outcome, "done");
     import_strict.default.deepEqual(git(repo.dir, "show", "--name-only", "--format=", "HEAD").split("\n"), ["hello.txt"]);
@@ -4153,11 +4162,11 @@ describe("an agent run in VS Code", () => {
     import_strict.default.equal(read("src/keep.txt"), "untouched\nmy work in progress\n");
   });
   it("refuses to overwrite changes that are only in an unsaved editor", async () => {
-    const document = await vscode2.workspace.openTextDocument(vscode2.Uri.file(file("src/keep.txt")));
-    const editor = await vscode2.window.showTextDocument(document);
-    await editor.edit((edit) => edit.insert(new vscode2.Position(0, 0), "// unsaved idea\n"));
+    const document = await vscode3.workspace.openTextDocument(vscode3.Uri.file(file("src/keep.txt")));
+    const editor = await vscode3.window.showTextDocument(document);
+    await editor.edit((edit) => edit.insert(new vscode3.Position(0, 0), "// unsaved idea\n"));
     import_strict.default.equal(document.isDirty, true);
-    browser.answerWith(
+    ctx.browser.answerWith(
       (_job, index) => [
         chatReply("Changing the file.", [updatedFile("src/keep.txt", "untouched", "changed")], "done"),
         chatReply("Understood, leaving it.", [], "done")
@@ -4169,28 +4178,28 @@ describe("an agent run in VS Code", () => {
     import_strict.default.match(first.edits[0].errors.join(" "), /uncommitted local changes/);
     import_strict.default.equal(import_node_fs2.default.readFileSync(file("src/keep.txt"), "utf8"), "untouched\n", "the file on disk is unchanged");
     import_strict.default.ok(document.getText().startsWith("// unsaved idea"), "the unsaved text is still in the editor");
-    import_strict.default.ok(browser.jobs[1].text.includes("left alone"), "ChatGPT is told why");
+    import_strict.default.ok(ctx.browser.jobs[1].text.includes("left alone"), "ChatGPT is told why");
     import_strict.default.equal(git(repo.dir, "rev-list", "--count", `${repo.base}..HEAD`), "0", "nothing was committed");
-    await vscode2.commands.executeCommand("workbench.action.files.revert");
+    await vscode3.commands.executeCommand("workbench.action.files.revert");
   });
   it("shows the proposal and waits for approval when auto-apply is off", async () => {
     await setSetting("autoApply", false);
-    await api.waitFor((state2) => !state2.toggles.autoApply);
-    browser.answerWith(() => chatReply("Added the greeting.", [createdFile("hello.txt", "Hello from CodeGent")], "done"));
+    await ctx.api.waitFor((state2) => !state2.toggles.autoApply);
+    ctx.browser.answerWith(() => chatReply("Added the greeting.", [createdFile("hello.txt", "Hello from CodeGent")], "done"));
     const finished = start("Create hello.txt");
-    const state = await api.waitFor((s) => s.review !== null);
+    const state = await ctx.api.waitFor((s) => s.review !== null);
     import_strict.default.deepEqual(
       state.review.files.map((entry) => [entry.path, entry.kind, entry.added]),
       [["hello.txt", "create", 1]]
     );
     import_strict.default.equal(import_node_fs2.default.existsSync(file("hello.txt")), false, "nothing is written before approval");
-    await api.send({ type: "openDiff", path: "hello.txt" });
-    const diff = vscode2.window.tabGroups.all.flatMap((group) => group.tabs).map((tab) => tab.input).find((input) => input instanceof vscode2.TabInputTextDiff);
+    await ctx.api.send({ type: "openDiff", path: "hello.txt" });
+    const diff = vscode3.window.tabGroups.all.flatMap((group) => group.tabs).map((tab) => tab.input).find((input) => input instanceof vscode3.TabInputTextDiff);
     import_strict.default.ok(diff, "a diff editor is open");
     import_strict.default.equal(diff.modified.scheme, "codegent-diff");
-    import_strict.default.equal((await vscode2.workspace.openTextDocument(diff.modified)).getText(), "Hello from CodeGent\n");
-    import_strict.default.equal((await vscode2.workspace.openTextDocument(diff.original)).getText(), "");
-    await api.send({ type: "decide", decision: "apply" });
+    import_strict.default.equal((await vscode3.workspace.openTextDocument(diff.modified)).getText(), "Hello from CodeGent\n");
+    import_strict.default.equal((await vscode3.workspace.openTextDocument(diff.original)).getText(), "");
+    await ctx.api.send({ type: "decide", decision: "apply" });
     await finished;
     import_strict.default.equal(read("hello.txt"), "Hello from CodeGent\n");
     import_strict.default.equal(run().outcome, "done");
@@ -4198,63 +4207,63 @@ describe("an agent run in VS Code", () => {
   });
   it("applies nothing when the proposal is declined, and tells ChatGPT", async () => {
     await setSetting("autoApply", false);
-    await api.waitFor((state) => !state.toggles.autoApply);
-    browser.answerWith(
+    await ctx.api.waitFor((state) => !state.toggles.autoApply);
+    ctx.browser.answerWith(
       (_job, index) => [
         chatReply("Added the greeting.", [createdFile("hello.txt", "hi")], "continue"),
         chatReply("Alright, I will stop here.", [], "done")
       ][index]
     );
     const finished = start("Create hello.txt");
-    await api.waitFor((s) => s.review !== null);
-    await api.send({ type: "decide", decision: "skip" });
+    await ctx.api.waitFor((s) => s.review !== null);
+    await ctx.api.send({ type: "decide", decision: "skip" });
     await finished;
     import_strict.default.equal(import_node_fs2.default.existsSync(file("hello.txt")), false);
     import_strict.default.equal(git(repo.dir, "rev-list", "--count", `${repo.base}..HEAD`), "0");
-    import_strict.default.match(browser.jobs[1].text, /not to apply|declined/i);
+    import_strict.default.match(ctx.browser.jobs[1].text, /not to apply|declined/i);
     import_strict.default.equal(run().steps[0].decision, "skip");
   });
   it("undoes a step in the working tree", async () => {
-    browser.answerWith(() => chatReply("Added the greeting.", [createdFile("hello.txt", "hi")], "done"));
+    ctx.browser.answerWith(() => chatReply("Added the greeting.", [createdFile("hello.txt", "hi")], "done"));
     await start("Create hello.txt");
     import_strict.default.equal(import_node_fs2.default.existsSync(file("hello.txt")), true);
-    await api.send({ type: "undo", step: 1 });
+    await ctx.api.send({ type: "undo", step: 1 });
     import_strict.default.equal(import_node_fs2.default.existsSync(file("hello.txt")), false);
     const step = run().steps[0];
     import_strict.default.equal(step.undone, true);
     import_strict.default.equal(step.canUndo, false);
-    import_strict.default.match(api.state().notice?.text ?? "", /undone/);
+    import_strict.default.match(ctx.api.state().notice?.text ?? "", /undone/);
   });
   it("stops on request and cancels the message in the browser", async () => {
-    browser.onJob = () => {
+    ctx.browser.onJob = () => {
     };
     const finished = start("Create hello.txt");
-    await until(() => browser.jobs.length === 1, "the message to reach the browser");
-    await api.send({ type: "stop" });
+    await until(() => ctx.browser.jobs.length === 1, "the message to reach the browser");
+    await ctx.api.send({ type: "stop" });
     await finished;
     import_strict.default.equal(run().outcome, "stopped");
-    await until(() => browser.cancels.length === 1, "the cancel to reach the browser");
-    import_strict.default.equal(browser.cancels[0].jobId, browser.jobs[0].jobId);
+    await until(() => ctx.browser.cancels.length === 1, "the cancel to reach the browser");
+    import_strict.default.equal(ctx.browser.cancels[0].jobId, ctx.browser.jobs[0].jobId);
   });
   it("commits locally when pushing is off, and pushes on request", async () => {
     await setSetting("git.push", false);
-    await api.waitFor((state) => !state.toggles.push);
-    browser.answerWith(() => chatReply("Added the greeting.", [createdFile("hello.txt", "hi")], "done"));
+    await ctx.api.waitFor((state) => !state.toggles.push);
+    ctx.browser.answerWith(() => chatReply("Added the greeting.", [createdFile("hello.txt", "hi")], "done"));
     await start("Create hello.txt");
     import_strict.default.equal(run().steps[0].publish?.state, "committed");
     import_strict.default.equal(git(repo.bare, "rev-parse", "main"), repo.base, "GitHub has not seen the commit");
-    await api.send({ type: "refreshRepo" });
-    const status = api.state().repo;
+    await ctx.api.send({ type: "refreshRepo" });
+    const status = ctx.api.state().repo;
     import_strict.default.equal(status.ok && status.ahead, 1);
-    await api.send({ type: "pushNow" });
+    await ctx.api.send({ type: "pushNow" });
     import_strict.default.equal(git(repo.bare, "rev-parse", "main"), git(repo.dir, "rev-parse", "HEAD"));
-    import_strict.default.match(api.state().notice?.text ?? "", /Pushed main/);
-    await api.waitFor((state) => state.repo.ok && state.repo.ahead === 0);
+    import_strict.default.match(ctx.api.state().notice?.text ?? "", /Pushed main/);
+    await ctx.api.waitFor((state) => state.repo.ok && state.repo.ahead === 0);
   });
   it("does not commit at all when committing is off", async () => {
     await setSetting("git.commit", false);
-    await api.waitFor((state) => !state.toggles.commit);
-    browser.answerWith(() => chatReply("Added the greeting.", [createdFile("hello.txt", "hi")], "done"));
+    await ctx.api.waitFor((state) => !state.toggles.commit);
+    ctx.browser.answerWith(() => chatReply("Added the greeting.", [createdFile("hello.txt", "hi")], "done"));
     await start("Create hello.txt");
     import_strict.default.equal(run().outcome, "done");
     import_strict.default.equal(run().steps[0].publish?.state, "skipped");
@@ -4263,7 +4272,7 @@ describe("an agent run in VS Code", () => {
   });
   it("pauses when ChatGPT reports a problem and carries on after Resume", async () => {
     let attempts = 0;
-    browser.onJob = (_job, send) => {
+    ctx.browser.onJob = (_job, send) => {
       if (attempts++ === 0) return send({ kind: "failed", code: "rate-limited", message: "ChatGPT says you are sending too many requests" });
       send({
         kind: "completed",
@@ -4276,10 +4285,10 @@ describe("an agent run in VS Code", () => {
     import_strict.default.equal(run().state, "paused");
     import_strict.default.equal(run().canResume, true);
     import_strict.default.match(run().message ?? "", /too many requests/);
-    await api.send({ type: "resume" });
+    await ctx.api.send({ type: "resume" });
     import_strict.default.equal(run().outcome, "done");
     import_strict.default.equal(read("hello.txt"), "hi\n");
-    import_strict.default.equal(browser.jobs.length, 2);
+    import_strict.default.equal(ctx.browser.jobs.length, 2);
   });
   it("refuses to start while GitHub has commits that are not in the working tree", async () => {
     write(repo.dir, "upstream.txt", "someone else pushed this\n");
@@ -4287,15 +4296,15 @@ describe("an agent run in VS Code", () => {
     git(repo.dir, "commit", "-q", "-m", "someone else");
     git(repo.dir, "push", "-q", "origin", "main");
     git(repo.dir, "reset", "-q", "--hard", repo.base);
-    browser.answerWith(() => chatReply("Should never be asked.", [], "done"));
+    ctx.browser.answerWith(() => chatReply("Should never be asked.", [], "done"));
     await start("Create hello.txt");
-    import_strict.default.equal(api.state().run, null);
-    import_strict.default.equal(browser.jobs.length, 0);
-    import_strict.default.match(api.state().notice?.text ?? "", /Pull first/);
+    import_strict.default.equal(ctx.api.state().run, null);
+    import_strict.default.equal(ctx.browser.jobs.length, 0);
+    import_strict.default.match(ctx.api.state().notice?.text ?? "", /Pull first/);
   });
   it("runs the verify command and tells ChatGPT when it fails", async () => {
     await setSetting("verifyCommand", `node -e "console.log('VERIFY-MARKER'); process.exit(3)"`);
-    browser.answerWith(
+    ctx.browser.answerWith(
       (_job, index) => [
         chatReply("Added the greeting.", [createdFile("hello.txt", "hi")], "done"),
         chatReply("Looking into it.", [], "blocked")
@@ -4306,25 +4315,25 @@ describe("an agent run in VS Code", () => {
       { outcome: run().steps[0].verify?.outcome, exitCode: run().steps[0].verify?.exitCode },
       { outcome: "failed", exitCode: 3 }
     );
-    import_strict.default.equal(browser.jobs.length, 2, "a failing check keeps the run going instead of finishing");
-    import_strict.default.ok(browser.jobs[1].text.includes("VERIFY-MARKER"), "the command output is sent back");
+    import_strict.default.equal(ctx.browser.jobs.length, 2, "a failing check keeps the run going instead of finishing");
+    import_strict.default.ok(ctx.browser.jobs[1].text.includes("VERIFY-MARKER"), "the command output is sent back");
   });
   it("reports the errors the language servers find in the changed files", async function() {
     this.timeout(18e4);
-    const typescript = vscode2.extensions.getExtension("vscode.typescript-language-features");
+    const typescript = vscode3.extensions.getExtension("vscode.typescript-language-features");
     if (!typescript) return this.skip();
     await typescript.activate();
     write(repo.dir, "warmup.ts", 'export const warmup: number = "text"\n');
-    const document = await vscode2.workspace.openTextDocument(vscode2.Uri.file(file("warmup.ts")));
-    await vscode2.window.showTextDocument(document, { preserveFocus: true });
+    const document = await vscode3.workspace.openTextDocument(vscode3.Uri.file(file("warmup.ts")));
+    await vscode3.window.showTextDocument(document, { preserveFocus: true });
     await until(
-      () => vscode2.languages.getDiagnostics(document.uri).length > 0,
+      () => vscode3.languages.getDiagnostics(document.uri).length > 0,
       `the TypeScript server to start (language ${document.languageId})`,
       12e4
     );
-    await vscode2.commands.executeCommand("workbench.action.closeAllEditors");
+    await vscode3.commands.executeCommand("workbench.action.closeAllEditors");
     await setSetting("diagnosticsWaitSeconds", 20);
-    browser.answerWith(
+    ctx.browser.answerWith(
       (_job, index) => [
         chatReply("Added the module.", [createdFile("src/count.ts", 'export const count: number = "three"')], "done"),
         chatReply("I will leave it.", [], "blocked")
@@ -4334,11 +4343,11 @@ describe("an agent run in VS Code", () => {
     const diagnostics = run().steps[0].diagnostics;
     import_strict.default.ok(diagnostics && diagnostics.errors >= 1, `expected an error in src/count.ts, got ${JSON.stringify(diagnostics)}`);
     import_strict.default.equal(diagnostics.items[0].path, "src/count.ts");
-    import_strict.default.ok(browser.jobs[1].text.includes("src/count.ts"), "the error is reported back");
+    import_strict.default.ok(ctx.browser.jobs[1].text.includes("src/count.ts"), "the error is reported back");
     import_strict.default.deepEqual(
-      vscode2.window.tabGroups.all.flatMap((group) => group.tabs),
+      vscode3.window.tabGroups.all.flatMap((group) => group.tabs),
       []
     );
-    import_strict.default.equal(vscode2.window.tabGroups.all.length, 1);
+    import_strict.default.equal(vscode3.window.tabGroups.all.length, 1);
   });
 });

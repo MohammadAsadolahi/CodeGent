@@ -33,6 +33,7 @@ __export(env_exports, {
   configuration: () => configuration,
   getApi: () => getApi,
   hubPorts: () => hubPorts,
+  replaceWindowFunction: () => replaceWindowFunction,
   sandbox: () => sandbox,
   setSetting: () => setSetting,
   workRepo: () => workRepo
@@ -78,11 +79,20 @@ var configuration = () => vscode.workspace.getConfiguration("codegent");
 var setSetting = async (key, value) => {
   await configuration().update(key, value, vscode.ConfigurationTarget.Global);
 };
+var replaceWindowFunction = (name, replacement) => {
+  const window2 = vscode.window;
+  const original = window2[name];
+  window2[name] = replacement;
+  return () => {
+    window2[name] = original;
+  };
+};
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   configuration,
   getApi,
   hubPorts,
+  replaceWindowFunction,
   sandbox,
   setSetting,
   workRepo
