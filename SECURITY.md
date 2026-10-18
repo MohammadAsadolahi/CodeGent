@@ -30,5 +30,5 @@ Only the latest release receives fixes.
 - The behaviour of chatgpt.com, OpenAI's GitHub connector or GitHub itself.
 - Problems that need an attacker who already controls your machine or your browser profile.
 
-The design and safety rules are described in the [README](README.md#safety) and in
+The design and safety rules are described in the [safety and privacy page](docs/safety-and-privacy.md) and in
 [docs/architecture.md](docs/architecture.md).

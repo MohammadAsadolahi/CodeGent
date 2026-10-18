@@ -55,10 +55,10 @@ Press `F5` in VS Code with this repository open to start an Extension Developmen
 - TypeScript, no semicolons, single quotes (Prettier decides; `.editorconfig` is respected).
 - Every behaviour change comes with a test. The mock ChatGPT page in the browser tests exists so that
   page handling can be tested without a login; extend it rather than testing against the real site.
-- Keep the safety rules from the README intact: edits are validated before anything is written, files
+- Keep the safety rules in [docs/safety-and-privacy.md](docs/safety-and-privacy.md) intact: edits are validated before anything is written, files
   with uncommitted or unsaved changes are left alone, ChatGPT never gets a channel to run commands, and
   the hub accepts only loopback connections from your editor and the CodeGent Bridge extension.
-- No telemetry and no network calls other than the ones the README documents.
+- No telemetry and no network calls other than the ones documented there.
 - Commit messages use a short prefix: `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`.
 - User-visible changes get a line under _Unreleased_ in [CHANGELOG.md](CHANGELOG.md).
 

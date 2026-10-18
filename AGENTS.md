@@ -39,11 +39,11 @@ Do not run `npm run test:live` unless asked: it sends real messages to chatgpt.c
 - Match the surrounding code: TypeScript, no semicolons, single quotes, Prettier config in the repo.
 - A behaviour change needs a test. ChatGPT page handling is tested against the mock page, never the
   real site.
-- Keep the safety invariants (README, _Safety_): validate every edit before writing, never touch files
+- Keep the safety invariants (`docs/safety-and-privacy.md`): validate every edit before writing, never touch files
   with uncommitted or unsaved changes, never give ChatGPT a way to run commands, keep the hub
   loopback-only with the origin allow-list.
 - No telemetry, no new network destinations, no new browser-extension permissions without a documented
-  reason in the README's _Privacy_ section.
+  reason in `docs/safety-and-privacy.md`.
 - Selectors for chatgpt.com live in `apps/browser/src/content/selectors.ts` with ordered fallbacks;
   fix page breakage there, not by scattering selectors.
 - User-visible changes get a line in `CHANGELOG.md` under _Unreleased_.
