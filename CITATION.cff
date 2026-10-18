@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: If you use CodeGent in your work or teaching, please cite it as below.
+title: CodeGent
+abstract: >-
+  Agentic coding on a free ChatGPT account: a VS Code extension, a browser extension and a local hub
+  that let ChatGPT read a GitHub repository, apply its file changes, check them and report back, step
+  by step.
+type: software
+authors:
+  - name: Mohammad Asadolahi
+repository-code: https://github.com/MohammadAsadolahi/CodeGent
+version: 0.1.0
+keywords:
+  - agentic coding
+  - ChatGPT
+  - VS Code extension
+  - browser extension
+  - AI coding assistant

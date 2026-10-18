@@ -19,6 +19,11 @@ export interface ParseProblem {
   /** The file the problem belongs to, when known. */
   path?: string
   message: string
+  /**
+   * Set for a file heading that no code block follows. When ChatGPT closes with `done` this is
+   * usually a recap of what it did, not an edit that went missing.
+   */
+  kind?: 'heading-without-block'
 }
 
 export interface ParsedReply {

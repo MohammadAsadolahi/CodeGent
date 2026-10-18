@@ -1,9 +1,25 @@
 # CodeGent
 
+[![CI](https://github.com/MohammadAsadolahi/CodeGent/actions/workflows/ci.yml/badge.svg)](https://github.com/MohammadAsadolahi/CodeGent/actions/workflows/ci.yml)
+![VS Code 1.96+](https://img.shields.io/badge/VS%20Code-1.96%2B-007acc)
+![Chromium 116+](https://img.shields.io/badge/Chromium-116%2B-4285f4)
+![No API keys, no telemetry](https://img.shields.io/badge/API%20keys%20%C2%B7%20telemetry-none-brightgreen)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](CONTRIBUTING.md)
+
 **Agentic coding on a free ChatGPT account.** You describe a task in VS Code. ChatGPT reads the
 latest code of your repository from GitHub, answers with file changes, CodeGent applies them to your
 working tree, checks them, commits and pushes them, and sends the result back into the same chat so
 ChatGPT can take the next step — until the task is done. No API keys, no copy and paste.
+
+> **Status: early release (0.1.0).** The whole loop works and is tested, but CodeGent was developed on
+> Windows and drives a web page it does not control, so expect rough edges — see
+> [Known limitations](#known-limitations). Bug reports and ChatGPT-page reports are the most useful
+> thing you can send; see [Contributing](#contributing).
+
+**Why?** A chatbot can suggest code; _agentic_ coding goes further: change the code, check what
+happened, and use the result to decide the next step. That loop usually needs a paid coding-agent
+subscription or an API key. CodeGent builds it around the ChatGPT account you already have, so
+students, hobbyists and anyone on a tight budget can try — and learn — how agentic coding works.
 
 ```
  VS Code (CodeGent) ──▶ local hub ──▶ browser extension ──▶ chatgpt.com (your own signed-in tab)
@@ -187,6 +203,46 @@ storage folder.
   history (steps already applied stay in your tree and in git).
 - The ChatGPT page is not a stable API. The browser extension keeps all page-specific code in one
   module and has a self-test, but a ChatGPT redesign can break it until it is updated.
+
+## FAQ
+
+**Can I use ChatGPT Free with VS Code for agentic coding?**
+That is what CodeGent is for: the loop runs in your own signed-in ChatGPT tab, with no API key.
+Whether the GitHub connector and how many messages you get depend on OpenAI's plans and region, and can
+change — CodeGent does not lift any limit (a run pauses on a rate limit and you press **Resume**).
+
+**Is there a coding agent that uses ChatGPT in the browser, without an API key?**
+Yes, this one: a VS Code extension, a Chromium extension and a local hub, all in this repository.
+
+**How do I get an edit → test → feedback loop with ChatGPT?**
+Set a verify command (`codegent.verifyCommand`, for example `npm test`). After each step CodeGent
+runs it, together with the language servers' error check, and sends the output back to ChatGPT; a
+failing command stops it from declaring the task done.
+
+**Does ChatGPT run commands on my computer or write to my repository?**
+No. ChatGPT only answers with text. CodeGent applies validated edits itself and runs only git and
+your own verify command. See [Safety](#safety).
+
+**Does anything leave my machine besides the chat with ChatGPT?**
+Only what [Privacy](#privacy) lists: the conversation with ChatGPT and the pushes to your own git
+remote. There is no CodeGent server and no telemetry.
+
+**Is this affiliated with OpenAI, GitHub or Microsoft?**
+No. CodeGent is an independent community project, not endorsed by those companies. Automating a
+consumer web page may conflict with its terms — see [Responsible use](#responsible-use).
+
+## Contributing
+
+CodeGent is free to use, and contributions are welcome. You do not need to be an expert to help. Trying the install steps on macOS or Linux, reporting where
+you got stuck, improving these docs, or sending a **Test ChatGPT page** report when ChatGPT's page
+changes are all valuable. Start with [CONTRIBUTING.md](CONTRIBUTING.md); ask questions in
+[Discussions](https://github.com/MohammadAsadolahi/CodeGent/discussions) and report problems as
+[issues](https://github.com/MohammadAsadolahi/CodeGent/issues/new/choose). Please read the
+[Code of Conduct](CODE_OF_CONDUCT.md), and report security problems privately as described in
+[SECURITY.md](SECURITY.md).
+
+If CodeGent is useful to you, a star helps other people find it — and a bug report or a pull request
+helps even more.
 
 ## Development
 

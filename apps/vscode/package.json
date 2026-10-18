@@ -2,6 +2,14 @@
   "name": "codegent",
   "displayName": "CodeGent",
   "description": "Agentic coding on a free ChatGPT account. ChatGPT reads your GitHub repository, CodeGent applies its changes, checks them and reports back — step by step.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MohammadAsadolahi/CodeGent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MohammadAsadolahi/CodeGent/issues"
+  },
+  "homepage": "https://github.com/MohammadAsadolahi/CodeGent#readme",
   "version": "0.1.0",
   "publisher": "codegent",
   "icon": "media/icon.png",
@@ -18,9 +26,14 @@
   "keywords": [
     "chatgpt",
     "agent",
-    "ai",
+    "agentic-coding",
+    "ai-coding-assistant",
+    "coding-agent",
     "github",
-    "free"
+    "free",
+    "vscode-extension",
+    "browser-extension",
+    "developer-tools"
   ],
   "main": "./out/extension.js",
   "activationEvents": [

@@ -3,6 +3,14 @@
   "private": true,
   "version": "0.1.0",
   "description": "Seamless agentic coding on a free ChatGPT account: VS Code extension + browser extension + local hub.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MohammadAsadolahi/CodeGent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MohammadAsadolahi/CodeGent/issues"
+  },
+  "homepage": "https://github.com/MohammadAsadolahi/CodeGent#readme",
   "type": "module",
   "engines": {
     "node": ">=20"

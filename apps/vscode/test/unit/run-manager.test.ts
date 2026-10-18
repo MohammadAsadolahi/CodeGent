@@ -191,7 +191,10 @@ describe('a run from start to finish', () => {
       repo: 'octo/project'
     })
     expect(t.history).toHaveLength(1)
-    expect(t.notices.at(-1)).toMatchObject({ kind: 'info', text: 'Finished: All done.' })
+    expect(t.notices.at(-1)).toMatchObject({
+      kind: 'info',
+      text: 'Done — the task is complete: All done.'
+    })
     expect(views).toContain('running')
     expect(t.manager.active).toBe(false)
     expect(t.state.pushes).toBe(1)

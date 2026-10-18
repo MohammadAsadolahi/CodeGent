@@ -299,7 +299,8 @@ describe('things that must NOT become edits', () => {
     expect(noBlock.edits).toEqual([])
     expect(noBlock.problems[0]).toMatchObject({
       path: 'a.ts',
-      message: expect.stringMatching(/without a code block/)
+      message: expect.stringMatching(/without a code block/),
+      kind: 'heading-without-block'
     })
 
     const noHeading = parseReply(fence(hunk('x', 'y')))

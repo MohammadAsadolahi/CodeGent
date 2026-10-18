@@ -290,7 +290,7 @@ export const RunCard = ({ run }: { run: UiRun }) => {
 }
 
 const TITLES: Record<NonNullable<UiRun['outcome']>, string> = {
-  done: 'Finished',
+  done: 'Done — the task is complete',
   blocked: 'ChatGPT is blocked',
   stopped: 'Stopped',
   'step-limit': 'Step limit reached',

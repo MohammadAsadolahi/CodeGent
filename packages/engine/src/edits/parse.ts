@@ -222,7 +222,8 @@ export const parseReply = (markdown: string): ParsedReply => {
     ) {
       problems.push({
         path: open.header.paths[0],
-        message: `“${open.header.operation} file” heading without a code block holding the content`
+        message: `“${open.header.operation} file” heading without a code block holding the content`,
+        kind: 'heading-without-block'
       })
     }
     pending = null

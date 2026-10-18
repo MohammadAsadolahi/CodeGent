@@ -54,7 +54,7 @@ export const describeState = (state: RunState): { phase?: string; detail?: strin
 }
 
 export const outcomeTitle: Record<FinishKind, string> = {
-  done: 'Finished',
+  done: 'Done — the task is complete',
   blocked: 'ChatGPT is blocked',
   stopped: 'Stopped',
   'step-limit': 'Step limit reached',

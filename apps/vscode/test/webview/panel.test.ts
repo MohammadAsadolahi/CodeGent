@@ -379,7 +379,7 @@ describe('a run', () => {
       })
     )
     expect(text()).toContain('Add a greeting')
-    expect(text()).toContain('Finished')
+    expect(text()).toContain('Done — the task is complete')
     expect(text()).toContain('All done.')
     expect(text()).toContain('Step 1')
     expect(text()).toContain('Added the greeting module.')

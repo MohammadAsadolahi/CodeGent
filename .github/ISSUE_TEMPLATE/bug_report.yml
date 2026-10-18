@@ -1,0 +1,82 @@
+name: Bug report
+description: Something does not work as the README says
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please do not paste secrets, tokens or private code.
+        Security problems: use the private form in SECURITY.md instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: Include the step where it went wrong (setup, starting a run, a particular step, undo, ...).
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: page-report
+    attributes:
+      label: ChatGPT page report
+      description: |
+        Only if ChatGPT was not typed into, a reply was not recognised, or a run timed out: in the browser
+        extension's popup press "Test ChatGPT page", then "Copy report", and paste it here. If the error
+        message ended with "[Page: ...]", paste that too.
+      render: text
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: 'VS Code: Command Palette -> CodeGent: Show Log. Remove anything private.'
+      render: text
+  - type: input
+    id: codegent-version
+    attributes:
+      label: CodeGent version
+      placeholder: '0.1.0'
+    validations:
+      required: true
+  - type: input
+    id: vscode-version
+    attributes:
+      label: VS Code version
+      placeholder: '1.96.0'
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: 'Chrome 130, Edge 130, ...'
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: plan
+    attributes:
+      label: ChatGPT plan
+      options:
+        - Free
+        - Plus / Pro / Team
+        - Not sure
+    validations:
+      required: false

@@ -69,6 +69,30 @@ interface StepWork {
   commit?: { sha: string; shortSha: string; message: string }
 }
 
+/**
+ * ChatGPT sometimes closes with `done` and a recap that names the files it changed as headings,
+ * without any content under them. With nothing to apply that is a summary, not an edit that went
+ * missing, so it must not be reported back as a failure (which would cost another round trip).
+ */
+const withoutRecapProblems = (parsed: ParsedReply): ParsedReply => {
+  const recap = parsed.problems.length
+  if (
+    parsed.status !== 'done' ||
+    parsed.edits.length > 0 ||
+    recap === 0 ||
+    !parsed.problems.every((problem) => problem.kind === 'heading-without-block')
+  )
+    return parsed
+  return {
+    ...parsed,
+    problems: [],
+    warnings: [
+      ...parsed.warnings,
+      `ChatGPT listed ${recap} file${recap === 1 ? '' : 's'} without any content, as a recap; ignored because it reported the task as done`
+    ]
+  }
+}
+
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
@@ -247,7 +271,7 @@ export class AgentRun {
     this.snap.conversationUrl = reply.conversationUrl
 
     this.setPhase('reading', record.step)
-    const parsed = parseReply(reply.markdown)
+    const parsed = withoutRecapProblems(parseReply(reply.markdown))
     record.reply = {
       chars: reply.markdown.length,
       status: parsed.status,

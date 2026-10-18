@@ -305,6 +305,64 @@ describe('replies without usable changes', () => {
     expect(h.chat.sent).toHaveLength(2)
   })
 
+  describe('a "done" that only recaps the files as headings', () => {
+    const recap = (status: 'done' | 'continue') =>
+      reply(
+        'Both changes are in place.',
+        ['### Updated file: `a.ts`', '### Created file: `notes.md`'],
+        status
+      )
+
+    it('finishes at once, without another round trip', async () => {
+      const h = harness([recap('done')])
+      const snapshot = await run(h).start()
+      expect(finalState(snapshot)).toMatchObject({
+        kind: 'finished',
+        outcome: 'done',
+        message: 'Both changes are in place.'
+      })
+      expect(h.chat.sent).toHaveLength(1)
+      // Nothing is reported as a problem; the step says what was ignored instead.
+      expect(snapshot.steps[0]!.reply).toMatchObject({
+        problems: [],
+        warnings: [
+          expect.stringMatching(/listed 2 files without any content, as a recap/)
+        ]
+      })
+    })
+
+    it('also ends a task that already applied changes', async () => {
+      const h = harness([
+        reply('Add it.', [createReply('a.ts', 'x')], 'continue'),
+        recap('done')
+      ])
+      const snapshot = await run(h).start()
+      expect(finalState(snapshot)).toMatchObject({ outcome: 'done' })
+      expect(h.chat.sent).toHaveLength(2)
+      expect(h.workspace.files.get('a.ts')).toBe('x\n')
+    })
+
+    it('is still a problem when ChatGPT says "continue": the content went missing', async () => {
+      const h = harness([recap('continue'), reply('Here it is.', [], 'done')])
+      const snapshot = await run(h).start()
+      expect(finalState(snapshot)).toMatchObject({ outcome: 'done' })
+      expect(h.chat.sent).toHaveLength(2)
+      expect(h.chat.texts[1]).toContain('without a code block')
+    })
+
+    it('is still a problem when it comes with real edits: one file may have lost its content', async () => {
+      const h = harness([
+        reply('Done.', [createReply('a.ts', 'x'), '### Updated file: `b.ts`'], 'done'),
+        reply('Fixed.', [createReply('b.ts', 'y')], 'done')
+      ])
+      const snapshot = await run(h).start()
+      expect(finalState(snapshot)).toMatchObject({ outcome: 'done' })
+      expect(h.chat.sent).toHaveLength(2)
+      expect(h.chat.texts[1]).toContain('without a code block')
+      expect(h.workspace.files.get('b.ts')).toBe('y\n')
+    })
+  })
+
   it('accepts "done" without changes immediately (no reminder)', async () => {
     const h = harness([reply('Nothing to change; it already works.', [], 'done')])
     const snapshot = await run(h).start()
