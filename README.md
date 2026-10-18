@@ -1,10 +1,11 @@
 # CodeGent
 
+[![Latest release](https://img.shields.io/github/v/release/MohammadAsadolahi/CodeGent?include_prereleases&label=release)](https://github.com/MohammadAsadolahi/CodeGent/releases/latest)
 [![CI](https://github.com/MohammadAsadolahi/CodeGent/actions/workflows/ci.yml/badge.svg)](https://github.com/MohammadAsadolahi/CodeGent/actions/workflows/ci.yml)
 ![VS Code 1.96+](https://img.shields.io/badge/VS%20Code-1.96%2B-007acc)
 ![Chromium 116+](https://img.shields.io/badge/Chromium-116%2B-4285f4)
 ![No API keys, no telemetry](https://img.shields.io/badge/API%20keys%20%C2%B7%20telemetry-none-brightgreen)
-[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](CONTRIBUTING.md)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](.github/CONTRIBUTING.md)
 
 ### Agentic coding on a free ChatGPT account.
 
@@ -20,6 +21,8 @@ You ──▶ VS Code ──▶ ChatGPT (your own browser tab)
               commits, pushes, and tells ChatGPT what happened
 ```
 
+**[⬇ Download the latest release](https://github.com/MohammadAsadolahi/CodeGent/releases/latest)** — the VS Code extension and the browser extension.
+
 > **Early release (0.1.0).** It works end to end, but it was built on Windows and controls a web page
 > it does not own, so rough edges are expected. [Known problems](docs/troubleshooting.md#known-limitations)
 
@@ -28,11 +31,13 @@ You ──▶ VS Code ──▶ ChatGPT (your own browser tab)
 **You need:** VS Code 1.96+, a project that is a git repository on GitHub, a Chromium browser
 (Chrome, Edge or Brave), and a ChatGPT account (free is the target) with the GitHub connector turned on.
 
-1. **Install the VS Code extension.** Download `codegent-0.1.0.vsix` from a release (or build it with
-   `npm run package`) and run `code --install-extension codegent-0.1.0.vsix`.
+1. **Install the VS Code extension.** Download `codegent-0.1.0.vsix` from the
+   [latest release](https://github.com/MohammadAsadolahi/CodeGent/releases/latest) (or build it with `npm run package`) and run
+   `code --install-extension codegent-0.1.0.vsix`.
 2. **Install the browser extension.** Open the CodeGent panel in VS Code, find the folder it shows under
    _Browser extension_, then in your browser go to `chrome://extensions` → turn on **Developer mode** →
-   **Load unpacked** → pick that folder.
+   **Load unpacked** → pick that folder. (Or unzip `codegent-bridge-browser-extension-0.1.0.zip` from the
+   release and pick the unzipped folder.)
 3. **Sign in to ChatGPT.** Open [chatgpt.com](https://chatgpt.com) in the same browser, sign in, and
    connect the **GitHub** connector to your repository.
 
@@ -82,9 +87,9 @@ does not remove any limit.
 
 CodeGent is free to use, and contributions are welcome. Testing the install on macOS or Linux,
 reporting where you got stuck, and improving these docs are all valuable — start with
-[CONTRIBUTING.md](CONTRIBUTING.md). Ask questions in
+[CONTRIBUTING.md](.github/CONTRIBUTING.md). Ask questions in
 [Discussions](https://github.com/MohammadAsadolahi/CodeGent/discussions), report problems as
 [issues](https://github.com/MohammadAsadolahi/CodeGent/issues/new/choose), and follow the
-[Code of Conduct](CODE_OF_CONDUCT.md).
+[Code of Conduct](.github/CODE_OF_CONDUCT.md).
 
 If CodeGent helps you, a star helps others find it.

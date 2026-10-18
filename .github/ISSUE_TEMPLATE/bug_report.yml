@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Thanks for reporting. Please do not paste secrets, tokens or private code.
-        Security problems: use the private form in SECURITY.md instead.
+        Security problems: use the private form described in the security policy instead.
   - type: textarea
     id: what
     attributes:

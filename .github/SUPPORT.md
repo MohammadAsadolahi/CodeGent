@@ -1,6 +1,6 @@
 # Getting help
 
-- **Something does not work?** Start with the [Troubleshooting page](docs/troubleshooting.md) and
+- **Something does not work?** Start with the [Troubleshooting page](../docs/troubleshooting.md) and
   **CodeGent: Show Log** in VS Code.
 - **A run cannot find ChatGPT's box, button or reply?** The ChatGPT page changes over time. In the
   browser extension's popup press **Test ChatGPT page**, then **Copy report**, and include it in a

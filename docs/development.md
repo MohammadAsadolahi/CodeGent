@@ -1,6 +1,6 @@
 # Development
 
-[← Back to the README](../README.md) · Contribution rules: [CONTRIBUTING](../CONTRIBUTING.md)
+[← Back to the README](../README.md) · Contribution rules: [CONTRIBUTING](../.github/CONTRIBUTING.md)
 
 ```bash
 npm ci

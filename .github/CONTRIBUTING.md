@@ -8,7 +8,7 @@ Please read the [Code of Conduct](CODE_OF_CONDUCT.md) first. Questions are welco
 
 ## Ways to help
 
-- **Try it and tell us where you got stuck.** Follow the install steps in the [README](README.md) on a
+- **Try it and tell us where you got stuck.** Follow the install steps in the [README](../README.md) on a
   clean machine and open an issue for every unclear step. CodeGent is developed and tested on Windows;
   reports from **macOS and Linux** are especially valuable.
 - **Report ChatGPT page changes.** The ChatGPT page is not a stable API. When a run stops finding the
@@ -48,19 +48,19 @@ npm run package            # builds apps/vscode/codegent-<version>.vsix
 opt-in, and you never need it for a pull request.
 
 Press `F5` in VS Code with this repository open to start an Extension Development Host. The
-[architecture overview](docs/architecture.md) explains how the packages fit together.
+[architecture overview](../docs/architecture.md) explains how the packages fit together.
 
 ## Conventions
 
 - TypeScript, no semicolons, single quotes (Prettier decides; `.editorconfig` is respected).
 - Every behaviour change comes with a test. The mock ChatGPT page in the browser tests exists so that
   page handling can be tested without a login; extend it rather than testing against the real site.
-- Keep the safety rules in [docs/safety-and-privacy.md](docs/safety-and-privacy.md) intact: edits are validated before anything is written, files
+- Keep the safety rules in [docs/safety-and-privacy.md](../docs/safety-and-privacy.md) intact: edits are validated before anything is written, files
   with uncommitted or unsaved changes are left alone, ChatGPT never gets a channel to run commands, and
   the hub accepts only loopback connections from your editor and the CodeGent Bridge extension.
 - No telemetry and no network calls other than the ones documented there.
 - Commit messages use a short prefix: `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`.
-- User-visible changes get a line under _Unreleased_ in [CHANGELOG.md](CHANGELOG.md).
+- User-visible changes get a line under _Unreleased_ in [CHANGELOG.md](../CHANGELOG.md).
 
 ## Pull requests
 
