@@ -4079,9 +4079,10 @@ var installRunHooks = () => {
     await api.waitFor((state) => !state.run || state.run.state !== "running", 15e3);
     browser.close();
     await api.waitFor((state) => state.connection.browsers.length === 0);
-    for (const key of ["autoApply", "autoContinue", "git.push", "git.commit", "verifyCommand", "diagnosticsWaitSeconds"]) {
+    for (const key of ["autoApply", "autoContinue", "git.push", "git.commit", "verifyCommand"]) {
       await setSetting(key, void 0);
     }
+    await setSetting("diagnosticsWaitSeconds", 0);
     await vscode2.commands.executeCommand("workbench.action.closeAllEditors");
   });
   return context;
