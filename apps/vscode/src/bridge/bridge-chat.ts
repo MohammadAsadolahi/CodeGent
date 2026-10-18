@@ -1,5 +1,15 @@
-import { newId, type BrowserInfo, type JobEvent, type JobRequest } from '@codegent/protocol'
-import { ChatError, type ChatPort, type ChatReply, type ChatRequest } from '@codegent/engine'
+import {
+  newId,
+  type BrowserInfo,
+  type JobEvent,
+  type JobRequest
+} from '@codegent/protocol'
+import {
+  ChatError,
+  type ChatPort,
+  type ChatReply,
+  type ChatRequest
+} from '@codegent/engine'
 import type { BridgeConnection } from './hub-connection'
 
 export interface BridgeChatOptions {
@@ -71,7 +81,11 @@ export class BridgeChat implements ChatPort {
             return
           case 'completed':
             return settle(() =>
-              resolve({ markdown: event.markdown, conversationUrl: event.conversationUrl, durationMs: event.durationMs })
+              resolve({
+                markdown: event.markdown,
+                conversationUrl: event.conversationUrl,
+                durationMs: event.durationMs
+              })
             )
           case 'failed':
             return settle(() => reject(new ChatError(event.code, event.message)))
@@ -85,13 +99,18 @@ export class BridgeChat implements ChatPort {
         settle(() => reject(new ChatError('cancelled', 'cancelled')))
       }
       const timer = setTimeout(
-        () => settle(() => reject(new ChatError('timeout', 'ChatGPT did not answer in time.'))),
+        () =>
+          settle(() =>
+            reject(new ChatError('timeout', 'ChatGPT did not answer in time.'))
+          ),
         job.timeoutMs + (this.options.graceMs ?? REPLY_GRACE_MS)
       )
       request.signal.addEventListener('abort', onAbort, { once: true })
 
       if (!this.connection.submit(job)) {
-        settle(() => reject(new ChatError('bridge', 'The connection to the CodeGent hub was lost.')))
+        settle(() =>
+          reject(new ChatError('bridge', 'The connection to the CodeGent hub was lost.'))
+        )
       }
     })
   }
@@ -106,7 +125,8 @@ export class BridgeChat implements ChatPort {
       if (this.connection.state === 'connected') {
         const browsers = this.connection.browsers
         const preferred = this.options.preferredBrowserId?.()
-        if (preferred && browsers.some((browser) => browser.id === preferred)) return preferred
+        if (preferred && browsers.some((browser) => browser.id === preferred))
+          return preferred
         if (browsers.length === 1) return browsers[0]!.id
         if (browsers.length > 1) {
           const chosen = await this.options.chooseBrowser(browsers)

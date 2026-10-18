@@ -16,4 +16,9 @@ export {
   type ApplyResult,
   type HunkOutcome
 } from './apply'
-export { BinaryFileError, planChanges, type PlanOptions, type WorkspaceView } from './plan'
+export {
+  BinaryFileError,
+  planChanges,
+  type PlanOptions,
+  type WorkspaceView
+} from './plan'

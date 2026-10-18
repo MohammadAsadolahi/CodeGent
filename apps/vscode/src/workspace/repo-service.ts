@@ -48,25 +48,43 @@ export class RepoService {
 
   async status(options: { fetch?: boolean } = {}): Promise<RepoStatus> {
     if (!(await this.git.available())) {
-      return { ok: false, problem: 'no-git', reason: 'Git was not found. Install git and make sure it is on your PATH.' }
+      return {
+        ok: false,
+        problem: 'no-git',
+        reason: 'Git was not found. Install git and make sure it is on your PATH.'
+      }
     }
     if (!(await this.git.isRepo())) {
-      return { ok: false, problem: 'no-repo', reason: 'This folder is not a git repository.' }
+      return {
+        ok: false,
+        problem: 'no-repo',
+        reason: 'This folder is not a git repository.'
+      }
     }
     if (!(await this.git.hasCommits())) {
-      return { ok: false, problem: 'no-commits', reason: 'The repository has no commits yet. Commit and push something first so ChatGPT has code to read.' }
+      return {
+        ok: false,
+        problem: 'no-commits',
+        reason:
+          'The repository has no commits yet. Commit and push something first so ChatGPT has code to read.'
+      }
     }
     const remote = await this.git.remote()
     if (!remote) {
       return {
         ok: false,
         problem: 'no-remote',
-        reason: 'The repository has no GitHub remote. Add one (git remote add origin …) and push, so ChatGPT can read the code through its GitHub connector.'
+        reason:
+          'The repository has no GitHub remote. Add one (git remote add origin …) and push, so ChatGPT can read the code through its GitHub connector.'
       }
     }
     const head = await this.git.head()
     if (!head.branch) {
-      return { ok: false, problem: 'detached', reason: 'HEAD is detached. Check out a branch first.' }
+      return {
+        ok: false,
+        problem: 'detached',
+        reason: 'HEAD is detached. Check out a branch first.'
+      }
     }
     if (options.fetch) await this.git.fetch()
     const upstream = await this.git.upstream()
@@ -74,20 +92,30 @@ export class RepoService {
 
     const warnings: string[] = []
     if (remote.host !== 'github.com') {
-      warnings.push(`The remote is on ${remote.host}; ChatGPT's connector works with github.com repositories.`)
+      warnings.push(
+        `The remote is on ${remote.host}; ChatGPT's connector works with github.com repositories.`
+      )
     }
     if (!upstream) {
-      warnings.push(`Branch "${head.branch}" is not on GitHub yet. It will be pushed with the first step; until then ChatGPT cannot read it.`)
+      warnings.push(
+        `Branch "${head.branch}" is not on GitHub yet. It will be pushed with the first step; until then ChatGPT cannot read it.`
+      )
     } else {
       if (upstream.behind > 0) {
-        warnings.push(`GitHub has ${upstream.behind} commit${upstream.behind === 1 ? '' : 's'} you do not have locally. Pull first — ChatGPT reads GitHub, so its changes would not match your files.`)
+        warnings.push(
+          `GitHub has ${upstream.behind} commit${upstream.behind === 1 ? '' : 's'} you do not have locally. Pull first — ChatGPT reads GitHub, so its changes would not match your files.`
+        )
       }
       if (upstream.ahead > 0) {
-        warnings.push(`${upstream.ahead} local commit${upstream.ahead === 1 ? ' is' : 's are'} not pushed, so ChatGPT cannot see ${upstream.ahead === 1 ? 'it' : 'them'} yet. Push first.`)
+        warnings.push(
+          `${upstream.ahead} local commit${upstream.ahead === 1 ? ' is' : 's are'} not pushed, so ChatGPT cannot see ${upstream.ahead === 1 ? 'it' : 'them'} yet. Push first.`
+        )
       }
     }
     if (dirty.length > 0) {
-      warnings.push(`${dirty.length} file${dirty.length === 1 ? ' has' : 's have'} uncommitted changes. ChatGPT cannot see them, and CodeGent will not edit those files.`)
+      warnings.push(
+        `${dirty.length} file${dirty.length === 1 ? ' has' : 's have'} uncommitted changes. ChatGPT cannot see them, and CodeGent will not edit those files.`
+      )
     }
 
     return {

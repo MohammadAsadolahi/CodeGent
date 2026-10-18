@@ -11,10 +11,16 @@ import {
   updateReply
 } from './fakes'
 
-const settings = (over: Partial<RunSettings> = {}): RunSettings => ({ ...DEFAULT_SETTINGS, ...over })
+const settings = (over: Partial<RunSettings> = {}): RunSettings => ({
+  ...DEFAULT_SETTINGS,
+  ...over
+})
 
-const run = (h: ReturnType<typeof harness>, over: Partial<RunSettings> = {}, task = 'Add a greeting module') =>
-  new AgentRun(h.deps, settings(over), task)
+const run = (
+  h: ReturnType<typeof harness>,
+  over: Partial<RunSettings> = {},
+  task = 'Add a greeting module'
+) => new AgentRun(h.deps, settings(over), task)
 
 const finalState = (snapshot: { state: { kind: string } }) => snapshot.state
 
@@ -22,8 +28,16 @@ describe('a complete task', () => {
   it('works step by step: apply, check, commit, push, report back, and finish when ChatGPT says done', async () => {
     const h = harness(
       [
-        reply('Add the module.', [createReply('src/greeting.ts', 'export const greet = () => "hi"')], 'continue'),
-        reply('Wire it into main.', [updateReply('src/main.ts', 'main()', 'main(greet())')], 'continue'),
+        reply(
+          'Add the module.',
+          [createReply('src/greeting.ts', 'export const greet = () => "hi"')],
+          'continue'
+        ),
+        reply(
+          'Wire it into main.',
+          [updateReply('src/main.ts', 'main()', 'main(greet())')],
+          'continue'
+        ),
         reply('All wired up.', [], 'done')
       ],
       { 'src/main.ts': 'main()\n' }
@@ -37,11 +51,22 @@ describe('a complete task', () => {
 
     const snapshot = await agent.start()
 
-    expect(finalState(snapshot)).toMatchObject({ kind: 'finished', outcome: 'done', message: 'All wired up.' })
-    expect(h.workspace.files.get('src/greeting.ts')).toBe('export const greet = () => "hi"\n')
+    expect(finalState(snapshot)).toMatchObject({
+      kind: 'finished',
+      outcome: 'done',
+      message: 'All wired up.'
+    })
+    expect(h.workspace.files.get('src/greeting.ts')).toBe(
+      'export const greet = () => "hi"\n'
+    )
     expect(h.workspace.files.get('src/main.ts')).toBe('main(greet())\n')
-    expect(h.git.commits.map((c) => c.paths)).toEqual([['src/greeting.ts'], ['src/main.ts']])
-    expect(h.git.commits[0]!.message).toMatch(/^codegent: Add the module\n\nCodeGent step 1\.$/)
+    expect(h.git.commits.map((c) => c.paths)).toEqual([
+      ['src/greeting.ts'],
+      ['src/main.ts']
+    ])
+    expect(h.git.commits[0]!.message).toMatch(
+      /^codegent: Add the module\n\nCodeGent step 1\.$/
+    )
     expect(h.git.pushes).toBe(2)
 
     // The conversation: initial prompt, then two follow-ups.
@@ -49,12 +74,18 @@ describe('a complete task', () => {
     expect(new Set(h.chat.sent.map((r) => r.sessionId)).size).toBe(1)
     expect(h.chat.texts[0]).toContain('octo/project')
     expect(h.chat.texts[0]).toContain('Add a greeting module')
-    expect(h.chat.texts[1]).toMatch(/^CodeGent result — step 1\n\nThe change was applied\./)
+    expect(h.chat.texts[1]).toMatch(
+      /^CodeGent result — step 1\n\nThe change was applied\./
+    )
     expect(h.chat.texts[1]).toContain('`src/greeting.ts` — created')
     expect(h.chat.texts[1]).toMatch(/pushed it to origin\/main/)
     expect(h.chat.texts[2]).toContain('step 2')
 
-    expect(snapshot.steps.map((s) => s.messageKind)).toEqual(['initial', 'follow-up', 'follow-up'])
+    expect(snapshot.steps.map((s) => s.messageKind)).toEqual([
+      'initial',
+      'follow-up',
+      'follow-up'
+    ])
     expect(snapshot.steps.map((s) => s.outcomes.length)).toEqual([1, 1, 0])
     expect(snapshot.steps[0]!.publish).toMatchObject({ state: 'pushed', branch: 'main' })
     expect(snapshot.conversationUrl).toBe('https://chatgpt.com/c/test-conversation')
@@ -74,7 +105,17 @@ describe('a complete task', () => {
 
   it('lets the checks take a baseline of the files about to change, before anything is written', async () => {
     const h = harness(
-      [reply('x', [createReply('new.ts', 'x'), updateReply('a.ts', 'a', 'b'), deleteReply('gone.ts')], 'done')],
+      [
+        reply(
+          'x',
+          [
+            createReply('new.ts', 'x'),
+            updateReply('a.ts', 'a', 'b'),
+            deleteReply('gone.ts')
+          ],
+          'done'
+        )
+      ],
       { 'a.ts': 'a\n', 'gone.ts': 'g\n' }
     )
     let writtenAtPrepare = -1
@@ -89,7 +130,17 @@ describe('a complete task', () => {
 
   it('passes the diagnostics paths of changed files (not deleted ones) to the checks', async () => {
     const h = harness(
-      [reply('x', [createReply('new.ts', 'x'), updateReply('a.ts', 'a', 'b'), deleteReply('gone.ts')], 'done')],
+      [
+        reply(
+          'x',
+          [
+            createReply('new.ts', 'x'),
+            updateReply('a.ts', 'a', 'b'),
+            deleteReply('gone.ts')
+          ],
+          'done'
+        )
+      ],
       { 'a.ts': 'a\n', 'gone.ts': 'g\n' }
     )
     await run(h).start()
@@ -102,8 +153,16 @@ describe('recovering from problems', () => {
   it('feeds failures back, lets ChatGPT fix them, and finishes', async () => {
     const h = harness(
       [
-        reply('First try.', [updateReply('src/a.ts', 'const a = 0', 'const a = 1')], 'continue'), // wrong SEARCH
-        reply('Fixed.', [updateReply('src/a.ts', 'const a = 1 // old', 'const a = 2')], 'done')
+        reply(
+          'First try.',
+          [updateReply('src/a.ts', 'const a = 0', 'const a = 1')],
+          'continue'
+        ), // wrong SEARCH
+        reply(
+          'Fixed.',
+          [updateReply('src/a.ts', 'const a = 1 // old', 'const a = 2')],
+          'done'
+        )
       ],
       { 'src/a.ts': 'const a = 1 // old\n' }
     )
@@ -120,7 +179,11 @@ describe('recovering from problems', () => {
   it('keeps applying the good files when one file fails, and says which', async () => {
     const h = harness(
       [
-        reply('Two files.', [updateReply('good.ts', 'x', 'y'), updateReply('bad.ts', 'nope', 'z')], 'continue'),
+        reply(
+          'Two files.',
+          [updateReply('good.ts', 'x', 'y'), updateReply('bad.ts', 'nope', 'z')],
+          'continue'
+        ),
         reply('Done.', [], 'done')
       ],
       { 'good.ts': 'x\n', 'bad.ts': 'b\n' }
@@ -129,29 +192,49 @@ describe('recovering from problems', () => {
     expect(h.workspace.files.get('good.ts')).toBe('y\n')
     expect(h.workspace.files.get('bad.ts')).toBe('b\n')
     expect(h.chat.texts[1]).toContain('1 change applied, 1 could not be.')
-    expect(snapshot.steps[0]!.outcomes.map((o) => o.status)).toEqual(['applied', 'failed'])
+    expect(snapshot.steps[0]!.outcomes.map((o) => o.status)).toEqual([
+      'applied',
+      'failed'
+    ])
   })
 
   it('does not accept "done" while the editor reports errors in the changed files', async () => {
-    const h = harness(
-      [
-        reply('Looks complete.', [createReply('a.ts', 'broken')], 'done'),
-        reply('Fixed the type error.', [updateReply('a.ts', 'broken', 'fixed')], 'done')
-      ]
-    )
+    const h = harness([
+      reply('Looks complete.', [createReply('a.ts', 'broken')], 'done'),
+      reply('Fixed the type error.', [updateReply('a.ts', 'broken', 'fixed')], 'done')
+    ])
     h.checks.diagnosticsQueue = [
-      { items: [{ path: 'a.ts', line: 1, column: 1, severity: 'error', message: 'Cannot find name broken', code: 'TS2304', source: 'ts' }], errors: 1, warnings: 0 },
+      {
+        items: [
+          {
+            path: 'a.ts',
+            line: 1,
+            column: 1,
+            severity: 'error',
+            message: 'Cannot find name broken',
+            code: 'TS2304',
+            source: 'ts'
+          }
+        ],
+        errors: 1,
+        warnings: 0
+      },
       { items: [], errors: 0, warnings: 0 }
     ]
     const snapshot = await run(h).start()
     expect(finalState(snapshot)).toMatchObject({ outcome: 'done' })
     expect(h.chat.sent).toHaveLength(2)
-    expect(h.chat.texts[1]).toContain('Editor diagnostics for the changed files: 1 error, 0 warnings.')
+    expect(h.chat.texts[1]).toContain(
+      'Editor diagnostics for the changed files: 1 error, 0 warnings.'
+    )
     expect(h.chat.texts[1]).toMatch(/Fix the problems found by the checks/)
   })
 
   it('treats a failing verify command like failing diagnostics', async () => {
-    const h = harness([reply('x', [createReply('a.ts', 'x')], 'done'), reply('fixed', [updateReply('a.ts', 'x', 'y')], 'done')])
+    const h = harness([
+      reply('x', [createReply('a.ts', 'x')], 'done'),
+      reply('fixed', [updateReply('a.ts', 'x', 'y')], 'done')
+    ])
     h.checks.verifyQueue = [
       { command: 'npm test', exitCode: 1, outputTail: 'AssertionError: expected 1' },
       { command: 'npm test', exitCode: 0, outputTail: '' }
@@ -173,13 +256,16 @@ describe('recovering from problems', () => {
   it('resets the failure streak after a successful step', async () => {
     const bad = reply('Try.', [updateReply('a.ts', 'missing', 'x')], 'continue')
     const good = reply('Ok.', [updateReply('a.ts', 'a', 'b')], 'continue')
-    const h = harness([bad, bad, good, bad, bad, reply('Done.', [], 'done')], { 'a.ts': 'a\n' })
+    const h = harness([bad, bad, good, bad, bad, reply('Done.', [], 'done')], {
+      'a.ts': 'a\n'
+    })
     const snapshot = await run(h, { maxFailedSteps: 3 }).start()
     expect(finalState(snapshot)).toMatchObject({ outcome: 'done' })
   })
 
   it('stops at the step limit', async () => {
-    const step = (n: number) => reply(`Step ${n}.`, [createReply(`f${n}.ts`, 'x')], 'continue')
+    const step = (n: number) =>
+      reply(`Step ${n}.`, [createReply(`f${n}.ts`, 'x')], 'continue')
     const h = harness([step(1), step(2), step(3), step(4)])
     const snapshot = await run(h, { maxSteps: 3 }).start()
     expect(finalState(snapshot)).toMatchObject({ outcome: 'step-limit' })
@@ -189,7 +275,10 @@ describe('recovering from problems', () => {
   it('honours "blocked", with ChatGPT’s explanation', async () => {
     const h = harness([reply('I cannot see the repository.', [], 'blocked')])
     const snapshot = await run(h).start()
-    expect(finalState(snapshot)).toMatchObject({ outcome: 'blocked', message: 'I cannot see the repository.' })
+    expect(finalState(snapshot)).toMatchObject({
+      outcome: 'blocked',
+      message: 'I cannot see the repository.'
+    })
   })
 })
 
@@ -201,7 +290,10 @@ describe('replies without usable changes', () => {
     ])
     const snapshot = await run(h).start()
     expect(finalState(snapshot)).toMatchObject({ outcome: 'done' })
-    expect(snapshot.steps.map((s) => s.messageKind)).toEqual(['initial', 'format-reminder'])
+    expect(snapshot.steps.map((s) => s.messageKind)).toEqual([
+      'initial',
+      'format-reminder'
+    ])
     expect(h.chat.texts[1]).toContain('did not contain any file changes')
     expect(h.workspace.files.get('a.ts')).toBe('x\n')
   })
@@ -236,7 +328,13 @@ describe('replies without usable changes', () => {
 
   it('reports reply-format problems back instead of silently dropping them', async () => {
     const broken = '### Updated file: `a.ts`\n\n```ts\n<<<<<<< SEARCH\nx\n=======\ny\n```'
-    const h = harness([`Edit.\n\n${broken}\n\nCODEGENT_STATUS: continue`, reply('Ok.', [updateReply('a.ts', 'x', 'y')], 'done')], { 'a.ts': 'x\n' })
+    const h = harness(
+      [
+        `Edit.\n\n${broken}\n\nCODEGENT_STATUS: continue`,
+        reply('Ok.', [updateReply('a.ts', 'x', 'y')], 'done')
+      ],
+      { 'a.ts': 'x\n' }
+    )
     const snapshot = await run(h).start()
     expect(finalState(snapshot)).toMatchObject({ outcome: 'done' })
     expect(h.chat.texts[1]).toContain('never closed')
@@ -244,7 +342,10 @@ describe('replies without usable changes', () => {
 })
 
 describe('review mode (auto-apply off)', () => {
-  const twoSteps = () => [reply('Add.', [createReply('a.ts', 'x')], 'continue'), reply('Done.', [], 'done')]
+  const twoSteps = () => [
+    reply('Add.', [createReply('a.ts', 'x')], 'continue'),
+    reply('Done.', [], 'done')
+  ]
 
   it('asks before applying and applies when approved', async () => {
     const approval = new ScriptedApproval(['apply'])
@@ -257,7 +358,14 @@ describe('review mode (auto-apply off)', () => {
 
   it('does not apply what the user declines — and tells ChatGPT', async () => {
     const approval = new ScriptedApproval(['skip'])
-    const h = harness([reply('Add.', [createReply('a.ts', 'x')], 'continue'), reply('Ok, skipping.', [], 'done')], {}, approval)
+    const h = harness(
+      [
+        reply('Add.', [createReply('a.ts', 'x')], 'continue'),
+        reply('Ok, skipping.', [], 'done')
+      ],
+      {},
+      approval
+    )
     const snapshot = await run(h, { autoApply: false }).start()
     expect(h.workspace.files.has('a.ts')).toBe(false)
     expect(h.git.commits).toHaveLength(0)
@@ -283,10 +391,16 @@ describe('review mode (auto-apply off)', () => {
 
 describe('pausing and resuming', () => {
   it('pauses between steps when auto-continue is off, and continues on resume', async () => {
-    const h = harness([reply('One.', [createReply('a.ts', 'x')], 'continue'), reply('Two.', [], 'done')])
+    const h = harness([
+      reply('One.', [createReply('a.ts', 'x')], 'continue'),
+      reply('Two.', [], 'done')
+    ])
     const agent = run(h, { autoContinue: false })
     const paused = await agent.start()
-    expect(finalState(paused)).toMatchObject({ kind: 'paused', reason: 'awaiting-continue' })
+    expect(finalState(paused)).toMatchObject({
+      kind: 'paused',
+      reason: 'awaiting-continue'
+    })
     expect(h.chat.sent).toHaveLength(1)
     const finished = await agent.resume()
     expect(finalState(finished)).toMatchObject({ outcome: 'done' })
@@ -299,19 +413,28 @@ describe('pausing and resuming', () => {
     ['no-browser', /No browser is connected.*Resume/s],
     ['composer-not-found', /Resume/],
     ['timeout', /approval prompt/]
-  ] as const)('pauses on %s and re-sends the very same message on resume', async (code, message) => {
-    const h = harness([new ChatError(code, 'details'), reply('Fine.', [createReply('a.ts', 'x')], 'done')])
-    const agent = run(h)
-    const paused = await agent.start()
-    expect(finalState(paused)).toMatchObject({ kind: 'paused', reason: 'needs-attention' })
-    expect((paused.state as { message: string }).message).toMatch(message)
-    expect(paused.steps).toHaveLength(0) // the failed attempt is not a step
+  ] as const)(
+    'pauses on %s and re-sends the very same message on resume',
+    async (code, message) => {
+      const h = harness([
+        new ChatError(code, 'details'),
+        reply('Fine.', [createReply('a.ts', 'x')], 'done')
+      ])
+      const agent = run(h)
+      const paused = await agent.start()
+      expect(finalState(paused)).toMatchObject({
+        kind: 'paused',
+        reason: 'needs-attention'
+      })
+      expect((paused.state as { message: string }).message).toMatch(message)
+      expect(paused.steps).toHaveLength(0) // the failed attempt is not a step
 
-    const finished = await agent.resume()
-    expect(finalState(finished)).toMatchObject({ outcome: 'done' })
-    expect(h.chat.sent[1]!.text).toBe(h.chat.sent[0]!.text)
-    expect(h.chat.sent[1]!.newChat).toBe(true) // still the first message of the conversation
-  })
+      const finished = await agent.resume()
+      expect(finalState(finished)).toMatchObject({ outcome: 'done' })
+      expect(h.chat.sent[1]!.text).toBe(h.chat.sent[0]!.text)
+      expect(h.chat.sent[1]!.newChat).toBe(true) // still the first message of the conversation
+    }
+  )
 
   it('a follow-up that fails to send keeps its text and stays in the same conversation', async () => {
     const h = harness([
@@ -329,14 +452,22 @@ describe('pausing and resuming', () => {
   })
 
   it('ends the run when the ChatGPT conversation is lost mid-task', async () => {
-    const h = harness([reply('One.', [createReply('a.ts', 'x')], 'continue'), new ChatError('tab-unavailable', 'tab closed')])
+    const h = harness([
+      reply('One.', [createReply('a.ts', 'x')], 'continue'),
+      new ChatError('tab-unavailable', 'tab closed')
+    ])
     const snapshot = await run(h).start()
     expect(finalState(snapshot)).toMatchObject({ kind: 'finished', outcome: 'error' })
-    expect((snapshot.state as { message: string }).message).toMatch(/conversation is gone/)
+    expect((snapshot.state as { message: string }).message).toMatch(
+      /conversation is gone/
+    )
   })
 
   it('treats any other chat failure on the first message as resumable', async () => {
-    const h = harness([new ChatError('tab-unavailable', 'could not open ChatGPT'), reply('ok', [], 'done')])
+    const h = harness([
+      new ChatError('tab-unavailable', 'could not open ChatGPT'),
+      reply('ok', [], 'done')
+    ])
     const agent = run(h)
     expect(finalState(await agent.start())).toMatchObject({ kind: 'paused' })
     expect(finalState(await agent.resume())).toMatchObject({ outcome: 'done' })
@@ -399,15 +530,23 @@ describe('stopping', () => {
 })
 
 describe('git: commit and push', () => {
-  const oneStep = () => [reply('Add.', [createReply('a.ts', 'x')], 'continue'), reply('Done.', [], 'done')]
+  const oneStep = () => [
+    reply('Add.', [createReply('a.ts', 'x')], 'continue'),
+    reply('Done.', [], 'done')
+  ]
 
   it('pauses when the push fails and resumes at the push (nothing is applied twice)', async () => {
     const h = harness(oneStep())
     h.git.pushFailures = [new GitError('auth', 'fatal: Authentication failed')]
     const agent = run(h)
     const paused = await agent.start()
-    expect(finalState(paused)).toMatchObject({ kind: 'paused', reason: 'needs-attention' })
-    expect((paused.state as { message: string }).message).toMatch(/not signed in to GitHub/)
+    expect(finalState(paused)).toMatchObject({
+      kind: 'paused',
+      reason: 'needs-attention'
+    })
+    expect((paused.state as { message: string }).message).toMatch(
+      /not signed in to GitHub/
+    )
     expect(h.workspace.applied).toHaveLength(1)
     expect(h.chat.sent).toHaveLength(1) // ChatGPT is not told the change is on GitHub
 
@@ -444,7 +583,9 @@ describe('git: commit and push', () => {
     const snapshot = await run(h, { push: false }).start()
     expect(finalState(snapshot)).toMatchObject({ outcome: 'done' })
     expect(h.git.pushes).toBe(0)
-    expect(h.chat.texts[1]).toContain('NOT on GitHub (pushing is turned off in the settings)')
+    expect(h.chat.texts[1]).toContain(
+      'NOT on GitHub (pushing is turned off in the settings)'
+    )
   })
 
   it('with commit off, nothing touches git and ChatGPT is told so', async () => {
@@ -452,7 +593,9 @@ describe('git: commit and push', () => {
     await run(h, { commit: false }).start()
     expect(h.git.commits).toHaveLength(0)
     expect(h.git.pushes).toBe(0)
-    expect(h.chat.texts[1]).toContain('Nothing was committed or pushed (committing is turned off in the settings)')
+    expect(h.chat.texts[1]).toContain(
+      'Nothing was committed or pushed (committing is turned off in the settings)'
+    )
   })
 
   it('reports "nothing to commit" without failing', async () => {
@@ -467,7 +610,11 @@ describe('git: commit and push', () => {
     const h = harness([])
     h.git.contextError = new Error('This folder has no GitHub remote.')
     const snapshot = await run(h).start()
-    expect(finalState(snapshot)).toMatchObject({ kind: 'finished', outcome: 'error', message: 'This folder has no GitHub remote.' })
+    expect(finalState(snapshot)).toMatchObject({
+      kind: 'finished',
+      outcome: 'error',
+      message: 'This folder has no GitHub remote.'
+    })
     expect(h.chat.sent).toHaveLength(0)
   })
 
@@ -476,7 +623,9 @@ describe('git: commit and push', () => {
     h.workspace.failNextApply = new Error('EACCES: permission denied')
     const snapshot = await run(h).start()
     expect(finalState(snapshot)).toMatchObject({ outcome: 'error' })
-    expect((snapshot.state as { message: string }).message).toMatch(/could not be written.*EACCES/)
+    expect((snapshot.state as { message: string }).message).toMatch(
+      /could not be written.*EACCES/
+    )
     expect(h.git.commits).toHaveLength(0)
   })
 })
@@ -484,7 +633,10 @@ describe('git: commit and push', () => {
 describe('file safety', () => {
   it('leaves files with uncommitted changes alone and reports it', async () => {
     const h = harness(
-      [reply('Edit.', [updateReply('a.ts', 'a', 'b')], 'continue'), reply('Done.', [], 'done')],
+      [
+        reply('Edit.', [updateReply('a.ts', 'a', 'b')], 'continue'),
+        reply('Done.', [], 'done')
+      ],
       { 'a.ts': 'a\n' }
     )
     h.workspace.dirty.add('a.ts')
@@ -495,7 +647,9 @@ describe('file safety', () => {
   })
 
   it('edits dirty files when the setting allows it', async () => {
-    const h = harness([reply('Edit.', [updateReply('a.ts', 'a', 'b')], 'done')], { 'a.ts': 'a\n' })
+    const h = harness([reply('Edit.', [updateReply('a.ts', 'a', 'b')], 'done')], {
+      'a.ts': 'a\n'
+    })
     h.workspace.dirty.add('a.ts')
     await run(h, { allowDirty: true }).start()
     expect(h.workspace.files.get('a.ts')).toBe('b\n')
@@ -503,7 +657,15 @@ describe('file safety', () => {
 
   it('never writes outside the repository, whatever ChatGPT asks', async () => {
     const h = harness([
-      reply('Sneaky.', [createReply('../../etc/passwd', 'x'), createReply('.git/config', 'x'), createReply('ok.ts', 'fine')], 'done')
+      reply(
+        'Sneaky.',
+        [
+          createReply('../../etc/passwd', 'x'),
+          createReply('.git/config', 'x'),
+          createReply('ok.ts', 'fine')
+        ],
+        'done'
+      )
     ])
     await run(h).start()
     expect([...h.workspace.files.keys()]).toEqual(['ok.ts'])
@@ -520,7 +682,12 @@ describe('snapshots', () => {
     off()
     expect(seen.length).toBeGreaterThan(5)
     const step = snapshot.steps[0]!
-    expect(step.reply).toMatchObject({ status: 'done', editCount: 1, summary: 'Add a thing.', truncated: false })
+    expect(step.reply).toMatchObject({
+      status: 'done',
+      editCount: 1,
+      summary: 'Add a thing.',
+      truncated: false
+    })
     expect(step.finishedAt).toBeGreaterThan(step.startedAt)
     expect(step.promptChars).toBe(h.chat.texts[0]!.length)
     expect(snapshot.repo?.name).toBe('project')

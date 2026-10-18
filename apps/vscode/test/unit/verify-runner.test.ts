@@ -7,8 +7,10 @@ import { runVerifyCommand } from '../../src/checks/verify-runner'
 const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'codegent-verify-'))
 afterAll(() => fs.rmSync(cwd, { recursive: true, force: true }))
 
-const run = (command: string, over: Partial<Parameters<typeof runVerifyCommand>[0]> = {}) =>
-  runVerifyCommand({ command, cwd, timeoutMs: 20_000, ...over })
+const run = (
+  command: string,
+  over: Partial<Parameters<typeof runVerifyCommand>[0]> = {}
+) => runVerifyCommand({ command, cwd, timeoutMs: 20_000, ...over })
 
 const alive = (pid: number): boolean => {
   try {
@@ -22,7 +24,9 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 describe('runVerifyCommand', () => {
   it('reports success with the combined output', async () => {
-    const result = await run(`node -e "console.log('out-line'); console.error('err-line')"`)
+    const result = await run(
+      `node -e "console.log('out-line'); console.error('err-line')"`
+    )
     expect(result.exitCode).toBe(0)
     expect(result.timedOut).toBeUndefined()
     expect(result.outputTail).toContain('out-line')
@@ -38,7 +42,9 @@ describe('runVerifyCommand', () => {
 
   it('runs in the given directory with CI=true and no colours', async () => {
     fs.writeFileSync(path.join(cwd, 'marker.txt'), 'here')
-    const result = await run(`node -e "console.log(require('fs').existsSync('marker.txt'), process.env.CI, process.env.NO_COLOR)"`)
+    const result = await run(
+      `node -e "console.log(require('fs').existsSync('marker.txt'), process.env.CI, process.env.NO_COLOR)"`
+    )
     expect(result.outputTail.trim()).toBe('true true 1')
   })
 
@@ -50,7 +56,10 @@ describe('runVerifyCommand', () => {
   })
 
   it('keeps only the tail of enormous output', async () => {
-    const result = await run(`node -e "for (let i = 0; i < 20000; i++) console.log('line ' + i + ' ' + 'x'.repeat(60)); console.log('THE-END')"`, { tailChars: 5_000 })
+    const result = await run(
+      `node -e "for (let i = 0; i < 20000; i++) console.log('line ' + i + ' ' + 'x'.repeat(60)); console.log('THE-END')"`,
+      { tailChars: 5_000 }
+    )
     expect(result.exitCode).toBe(0)
     expect(result.outputTail.length).toBeLessThanOrEqual(5_000)
     expect(result.outputTail.trimEnd().endsWith('THE-END')).toBe(true)
@@ -77,7 +86,9 @@ describe('runVerifyCommand', () => {
 
   it('stops promptly when aborted', async () => {
     const controller = new AbortController()
-    const pending = run(`node -e "setInterval(() => {}, 1000)"`, { signal: controller.signal })
+    const pending = run(`node -e "setInterval(() => {}, 1000)"`, {
+      signal: controller.signal
+    })
     await sleep(500)
     const started = Date.now()
     controller.abort()
@@ -89,7 +100,9 @@ describe('runVerifyCommand', () => {
   it('does not start when already aborted', async () => {
     const controller = new AbortController()
     controller.abort()
-    const result = await run(`node -e "console.log('should not matter')"`, { signal: controller.signal })
+    const result = await run(`node -e "console.log('should not matter')"`, {
+      signal: controller.signal
+    })
     expect(result.exitCode).toBeNull()
   })
 })

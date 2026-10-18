@@ -1,4 +1,5 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process'
+import os from 'node:os'
 import {
   findHub,
   HUB_PORTS,
@@ -27,6 +28,12 @@ export interface EnsureHubOptions {
   startupTimeoutMs?: number
   spawn?: typeof nodeSpawn
   env?: NodeJS.ProcessEnv
+  /**
+   * Working directory of the hub process. Defaults to the temp folder: the hub outlives the window
+   * that started it, and on Windows a process keeps its working directory from being renamed or
+   * deleted — that must never be the user's project.
+   */
+  cwd?: string
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
@@ -65,6 +72,7 @@ const startOnPort = async (
   let child: ChildProcess
   try {
     child = spawnFn(options.execPath ?? process.execPath, args, {
+      cwd: options.cwd ?? os.tmpdir(),
       detached: true,
       stdio: 'ignore',
       windowsHide: true,

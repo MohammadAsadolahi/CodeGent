@@ -97,7 +97,8 @@ export class HubConnection implements BridgeConnection {
   }
 
   onEvent = (listener: (event: HubEvent) => void) => this.events.on(listener)
-  onPeers = (listener: (browsers: readonly BrowserInfo[]) => void) => this.peers.on(listener)
+  onPeers = (listener: (browsers: readonly BrowserInfo[]) => void) =>
+    this.peers.on(listener)
   onState = (listener: (state: ConnectionState) => void) => this.states.on(listener)
 
   start(): void {
@@ -116,7 +117,8 @@ export class HubConnection implements BridgeConnection {
   /** Drops the connection and asks the hub to exit, so the next start launches a fresh one. */
   async restartHub(): Promise<void> {
     const socket = this.socket
-    if (socket?.readyState === WebSocket.OPEN) socket.send(serialize({ type: 'shutdown' }))
+    if (socket?.readyState === WebSocket.OPEN)
+      socket.send(serialize({ type: 'shutdown' }))
     this.dropSocket(1000, 'restarting hub')
     this.attempt = 0
     await new Promise((resolve) => setTimeout(resolve, 600))
@@ -124,7 +126,8 @@ export class HubConnection implements BridgeConnection {
   }
 
   submit(job: JobRequest): boolean {
-    if (this.state !== 'connected' || this.socket?.readyState !== WebSocket.OPEN) return false
+    if (this.state !== 'connected' || this.socket?.readyState !== WebSocket.OPEN)
+      return false
     try {
       this.socket.send(serialize({ type: 'job', job }))
       return true
@@ -144,7 +147,12 @@ export class HubConnection implements BridgeConnection {
 
   // ── connection loop ──────────────────────────────────────────────────────────────────────────
   private async connect(): Promise<void> {
-    if (!this.wanted || this.looping || (this.socket && this.socket.readyState <= WebSocket.OPEN)) return
+    if (
+      !this.wanted ||
+      this.looping ||
+      (this.socket && this.socket.readyState <= WebSocket.OPEN)
+    )
+      return
     this.looping = true
     try {
       if (this.retryTimer) clearTimeout(this.retryTimer)
@@ -170,7 +178,11 @@ export class HubConnection implements BridgeConnection {
   }
 
   private open(port: number): void {
-    const query = new URLSearchParams({ role: 'editor', id: this.editorId, protocol: String(PROTOCOL_VERSION) })
+    const query = new URLSearchParams({
+      role: 'editor',
+      id: this.editorId,
+      protocol: String(PROTOCOL_VERSION)
+    })
     const url = `ws://${HUB_HOST}:${port}/ws?${query}`
     const socket = (this.options.createSocket ?? ((u) => new WebSocket(u)))(url)
     this.socket = socket
@@ -252,7 +264,10 @@ export class HubConnection implements BridgeConnection {
   private startWatchdog(): void {
     this.stopWatchdog()
     this.watchdog = setInterval(() => {
-      if (this.state === 'connected' && Date.now() - this.lastMessageAt > HEARTBEAT_DEAD_AFTER_MS) {
+      if (
+        this.state === 'connected' &&
+        Date.now() - this.lastMessageAt > HEARTBEAT_DEAD_AFTER_MS
+      ) {
         this.options.log?.('the hub stopped answering; reconnecting')
         this.dropSocket(4000, 'silent hub')
         this.setBrowsers([])

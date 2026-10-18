@@ -27,7 +27,14 @@ export interface VerifyResult {
 }
 
 export type PublishResult =
-  | { state: 'pushed'; sha: string; shortSha: string; message: string; branch: string; remote: string }
+  | {
+      state: 'pushed'
+      sha: string
+      shortSha: string
+      message: string
+      branch: string
+      remote: string
+    }
   /** Committed locally, but the push was disabled or failed — ChatGPT cannot see this commit. */
   | { state: 'committed'; sha: string; shortSha: string; message: string; reason: string }
   | { state: 'skipped'; reason: string }
@@ -50,7 +57,8 @@ const MAX_SNIPPET_LINES = 8
 const MAX_LINE_CHARS = 160
 const MAX_VERIFY_CHARS = 3_000
 
-const clip = (text: string, max: number): string => (text.length <= max ? text : `${text.slice(0, max - 1)}…`)
+const clip = (text: string, max: number): string =>
+  text.length <= max ? text : `${text.slice(0, max - 1)}…`
 const indent = (text: string, spaces: number): string =>
   text
     .split('\n')
@@ -58,7 +66,10 @@ const indent = (text: string, spaces: number): string =>
     .join('\n')
 
 const block = (lines: readonly string[], spaces = 2): string =>
-  indent(['```', ...lines.map((line) => clip(line, MAX_LINE_CHARS)), '```'].join('\n'), spaces)
+  indent(
+    ['```', ...lines.map((line) => clip(line, MAX_LINE_CHARS)), '```'].join('\n'),
+    spaces
+  )
 
 const appliedLine = (outcome: EditOutcome): string => {
   const edit = outcome.edit
@@ -90,14 +101,20 @@ const failedBlock = (outcome: EditOutcome): string => {
 }
 
 const diagnosticsBlock = (summary: DiagnosticsSummary): string => {
-  if (summary.errors === 0 && summary.warnings === 0) return '- Editor diagnostics for the changed files: none (no errors or warnings).'
-  const sorted = [...summary.items].sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'error' ? -1 : 1))
+  if (summary.errors === 0 && summary.warnings === 0)
+    return '- Editor diagnostics for the changed files: none (no errors or warnings).'
+  const sorted = [...summary.items].sort((a, b) =>
+    a.severity === b.severity ? 0 : a.severity === 'error' ? -1 : 1
+  )
   const shown = sorted.slice(0, MAX_DIAGNOSTICS)
   const lines = shown.map((item) => {
     const label = [item.source, item.code].filter(Boolean).join(' ')
     return `  - \`${item.path}\` ${item.line}:${item.column} ${item.severity}${label ? ` ${label}` : ''}: ${clip(item.message.replace(/\s+/g, ' '), 240)}`
   })
-  const more = summary.items.length > shown.length ? [`  - … and ${summary.items.length - shown.length} more`] : []
+  const more =
+    summary.items.length > shown.length
+      ? [`  - … and ${summary.items.length - shown.length} more`]
+      : []
   return [
     `- Editor diagnostics for the changed files: ${summary.errors} error${summary.errors === 1 ? '' : 's'}, ${summary.warnings} warning${summary.warnings === 1 ? '' : 's'}.`,
     ...lines,
@@ -115,7 +132,10 @@ const verifyBlock = (verify: VerifyResult): string => {
         : `failed (exit code ${verify.exitCode})`
   const head = `- Check \`${clip(verify.command, 120)}\` ${outcome}.`
   if (verify.exitCode === 0 || !verify.outputTail.trim()) return head
-  const tail = verify.outputTail.length > MAX_VERIFY_CHARS ? `…${verify.outputTail.slice(-MAX_VERIFY_CHARS)}` : verify.outputTail
+  const tail =
+    verify.outputTail.length > MAX_VERIFY_CHARS
+      ? `…${verify.outputTail.slice(-MAX_VERIFY_CHARS)}`
+      : verify.outputTail
   return `${head} Last output:\n${block(tail.trimEnd().split('\n').slice(-60), 2)}`
 }
 
@@ -155,13 +175,22 @@ export const buildFollowUpPrompt = (report: StepReport): string => {
 
   const sections: string[] = [`CodeGent result — step ${report.step}`, headline]
 
-  if (applied.length > 0) sections.push(['Applied', ...applied.map(appliedLine)].join('\n'))
+  if (applied.length > 0)
+    sections.push(['Applied', ...applied.map(appliedLine)].join('\n'))
   if (skipped.length > 0) {
-    sections.push(['Already in place (no change needed)', ...skipped.map((o) => `- \`${o.path}\` — ${o.detail}`)].join('\n'))
+    sections.push(
+      [
+        'Already in place (no change needed)',
+        ...skipped.map((o) => `- \`${o.path}\` — ${o.detail}`)
+      ].join('\n')
+    )
   }
   if (failures > 0) {
     const shown = failed.slice(0, MAX_FAILED_FILES).map(failedBlock)
-    const more = failed.length > MAX_FAILED_FILES ? [`- … and ${failed.length - MAX_FAILED_FILES} more files`] : []
+    const more =
+      failed.length > MAX_FAILED_FILES
+        ? [`- … and ${failed.length - MAX_FAILED_FILES} more files`]
+        : []
     sections.push(
       [
         'Not applied (these files were left exactly as they were)',
@@ -179,7 +208,8 @@ export const buildFollowUpPrompt = (report: StepReport): string => {
   if (report.verify) checks.push(verifyBlock(report.verify))
   if (checks.length > 0) sections.push(['Checks', ...checks].join('\n'))
 
-  if (report.publish) sections.push(['Repository', publishBlock(report.publish)].join('\n'))
+  if (report.publish)
+    sections.push(['Repository', publishBlock(report.publish)].join('\n'))
 
   const diagnosticsFailed = (report.diagnostics?.errors ?? 0) > 0
   const verifyFailed = report.verify ? report.verify.exitCode !== 0 : false

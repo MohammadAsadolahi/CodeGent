@@ -44,7 +44,11 @@ var vscode = __toESM(require("vscode"));
 // apps/vscode/test/support/git-fixture.ts
 var import_node_child_process = require("node:child_process");
 var import_node_path = __toESM(require("node:path"));
-var git = (cwd, ...args) => (0, import_node_child_process.execFileSync)("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trimEnd();
+var git = (cwd, ...args) => (0, import_node_child_process.execFileSync)("git", args, {
+  cwd,
+  encoding: "utf8",
+  stdio: ["ignore", "pipe", "pipe"]
+}).trimEnd();
 var attachRepo = (parent, name) => {
   const dir = import_node_path.default.join(parent, name);
   const bare = import_node_path.default.join(parent, `${name}.git`);
@@ -65,14 +69,18 @@ var attachRepo = (parent, name) => {
 // apps/vscode/test/integration/env.ts
 var sandbox = () => {
   const dir = process.env.CODEGENT_IT_DIR;
-  if (!dir) throw new Error("CODEGENT_IT_DIR is not set; run these tests with `npm run test:integration`.");
+  if (!dir)
+    throw new Error(
+      "CODEGENT_IT_DIR is not set; run these tests with `npm run test:integration`."
+    );
   return dir;
 };
 var hubPorts = () => (process.env.CODEGENT_IT_PORTS ?? "").split(",").map(Number);
 var workRepo = () => attachRepo(sandbox(), "work");
 var getApi = async () => {
   const extension = vscode.extensions.getExtension("codegent.codegent");
-  if (!extension) throw new Error("The CodeGent extension is not installed in the test instance.");
+  if (!extension)
+    throw new Error("The CodeGent extension is not installed in the test instance.");
   return extension.isActive ? extension.exports : extension.activate();
 };
 var configuration = () => vscode.workspace.getConfiguration("codegent");

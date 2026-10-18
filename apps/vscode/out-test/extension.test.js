@@ -3954,8 +3954,17 @@ var FakeBrowser = class {
   onJob = () => {
   };
   async connect() {
-    const query = new URLSearchParams({ role: "browser", id: this.id, protocol: "1", name: "Chrome", ua: "test", ext: "0" });
-    this.socket = new wrapper_default(`ws://127.0.0.1:${this.port}/ws?${query}`, { origin: EXT_ORIGIN });
+    const query = new URLSearchParams({
+      role: "browser",
+      id: this.id,
+      protocol: "1",
+      name: "Chrome",
+      ua: "test",
+      ext: "0"
+    });
+    this.socket = new wrapper_default(`ws://127.0.0.1:${this.port}/ws?${query}`, {
+      origin: EXT_ORIGIN
+    });
     this.socket.on("message", (raw) => {
       const message = JSON.parse(raw.toString());
       if (message.type === "ping") this.socket.send(JSON.stringify({ type: "pong" }));
@@ -3972,7 +3981,15 @@ var FakeBrowser = class {
     return this;
   }
   reply(job2, event2, seq = 100) {
-    this.socket.send(JSON.stringify({ type: "event", editorId: job2.editorId, jobId: job2.jobId, seq, event: event2 }));
+    this.socket.send(
+      JSON.stringify({
+        type: "event",
+        editorId: job2.editorId,
+        jobId: job2.jobId,
+        seq,
+        event: event2
+      })
+    );
   }
   /** Answers every job with a finished reply, the way a ChatGPT tab would. */
   answerWith(reply) {
@@ -3997,7 +4014,8 @@ var vscode = __toESM(require("vscode"));
 var hubPorts = () => (process.env.CODEGENT_IT_PORTS ?? "").split(",").map(Number);
 var getApi = async () => {
   const extension2 = vscode.extensions.getExtension("codegent.codegent");
-  if (!extension2) throw new Error("The CodeGent extension is not installed in the test instance.");
+  if (!extension2)
+    throw new Error("The CodeGent extension is not installed in the test instance.");
   return extension2.isActive ? extension2.exports : extension2.activate();
 };
 var configuration = () => vscode.workspace.getConfiguration("codegent");
@@ -4021,17 +4039,18 @@ describe("the extension in VS Code", () => {
     import_strict.default.equal(health.protocol, 1);
   });
   it("registers every command it declares", async () => {
-    const declared = vscode2.extensions.getExtension("codegent.codegent").packageJSON.contributes.commands.map(
-      (entry) => entry.command
-    );
+    const declared = vscode2.extensions.getExtension("codegent.codegent").packageJSON.contributes.commands.map((entry) => entry.command);
     import_strict.default.ok(declared.length >= 8);
     const registered = new Set(await vscode2.commands.getCommands(true));
-    for (const command of declared) import_strict.default.ok(registered.has(command), `${command} is declared but not registered`);
+    for (const command of declared)
+      import_strict.default.ok(registered.has(command), `${command} is declared but not registered`);
   });
   it("puts the browser extension where the user can load it", () => {
     const folder = api.browserExtensionPath();
     import_strict.default.ok(folder, "no browser extension folder");
-    const manifest = JSON.parse(import_node_fs.default.readFileSync(import_node_path.default.join(folder, "manifest.json"), "utf8"));
+    const manifest = JSON.parse(
+      import_node_fs.default.readFileSync(import_node_path.default.join(folder, "manifest.json"), "utf8")
+    );
     import_strict.default.equal(manifest.name, "CodeGent Bridge");
     import_strict.default.equal(manifest.manifest_version, 3);
     for (const file of ["background.js", "content.js", "popup.html", "popup.js"]) {
@@ -4041,7 +4060,11 @@ describe("the extension in VS Code", () => {
   it("shows the panel, and the webview runs and talks back", async () => {
     await vscode2.commands.executeCommand("codegent.focus");
     await until(() => api.webview().resolved, "the panel to be created", 2e4);
-    await until(() => api.webview().received.includes("ready"), "the webview script to start and say hello", 2e4);
+    await until(
+      () => api.webview().received.includes("ready"),
+      "the webview script to start and say hello",
+      2e4
+    );
   });
   it("describes the repository that is open", async () => {
     await api.send({ type: "refreshRepo" });
@@ -4081,7 +4104,10 @@ describe("the extension in VS Code", () => {
     await api.waitFor((s) => s.connection.hub === "connected", 3e4);
     const { port } = api.hub();
     import_strict.default.ok(port !== null);
-    import_strict.default.ok((await fetch(`http://127.0.0.1:${port}/health`)).ok, "the new hub does not answer");
+    import_strict.default.ok(
+      (await fetch(`http://127.0.0.1:${port}/health`)).ok,
+      "the new hub does not answer"
+    );
     const browser = await new FakeBrowser(port).connect();
     try {
       await api.waitFor((s) => s.connection.browsers.length === 1);

@@ -34,10 +34,17 @@ export const REPO: RepoContext = {
 export const fence = (body: string, lang = 'ts') => `\`\`\`${lang}\n${body}\n\`\`\``
 export const updateReply = (path: string, search: string, replace: string) =>
   `### Updated file: \`${path}\`\n\n${fence(`<<<<<<< SEARCH\n${search}\n=======\n${replace}\n>>>>>>> REPLACE`)}`
-export const createReply = (path: string, content: string) => `### Created file: \`${path}\`\n\n${fence(content)}`
+export const createReply = (path: string, content: string) =>
+  `### Created file: \`${path}\`\n\n${fence(content)}`
 export const deleteReply = (path: string) => `### Deleted file: \`${path}\``
-export const reply = (summary: string, parts: string[], status?: 'continue' | 'done' | 'blocked') =>
-  [summary, '', ...parts, ...(status ? ['', `CODEGENT_STATUS: ${status}`] : [])].join('\n')
+export const reply = (
+  summary: string,
+  parts: string[],
+  status?: 'continue' | 'done' | 'blocked'
+) =>
+  [summary, '', ...parts, ...(status ? ['', `CODEGENT_STATUS: ${status}`] : [])].join(
+    '\n'
+  )
 
 // ── fakes ────────────────────────────────────────────────────────────────────────────────────────
 type Scripted = string | Error | ((request: ChatRequest) => string | Promise<string>)
@@ -53,7 +60,11 @@ export class ScriptedChat implements ChatPort {
     if (next === undefined) throw new Error('the script ran out of replies')
     if (next instanceof Error) throw next
     const markdown = typeof next === 'function' ? await next(request) : next
-    return { markdown, conversationUrl: 'https://chatgpt.com/c/test-conversation', durationMs: 5 }
+    return {
+      markdown,
+      conversationUrl: 'https://chatgpt.com/c/test-conversation',
+      durationMs: 5
+    }
   }
 
   get texts(): string[] {
@@ -88,14 +99,18 @@ export class MemoryWorkspace implements WorkspacePort {
     }
     this.applied.push([...changes])
     for (const change of changes) {
-      if (change.kind === 'create' || change.kind === 'modify') this.files.set(change.path, change.after)
+      if (change.kind === 'create' || change.kind === 'modify')
+        this.files.set(change.path, change.after)
       else if (change.kind === 'delete') this.files.delete(change.path)
       else {
         this.files.delete(change.from)
         this.files.set(change.to, change.after)
       }
     }
-    return { id: `receipt-${this.applied.length}`, paths: changes.map((c) => (c.kind === 'rename' ? c.to : c.path)) }
+    return {
+      id: `receipt-${this.applied.length}`,
+      paths: changes.map((c) => (c.kind === 'rename' ? c.to : c.path))
+    }
   }
 }
 
@@ -171,7 +186,11 @@ export interface Harness {
   deps: AgentDeps
 }
 
-export const harness = (script: Scripted[], files: Record<string, string> = {}, approval?: ApprovalPort): Harness => {
+export const harness = (
+  script: Scripted[],
+  files: Record<string, string> = {},
+  approval?: ApprovalPort
+): Harness => {
   const chat = new ScriptedChat(script)
   const workspace = new MemoryWorkspace(files)
   const git = new FakeGit()
@@ -183,7 +202,15 @@ export const harness = (script: Scripted[], files: Record<string, string> = {}, 
     workspace,
     git,
     checks,
-    deps: { chat, workspace, git, checks, approval, now: () => (tick += 10), newId: () => `id-${++ids}` }
+    deps: {
+      chat,
+      workspace,
+      git,
+      checks,
+      approval,
+      now: () => (tick += 10),
+      newId: () => `id-${++ids}`
+    }
   }
 }
 

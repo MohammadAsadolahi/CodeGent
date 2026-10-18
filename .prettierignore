@@ -8,3 +8,5 @@ package-lock.json
 *.vsix
 apps/browser/test/fixtures
 packages/engine/test/fixtures
+out-test
+roadmap.md

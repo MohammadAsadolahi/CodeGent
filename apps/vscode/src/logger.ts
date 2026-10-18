@@ -5,7 +5,9 @@ export class Log implements vscode.Disposable {
   private readonly channel = vscode.window.createOutputChannel('CodeGent')
 
   private write(level: string, message: string): void {
-    this.channel.appendLine(`${new Date().toISOString().slice(11, 23)} ${level} ${message}`)
+    this.channel.appendLine(
+      `${new Date().toISOString().slice(11, 23)} ${level} ${message}`
+    )
   }
 
   info = (message: string): void => this.write('INFO ', message)

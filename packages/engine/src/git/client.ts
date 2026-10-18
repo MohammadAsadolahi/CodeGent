@@ -37,8 +37,18 @@ export const execGit: GitRunner = (args, { cwd, timeoutMs = 60_000 }) =>
       (error, stdout, stderr) => {
         const exit = (error as NodeJS.ErrnoException | null)?.code
         const code =
-          error === null ? 0 : typeof exit === 'number' ? exit : (error as { killed?: boolean }).killed ? 124 : 1
-        resolve({ code, stdout: String(stdout), stderr: String(stderr) || (error?.message ?? '') })
+          error === null
+            ? 0
+            : typeof exit === 'number'
+              ? exit
+              : (error as { killed?: boolean }).killed
+                ? 124
+                : 1
+        resolve({
+          code,
+          stdout: String(stdout),
+          stderr: String(stderr) || (error?.message ?? '')
+        })
       }
     )
   })
@@ -65,8 +75,13 @@ export class GitError extends Error {
 
 export const classifyPushFailure = (stderr: string): GitFailureKind => {
   const text = stderr.toLowerCase()
-  if (/gh006|protected branch|protected-branch|hook declined/.test(text)) return 'protected-branch'
-  if (/non-fast-forward|fetch first|updates were rejected|tip of your current branch is behind/.test(text)) {
+  if (/gh006|protected branch|protected-branch|hook declined/.test(text))
+    return 'protected-branch'
+  if (
+    /non-fast-forward|fetch first|updates were rejected|tip of your current branch is behind/.test(
+      text
+    )
+  ) {
     return 'non-fast-forward'
   }
   if (
@@ -83,7 +98,11 @@ export const classifyPushFailure = (stderr: string): GitFailureKind => {
   ) {
     return 'network'
   }
-  if (/no configured push destination|does not appear to be a git repository|no such remote|invalid remote/.test(text)) {
+  if (
+    /no configured push destination|does not appear to be a git repository|no such remote|invalid remote/.test(
+      text
+    )
+  ) {
     return 'no-remote'
   }
   return 'unknown'
@@ -138,7 +157,10 @@ export class GitClient {
   private async ok(args: string[], timeoutMs?: number): Promise<string> {
     const result = await this.git(args, timeoutMs)
     if (result.code !== 0) {
-      throw new GitError('unknown', `git ${args[0]} failed: ${result.stderr.trim() || result.stdout.trim()}`)
+      throw new GitError(
+        'unknown',
+        `git ${args[0]} failed: ${result.stderr.trim() || result.stdout.trim()}`
+      )
     }
     return result.stdout
   }
@@ -166,7 +188,9 @@ export class GitClient {
       const match = /^(\S+)\s+(\S+)\s+\(fetch\)$/.exec(line.trim())
       if (match) fetchRemotes.set(match[1]!, match[2]!)
     }
-    const ordered = [...fetchRemotes.entries()].sort(([a], [b]) => (a === 'origin' ? -1 : b === 'origin' ? 1 : 0))
+    const ordered = [...fetchRemotes.entries()].sort(([a], [b]) =>
+      a === 'origin' ? -1 : b === 'origin' ? 1 : 0
+    )
     for (const [name, url] of ordered) {
       const parsed = parseRemoteUrl(url)
       if (parsed) return { ...parsed, name, url: sanitizeRemoteUrl(url) }
@@ -192,7 +216,12 @@ export class GitClient {
   }
 
   async upstream(): Promise<UpstreamInfo | null> {
-    const ref = await this.git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'])
+    const ref = await this.git([
+      'rev-parse',
+      '--abbrev-ref',
+      '--symbolic-full-name',
+      '@{u}'
+    ])
     if (ref.code !== 0) return null
     const counts = await this.git(['rev-list', '--left-right', '--count', 'HEAD...@{u}'])
     if (counts.code !== 0) return null
@@ -217,7 +246,9 @@ export class GitClient {
       const x = record[0]!
       const y = record[1]!
       const path = record.slice(3)
-      entries.push(x === 'R' || x === 'C' ? { path, x, y, from: parts[++i] } : { path, x, y })
+      entries.push(
+        x === 'R' || x === 'C' ? { path, x, y, from: parts[++i] } : { path, x, y }
+      )
     }
     return entries
   }
@@ -250,7 +281,8 @@ export class GitClient {
     const toStage = new Set<string>()
     for (const entry of await this.status(paths)) {
       changed.add(entry.path)
-      if (entry.from) changed.add(entry.from) // rename source: already staged, nothing to add
+      if (entry.from)
+        changed.add(entry.from) // rename source: already staged, nothing to add
       else if (!(entry.x === 'D' && entry.y === ' ')) toStage.add(entry.path) // staged deletion likewise
     }
     if (changed.size === 0) return { committed: false }
@@ -260,7 +292,10 @@ export class GitClient {
     if (options.noVerify ?? true) args.push('--no-verify')
     const result = await this.git([...args, '--', ...list])
     if (result.code !== 0) {
-      throw new GitError('unknown', `git commit failed: ${(result.stderr || result.stdout).trim()}`)
+      throw new GitError(
+        'unknown',
+        `git commit failed: ${(result.stderr || result.stdout).trim()}`
+      )
     }
     const head = await this.head()
     return { committed: true, sha: head.sha, shortSha: head.shortSha, paths: list }
@@ -269,13 +304,23 @@ export class GitClient {
   /** Pushes the current branch (to its upstream's remote, else `origin`), setting the upstream if missing. */
   async push(timeoutMs = 120_000): Promise<{ branch: string; remote: string }> {
     const head = await this.head()
-    if (!head.branch) throw new GitError('detached-head', 'HEAD is detached; check out a branch before pushing.')
+    if (!head.branch)
+      throw new GitError(
+        'detached-head',
+        'HEAD is detached; check out a branch before pushing.'
+      )
     const upstream = await this.upstream()
     const remote = upstream?.ref.split('/')[0] ?? (await this.remote())?.name ?? 'origin'
-    const result = await this.git(['push', '--set-upstream', remote, `HEAD:refs/heads/${head.branch}`], timeoutMs)
+    const result = await this.git(
+      ['push', '--set-upstream', remote, `HEAD:refs/heads/${head.branch}`],
+      timeoutMs
+    )
     if (result.code !== 0) {
       const kind = result.code === 124 ? 'timeout' : classifyPushFailure(result.stderr)
-      throw new GitError(kind, `git push failed: ${result.stderr.trim() || result.stdout.trim()}`)
+      throw new GitError(
+        kind,
+        `git push failed: ${result.stderr.trim() || result.stdout.trim()}`
+      )
     }
     return { branch: head.branch, remote }
   }

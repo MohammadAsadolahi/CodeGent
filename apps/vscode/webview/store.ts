@@ -18,7 +18,8 @@ interface Persisted {
   history?: boolean
 }
 
-export const loadPersisted = (): Persisted => vscode.getState<Persisted>() ?? { draft: '' }
+export const loadPersisted = (): Persisted =>
+  vscode.getState<Persisted>() ?? { draft: '' }
 export const savePersisted = (value: Persisted): void => vscode.setState(value)
 
 /** The latest state pushed by the extension (undefined until the first message arrives). */

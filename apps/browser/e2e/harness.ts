@@ -1,4 +1,3 @@
-import { build } from 'esbuild'
 import { Hub } from '@codegent/hub'
 import {
   newId,
@@ -7,20 +6,18 @@ import {
   type JobRequest
 } from '@codegent/protocol'
 import fs from 'node:fs'
-import https from 'node:https'
-import type { AddressInfo } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { chromium, type BrowserContext, type Worker } from 'playwright-core'
-import selfsigned from 'selfsigned'
 import WebSocket from 'ws'
+import { findChromium, startMock, type MockChatGpt } from './mock-chatgpt'
 // @ts-expect-error - plain .mjs build script without type declarations
 import { buildExtension } from '../scripts/build.mjs'
 
+export { MockChatGpt, type ReplyPlan } from './mock-chatgpt'
+
 export const E2E_PORTS = [47695, 47696]
 const DEBUG_PORT = 47698
-const here = path.dirname(fileURLToPath(import.meta.url))
 
 export const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms))
@@ -36,155 +33,6 @@ export const waitUntil = async <T>(
     if (value) return value as T
     if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`)
     await sleep(50)
-  }
-}
-
-// ── locating a Chromium build that can load extensions ─────────────────────────────────────────
-const findChromium = (): string => {
-  if (process.env.CODEGENT_CHROMIUM) return process.env.CODEGENT_CHROMIUM
-  try {
-    const own = chromium.executablePath()
-    if (own && fs.existsSync(own)) return own
-  } catch {
-    // fall through to scanning the cache
-  }
-  const cache =
-    process.env.PLAYWRIGHT_BROWSERS_PATH ??
-    path.join(
-      process.platform === 'win32'
-        ? (process.env.LOCALAPPDATA ?? os.homedir())
-        : process.platform === 'darwin'
-          ? path.join(os.homedir(), 'Library', 'Caches')
-          : path.join(os.homedir(), '.cache'),
-      'ms-playwright'
-    )
-  const executables = [
-    'chrome-win64/chrome.exe',
-    'chrome-win/chrome.exe',
-    'chrome-linux64/chrome',
-    'chrome-linux/chrome'
-  ]
-  const builds = fs.existsSync(cache)
-    ? fs
-        .readdirSync(cache)
-        .filter((name) => /^chromium-\d+$/.test(name))
-        .sort((a, b) => Number(b.split('-')[1]) - Number(a.split('-')[1]))
-    : []
-  for (const dir of builds) {
-    for (const relative of executables) {
-      const candidate = path.join(cache, dir, relative)
-      if (fs.existsSync(candidate)) return candidate
-    }
-  }
-  throw new Error(
-    'No Chromium found. Run `npx playwright-core install chromium` or set CODEGENT_CHROMIUM.'
-  )
-}
-
-// ── the mock ChatGPT, served by intercepting requests ────────────────────────────────────────────
-export interface ReplyPlan {
-  markdown: string
-  chunks?: number
-  chunkMs?: number
-  hold?: boolean
-}
-
-export class MockChatGpt {
-  readonly sent: string[] = []
-  stopClicks = 0
-  loggedOut = false
-  private queue: ReplyPlan[] = []
-  private released = false
-
-  constructor(private readonly script: string) {}
-
-  queueReply(markdown: string, options: Omit<ReplyPlan, 'markdown'> = {}): void {
-    this.queue.push({ markdown, ...options })
-  }
-  release(): void {
-    this.released = true
-  }
-
-  respond(request: { path: string; body: string }): {
-    status: number
-    type: string
-    body: string
-  } {
-    const json = (body: unknown) => ({
-      status: 200,
-      type: 'application/json',
-      body: JSON.stringify(body)
-    })
-    switch (request.path) {
-      case '/__mock.js':
-        return { status: 200, type: 'text/javascript', body: this.script }
-      case '/__mock/next-reply': {
-        const plan = this.queue.shift() ?? { markdown: 'OK' }
-        this.released = false
-        return json({ chunks: 3, chunkMs: 20, hold: false, ...plan })
-      }
-      case '/__mock/sent':
-        this.sent.push(JSON.parse(request.body || '{}').text)
-        return json({})
-      case '/__mock/stop':
-        this.stopClicks += 1
-        return json({})
-      case '/__mock/config':
-        return json({ loggedOut: this.loggedOut })
-      case '/__mock/released':
-        return json({ released: this.released })
-      case '/favicon.ico':
-        return { status: 204, type: 'image/x-icon', body: '' }
-      default:
-        return {
-          status: 200,
-          type: 'text/html',
-          body:
-            '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>ChatGPT</title>' +
-            '<style>body{font:14px sans-serif}#prompt-textarea{min-height:40px;border:1px solid #888;padding:6px;white-space:pre-wrap}</style>' +
-            '</head><body><script src="/__mock.js"></script></body></html>'
-        }
-    }
-  }
-
-  /**
-   * Serves the mock over HTTPS. Chromium is told to resolve chatgpt.com to this server, so every
-   * tab — including ones the extension opens itself — gets the mock and nothing reaches the
-   * real site.
-   */
-  async listen(): Promise<{ port: number; close: () => Promise<void> }> {
-    const pems = selfsigned.generate([{ name: 'commonName', value: 'chatgpt.com' }], {
-      days: 1,
-      keySize: 2048,
-      algorithm: 'sha256',
-      extensions: [
-        { name: 'subjectAltName', altNames: [{ type: 2, value: 'chatgpt.com' }] }
-      ]
-    })
-    const server = https.createServer(
-      { key: pems.private, cert: pems.cert },
-      (req, res) => {
-        let body = ''
-        req.on('data', (chunk) => (body += chunk))
-        req.on('end', () => {
-          const answer = this.respond({ path: (req.url ?? '/').split('?')[0]!, body })
-          res.writeHead(answer.status, {
-            'Content-Type': answer.type,
-            'Cache-Control': 'no-store'
-          })
-          res.end(answer.body)
-        })
-      }
-    )
-    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-    return {
-      port: (server.address() as AddressInfo).port,
-      close: () =>
-        new Promise<void>((resolve) => {
-          server.closeAllConnections()
-          server.close(() => resolve())
-        })
-    }
   }
 }
 
@@ -310,16 +158,7 @@ export const startWorld = async (): Promise<World> => {
   const extensionDir = path.join(root, 'extension')
   await buildExtension({ outDir: extensionDir, hubPorts: E2E_PORTS })
 
-  const bundle = await build({
-    entryPoints: [path.join(here, 'mock', 'mock-page.ts')],
-    bundle: true,
-    write: false,
-    format: 'iife',
-    target: 'chrome116',
-    logLevel: 'warning'
-  })
-  const mock = new MockChatGpt(bundle.outputFiles[0]!.text)
-  const mockServer = await mock.listen()
+  const { mock, ...mockServer } = await startMock()
 
   const hubLog: string[] = []
   const makeHub = () =>

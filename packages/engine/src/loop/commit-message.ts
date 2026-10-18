@@ -23,7 +23,8 @@ export const buildCommitMessage = (options: {
   summary: string
   step: number
 }): string => {
-  const what = firstSentence(options.summary) || firstSentence(options.task) || 'apply changes'
+  const what =
+    firstSentence(options.summary) || firstSentence(options.task) || 'apply changes'
   const subject = `${options.prefix}${what}`
   const clipped = subject.length > 72 ? `${subject.slice(0, 71).trimEnd()}…` : subject
   return `${clipped}\n\nCodeGent step ${options.step}.`

@@ -8,7 +8,7 @@ import {
   type RepoContext
 } from '@codegent/engine'
 import { buildSettings, type Settings } from '../../src/settings-model'
-import { RunManager, type RunHost } from '../../src/run/run-manager'
+import { RunManager, type ActiveRunMarker, type RunHost } from '../../src/run/run-manager'
 import type { UiHistoryItem, UiNotice } from '../../src/ui/protocol'
 import type { RepoOk, RepoStatus } from '../../src/workspace/repo-service'
 
@@ -29,17 +29,39 @@ const REPO: RepoOk = {
   dirtyCount: 0,
   warnings: []
 }
-const CONTEXT: RepoContext = { owner: 'octo', name: 'project', host: 'github.com', webUrl: REPO.webUrl, branch: 'main', sha: REPO.sha, shortSha: REPO.shortSha, subject: REPO.subject }
+const CONTEXT: RepoContext = {
+  owner: 'octo',
+  name: 'project',
+  host: 'github.com',
+  webUrl: REPO.webUrl,
+  branch: 'main',
+  sha: REPO.sha,
+  shortSha: REPO.shortSha,
+  subject: REPO.subject
+}
 
 const fence = (body: string) => '```ts\n' + body + '\n```'
-const create = (path: string, content: string) => `### Created file: \`${path}\`\n\n${fence(content)}`
-const reply = (summary: string, parts: string[], status: string) => [summary, '', ...parts, '', `CODEGENT_STATUS: ${status}`].join('\n')
+const create = (path: string, content: string) =>
+  `### Created file: \`${path}\`\n\n${fence(content)}`
+const reply = (summary: string, parts: string[], status: string) =>
+  [summary, '', ...parts, '', `CODEGENT_STATUS: ${status}`].join('\n')
 
 type Scripted = string | Error | ((request: ChatRequest) => Promise<string>)
 
-const setup = (script: Scripted[], over: { repo?: RepoStatus; consent?: 'allow' | 'commit-only' | 'cancel'; settings?: Partial<Settings['run']> } = {}) => {
+const setup = (
+  script: Scripted[],
+  over: {
+    repo?: RepoStatus
+    consent?: 'allow' | 'commit-only' | 'cancel'
+    settings?: Partial<Settings['run']>
+    /** A run that the previous window left behind. */
+    lost?: ActiveRunMarker
+    history?: UiHistoryItem[]
+  } = {}
+) => {
   const notices: UiNotice[] = []
   let savedHistory: UiHistoryItem[] = []
+  const markers: Array<ActiveRunMarker | undefined> = []
   const files = new Map<string, string>()
   const undone = new Set<string>()
   const commits: string[][] = []
@@ -58,18 +80,25 @@ const setup = (script: Scripted[], over: { repo?: RepoStatus; consent?: 'allow' 
   }
   const host: RunHost = {
     readSettings: () => {
-      const settings = buildSettings(<T,>(_key: string, fallback: T) => fallback)
+      const settings = buildSettings(<T>(_key: string, fallback: T) => fallback)
       return { ...settings, run: { ...settings.run, ...over.settings } }
     },
     createDeps: (): Omit<AgentDeps, 'approval'> => ({
       chat,
       workspace: {
-        view: { read: async (path) => files.get(path) ?? null, isDirty: async () => false },
+        view: {
+          read: async (path) => files.get(path) ?? null,
+          isDirty: async () => false
+        },
         apply: async (changes: readonly FileChange[]) => {
           for (const change of changes) {
-            if (change.kind === 'create' || change.kind === 'modify') files.set(change.path, change.after)
+            if (change.kind === 'create' || change.kind === 'modify')
+              files.set(change.path, change.after)
           }
-          return { id: `receipt-${files.size}-${commits.length}`, paths: changes.map((c) => (c.kind === 'rename' ? c.to : c.path)) }
+          return {
+            id: `receipt-${files.size}-${commits.length}`,
+            paths: changes.map((c) => (c.kind === 'rename' ? c.to : c.path))
+          }
         }
       },
       git: {
@@ -83,7 +112,10 @@ const setup = (script: Scripted[], over: { repo?: RepoStatus; consent?: 'allow' 
           return { branch: 'main', remote: 'origin' }
         }
       },
-      checks: { diagnostics: async () => ({ items: [], errors: 0, warnings: 0 }), verify: async () => undefined }
+      checks: {
+        diagnostics: async () => ({ items: [], errors: 0, warnings: 0 }),
+        verify: async () => undefined
+      }
     }),
     workspace: {
       undo: async (id) => {
@@ -98,24 +130,47 @@ const setup = (script: Scripted[], over: { repo?: RepoStatus; consent?: 'allow' 
       state.consentAsked += 1
       return over.consent ?? 'allow'
     },
-    loadHistory: () => [],
+    loadHistory: () => over.history ?? [],
     saveHistory: (items) => (savedHistory = items),
+    loadActive: () => over.lost,
+    saveActive: (marker) => void markers.push(marker),
     notify: (notice) => notices.push(notice)
   }
   const manager = new RunManager(host)
-  return { manager, notices, state, sent, commits, files, get history() { return savedHistory } }
+  return {
+    manager,
+    markers,
+    notices,
+    state,
+    sent,
+    commits,
+    files,
+    get history() {
+      return savedHistory
+    }
+  }
 }
 
 describe('a run from start to finish', () => {
   it('runs, exposes UI state, records history and announces the outcome', async () => {
-    const t = setup([reply('Add it.', [create('a.ts', 'x')], 'continue'), reply('All done.', [], 'done')])
+    const t = setup([
+      reply('Add it.', [create('a.ts', 'x')], 'continue'),
+      reply('All done.', [], 'done')
+    ])
     const views: Array<string | undefined> = []
     t.manager.onChange(() => views.push(t.manager.view().run?.state))
 
     await t.manager.start('  Add a module  ')
 
     const { run, history } = t.manager.view()
-    expect(run).toMatchObject({ task: 'Add a module', state: 'finished', outcome: 'done', message: 'All done.', canStop: false, canResume: false })
+    expect(run).toMatchObject({
+      task: 'Add a module',
+      state: 'finished',
+      outcome: 'done',
+      message: 'All done.',
+      canStop: false,
+      canResume: false
+    })
     expect(run!.steps).toHaveLength(2)
     expect(run!.steps[0]).toMatchObject({
       n: 1,
@@ -129,7 +184,12 @@ describe('a run from start to finish', () => {
       undone: false
     })
     expect(history).toHaveLength(1)
-    expect(history[0]).toMatchObject({ task: 'Add a module', outcome: 'done', steps: 2, repo: 'octo/project' })
+    expect(history[0]).toMatchObject({
+      task: 'Add a module',
+      outcome: 'done',
+      steps: 2,
+      repo: 'octo/project'
+    })
     expect(t.history).toHaveLength(1)
     expect(t.notices.at(-1)).toMatchObject({ kind: 'info', text: 'Finished: All done.' })
     expect(views).toContain('running')
@@ -138,7 +198,10 @@ describe('a run from start to finish', () => {
   })
 
   it('keeps only the newest applied step undoable, and undo goes through the workspace', async () => {
-    const t = setup([reply('One.', [create('a.ts', 'x')], 'continue'), reply('Two.', [create('b.ts', 'y')], 'done')])
+    const t = setup([
+      reply('One.', [create('a.ts', 'x')], 'continue'),
+      reply('Two.', [create('b.ts', 'y')], 'done')
+    ])
     await t.manager.start('task')
     let steps = t.manager.view().run!.steps
     expect(steps.map((s) => s.canUndo)).toEqual([false, true])
@@ -169,7 +232,10 @@ describe('a run from start to finish', () => {
     const t = setup([reply('Nothing.', [], 'done')])
     await t.manager.start('task')
     await t.manager.undoStep(1)
-    expect(t.notices.at(-1)).toMatchObject({ kind: 'warning', text: 'That step has nothing to undo.' })
+    expect(t.notices.at(-1)).toMatchObject({
+      kind: 'warning',
+      text: 'That step has nothing to undo.'
+    })
   })
 })
 
@@ -177,33 +243,57 @@ describe('starting', () => {
   it('needs a task', async () => {
     const t = setup([])
     await t.manager.start('   ')
-    expect(t.notices[0]).toMatchObject({ kind: 'warning', text: 'Describe the task first.' })
+    expect(t.notices[0]).toMatchObject({
+      kind: 'warning',
+      text: 'Describe the task first.'
+    })
     expect(t.manager.view().run).toBeNull()
   })
 
   it('explains why a repository cannot be used', async () => {
-    const t = setup([], { repo: { ok: false, problem: 'no-remote', reason: 'The repository has no GitHub remote.' } })
+    const t = setup([], {
+      repo: {
+        ok: false,
+        problem: 'no-remote',
+        reason: 'The repository has no GitHub remote.'
+      }
+    })
     await t.manager.start('task')
-    expect(t.notices[0]).toMatchObject({ kind: 'error', text: 'The repository has no GitHub remote.' })
+    expect(t.notices[0]).toMatchObject({
+      kind: 'error',
+      text: 'The repository has no GitHub remote.'
+    })
     expect(t.manager.view().run).toBeNull()
   })
 
   it('refuses to start while GitHub is ahead of the local branch', async () => {
-    const t = setup([], { repo: { ...REPO, upstream: { ref: 'origin/main', ahead: 0, behind: 2 } } })
+    const t = setup([], {
+      repo: { ...REPO, upstream: { ref: 'origin/main', ahead: 0, behind: 2 } }
+    })
     await t.manager.start('task')
-    expect(t.notices[0]!.text).toMatch(/GitHub has 2 commits that you do not have locally. Pull first/)
+    expect(t.notices[0]!.text).toMatch(
+      /GitHub has 2 commits that you do not have locally. Pull first/
+    )
     expect(t.manager.view().run).toBeNull()
   })
 
   it('does not start a second run while one is active', async () => {
     let release!: () => void
     const gate = new Promise<void>((resolve) => (release = resolve))
-    const t = setup([async () => { await gate; return reply('ok', [], 'done') }])
+    const t = setup([
+      async () => {
+        await gate
+        return reply('ok', [], 'done')
+      }
+    ])
     const first = t.manager.start('first')
     await new Promise((r) => setTimeout(r, 30))
     expect(t.manager.active).toBe(true)
     await t.manager.start('second')
-    expect(t.notices.at(-1)).toMatchObject({ kind: 'warning', text: 'A run is already in progress.' })
+    expect(t.notices.at(-1)).toMatchObject({
+      kind: 'warning',
+      text: 'A run is already in progress.'
+    })
     release()
     await first
   })
@@ -211,13 +301,16 @@ describe('starting', () => {
   it.each([
     ['allow', 1],
     ['commit-only', 0]
-  ] as const)('first-time consent "%s" decides whether it pushes', async (consent, pushes) => {
-    const t = setup([reply('Add.', [create('a.ts', 'x')], 'done')], { consent })
-    await t.manager.start('task')
-    expect(t.state.consentAsked).toBe(1)
-    expect(t.state.pushes).toBe(pushes)
-    expect(t.commits).toHaveLength(1)
-  })
+  ] as const)(
+    'first-time consent "%s" decides whether it pushes',
+    async (consent, pushes) => {
+      const t = setup([reply('Add.', [create('a.ts', 'x')], 'done')], { consent })
+      await t.manager.start('task')
+      expect(t.state.consentAsked).toBe(1)
+      expect(t.state.pushes).toBe(pushes)
+      expect(t.commits).toHaveLength(1)
+    }
+  )
 
   it('consent "cancel" starts nothing; with committing off the question is not asked', async () => {
     const cancelled = setup([], { consent: 'cancel' })
@@ -225,14 +318,23 @@ describe('starting', () => {
     expect(cancelled.manager.view().run).toBeNull()
     expect(cancelled.sent).toHaveLength(0)
 
-    const noCommit = setup([reply('Add.', [create('a.ts', 'x')], 'done')], { settings: { commit: false } })
+    const noCommit = setup([reply('Add.', [create('a.ts', 'x')], 'done')], {
+      settings: { commit: false }
+    })
     await noCommit.manager.start('task')
     expect(noCommit.state.consentAsked).toBe(0)
   })
 })
 
 describe('review mode', () => {
-  const reviewing = () => setup([reply('Add.', [create('a.ts', 'line1\nline2')], 'continue'), reply('Done.', [], 'done')], { settings: { autoApply: false } })
+  const reviewing = () =>
+    setup(
+      [
+        reply('Add.', [create('a.ts', 'line1\nline2')], 'continue'),
+        reply('Done.', [], 'done')
+      ],
+      { settings: { autoApply: false } }
+    )
 
   it('shows the proposed files and waits for the decision', async () => {
     const t = reviewing()
@@ -264,7 +366,10 @@ describe('review mode', () => {
     await waitFor(() => stopping.manager.view().review !== null)
     stopping.manager.stop()
     await run2
-    expect(stopping.manager.view().run).toMatchObject({ state: 'finished', outcome: 'stopped' })
+    expect(stopping.manager.view().run).toMatchObject({
+      state: 'finished',
+      outcome: 'stopped'
+    })
   })
 
   it('switching to review mid-run takes effect at the next step', async () => {
@@ -296,10 +401,19 @@ describe('review mode', () => {
 
 describe('pausing', () => {
   it('pauses on a ChatGPT problem and resumes with the matching label', async () => {
-    const t = setup([new ChatError('rate-limited', 'free plan limit'), reply('Fine.', [create('a.ts', 'x')], 'done')])
+    const t = setup([
+      new ChatError('rate-limited', 'free plan limit'),
+      reply('Fine.', [create('a.ts', 'x')], 'done')
+    ])
     await t.manager.start('task')
     let run = t.manager.view().run!
-    expect(run).toMatchObject({ state: 'paused', pauseReason: 'needs-attention', canResume: true, resumeLabel: 'Resume', canStop: true })
+    expect(run).toMatchObject({
+      state: 'paused',
+      pauseReason: 'needs-attention',
+      canResume: true,
+      resumeLabel: 'Resume',
+      canStop: true
+    })
     expect(run.message).toMatch(/limiting your messages/)
     expect(t.notices.at(-1)!.text).toMatch(/limiting your messages/)
 
@@ -309,9 +423,16 @@ describe('pausing', () => {
   })
 
   it('"awaiting continue" labels the button Continue', async () => {
-    const t = setup([reply('One.', [create('a.ts', 'x')], 'continue'), reply('Two.', [], 'done')], { settings: { autoContinue: false } })
+    const t = setup(
+      [reply('One.', [create('a.ts', 'x')], 'continue'), reply('Two.', [], 'done')],
+      { settings: { autoContinue: false } }
+    )
     await t.manager.start('task')
-    expect(t.manager.view().run).toMatchObject({ state: 'paused', pauseReason: 'awaiting-continue', resumeLabel: 'Continue' })
+    expect(t.manager.view().run).toMatchObject({
+      state: 'paused',
+      pauseReason: 'awaiting-continue',
+      resumeLabel: 'Continue'
+    })
     await t.manager.resume()
     expect(t.manager.view().run).toMatchObject({ state: 'finished', outcome: 'done' })
   })
@@ -348,6 +469,85 @@ describe('history', () => {
     many.manager.clearHistory()
     expect(many.manager.view().history).toEqual([])
     expect(many.history).toEqual([])
+  })
+})
+
+describe('a run that a closed window left behind', () => {
+  const lost = (steps: number): ActiveRunMarker => ({
+    id: 'run-lost',
+    task: 'Add dark mode',
+    startedAt: 1_000,
+    repo: 'octo/project',
+    steps
+  })
+
+  it('shows up in the history as interrupted, once, and the marker is cleared', () => {
+    const t = setup([], { lost: lost(2) })
+    const { history } = t.manager.view()
+    expect(history).toHaveLength(1)
+    expect(history[0]).toMatchObject({
+      id: 'run-lost',
+      task: 'Add dark mode',
+      outcome: 'interrupted',
+      steps: 2,
+      repo: 'octo/project'
+    })
+    expect(history[0]!.message).toMatch(/working tree and in git/)
+    expect(t.history).toHaveLength(1) // saved
+    expect(t.markers).toEqual([undefined]) // cleared
+    expect(t.manager.active).toBe(false)
+    expect(t.manager.view().run).toBeNull()
+  })
+
+  it('says that nothing changed when the window closed before ChatGPT had answered', () => {
+    const t = setup([], { lost: lost(0) })
+    expect(t.manager.view().history[0]!.message).toMatch(/Nothing was changed/)
+  })
+
+  it('does not replace a run that did get recorded as finished', () => {
+    const finished: UiHistoryItem = {
+      id: 'run-lost',
+      task: 'Add dark mode',
+      startedAt: 1_000,
+      outcome: 'done',
+      message: 'All done.',
+      steps: 2,
+      repo: 'octo/project'
+    }
+    const t = setup([], { lost: lost(2), history: [finished] })
+    expect(t.manager.view().history).toEqual([finished])
+    expect(t.markers).toEqual([undefined])
+  })
+})
+
+describe('remembering the run in progress', () => {
+  it('writes a marker when the run starts and when steps are added, and clears it at the end', async () => {
+    const t = setup([
+      reply('Add it.', [create('a.ts', 'x')], 'continue'),
+      reply('All done.', [], 'done')
+    ])
+    await t.manager.start('Add a module')
+
+    const written = t.markers.filter(
+      (marker): marker is ActiveRunMarker => marker !== undefined
+    )
+    expect(written[0]).toMatchObject({
+      task: 'Add a module',
+      repo: 'octo/project',
+      steps: 0
+    })
+    expect(Math.max(...written.map((marker) => marker.steps))).toBe(2)
+    expect(new Set(written.map((marker) => JSON.stringify(marker))).size).toBe(
+      written.length
+    ) // never rewritten unchanged
+    expect(t.markers.at(-1)).toBeUndefined()
+  })
+
+  it('keeps the marker while a run waits for the user', async () => {
+    const t = setup([new ChatError('rate-limited', 'slow down')])
+    await t.manager.start('task')
+    expect(t.manager.view().run!.state).toBe('paused')
+    expect(t.markers.at(-1)).toMatchObject({ task: 'task' })
   })
 })
 

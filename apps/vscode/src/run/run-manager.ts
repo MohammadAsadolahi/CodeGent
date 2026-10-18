@@ -26,7 +26,19 @@ export interface RunHost {
   confirmPublishing(repo: RepoOk): Promise<'allow' | 'commit-only' | 'cancel'>
   loadHistory(): UiHistoryItem[]
   saveHistory(items: UiHistoryItem[]): void
+  /** The run that was under way when the window was last closed or reloaded, if any. */
+  loadActive?(): ActiveRunMarker | undefined
+  saveActive?(marker: ActiveRunMarker | undefined): void
   notify(notice: UiNotice): void
+}
+
+/** What is remembered about a run in progress, so a reload can say what was cut short. */
+export interface ActiveRunMarker {
+  id: string
+  task: string
+  startedAt: number
+  repo: string
+  steps: number
 }
 
 interface PendingReview {
@@ -37,6 +49,19 @@ interface PendingReview {
 }
 
 const HISTORY_LIMIT = 30
+
+const interrupted = (marker: ActiveRunMarker): UiHistoryItem => ({
+  id: marker.id,
+  task: marker.task,
+  startedAt: marker.startedAt,
+  outcome: 'interrupted',
+  message:
+    marker.steps > 0
+      ? `VS Code was closed or reloaded while this task was running. The steps that were applied are in your working tree and in git. The ChatGPT conversation still exists; start a new task to continue.`
+      : 'VS Code was closed or reloaded before ChatGPT had answered. Nothing was changed.',
+  steps: marker.steps,
+  repo: marker.repo
+})
 
 /**
  * Owns the current agent run: starts it with fresh settings, exposes its state in the shape the
@@ -51,9 +76,20 @@ export class RunManager {
   private history: UiHistoryItem[]
   private readonly listeners = new Set<() => void>()
   private repoName = ''
+  private lastMarker = ''
 
   constructor(private readonly host: RunHost) {
     this.history = host.loadHistory()
+    // A run cannot outlive its window: whatever was under way when VS Code closed or reloaded is
+    // recorded as interrupted (its applied steps are in the working tree and in git).
+    const lost = host.loadActive?.()
+    if (lost) {
+      if (!this.history.some((item) => item.id === lost.id)) {
+        this.history = [interrupted(lost), ...this.history].slice(0, HISTORY_LIMIT)
+        host.saveHistory(this.history)
+      }
+      host.saveActive?.(undefined)
+    }
   }
 
   onChange(listener: () => void): () => void {
@@ -66,7 +102,9 @@ export class RunManager {
   }
 
   get active(): boolean {
-    return this.starting || (this.snapshot !== null && this.snapshot.state.kind !== 'finished')
+    return (
+      this.starting || (this.snapshot !== null && this.snapshot.state.kind !== 'finished')
+    )
   }
 
   /** Everything the panel shows about runs. */
@@ -78,7 +116,9 @@ export class RunManager {
             hasCheckpoint: (id) => this.host.workspace.receiptChanges(id) !== undefined
           })
         : null,
-      review: this.review ? toUiReview(this.review.step, this.review.summary, this.review.changes) : null,
+      review: this.review
+        ? toUiReview(this.review.step, this.review.summary, this.review.changes)
+        : null,
       history: this.history
     }
   }
@@ -97,8 +137,10 @@ export class RunManager {
   // ── commands ─────────────────────────────────────────────────────────────────────────────────
   async start(task: string): Promise<void> {
     const text = task.trim()
-    if (!text) return this.host.notify({ kind: 'warning', text: 'Describe the task first.' })
-    if (this.active) return this.host.notify({ kind: 'warning', text: 'A run is already in progress.' })
+    if (!text)
+      return this.host.notify({ kind: 'warning', text: 'Describe the task first.' })
+    if (this.active)
+      return this.host.notify({ kind: 'warning', text: 'A run is already in progress.' })
 
     this.starting = true
     this.emit()
@@ -121,15 +163,27 @@ export class RunManager {
       }
       this.activeSettings = run
       this.repoName = `${status.owner}/${status.name}`
-      agent = new AgentRun({ ...this.host.createDeps(settings), approval: { review: (input) => this.askForReview(input) } }, run, text)
+      agent = new AgentRun(
+        {
+          ...this.host.createDeps(settings),
+          approval: { review: (input) => this.askForReview(input) }
+        },
+        run,
+        text
+      )
       this.run = agent
       this.snapshot = agent.snapshot()
+      this.trackActive(this.snapshot)
       agent.onChange((snapshot) => {
         this.snapshot = snapshot
+        this.trackActive(snapshot)
         this.emit()
       })
     } catch (error) {
-      return this.host.notify({ kind: 'error', text: `Could not start: ${(error as Error).message}` })
+      return this.host.notify({
+        kind: 'error',
+        text: `Could not start: ${(error as Error).message}`
+      })
     } finally {
       this.starting = false
       this.emit()
@@ -158,24 +212,35 @@ export class RunManager {
   }
 
   /** Changes the toggles of a run that is already under way (they are read at each step). */
-  updateActiveSettings(patch: Partial<Pick<RunSettings, 'autoApply' | 'autoContinue' | 'commit' | 'push'>>): void {
+  updateActiveSettings(
+    patch: Partial<Pick<RunSettings, 'autoApply' | 'autoContinue' | 'commit' | 'push'>>
+  ): void {
     if (this.activeSettings) Object.assign(this.activeSettings, patch)
   }
 
   async undoStep(step: number): Promise<void> {
     const receipt = this.snapshot?.steps.find((s) => s.step === step)?.receipt
-    if (!receipt) return this.host.notify({ kind: 'warning', text: 'That step has nothing to undo.' })
+    if (!receipt)
+      return this.host.notify({ kind: 'warning', text: 'That step has nothing to undo.' })
     const result = await this.host.workspace.undo(receipt.id)
-    const skipped = result.skipped.map((s) => (s.path ? `${s.path} (${s.reason})` : s.reason))
+    const skipped = result.skipped.map((s) =>
+      s.path ? `${s.path} (${s.reason})` : s.reason
+    )
     if (result.undone.length > 0 && skipped.length === 0) {
       this.host.notify({
         kind: 'info',
         text: `Step ${step} was undone in your working tree (${result.undone.length} file${result.undone.length === 1 ? '' : 's'}). If it had been committed, the commit is still in git history.`
       })
     } else if (result.undone.length > 0) {
-      this.host.notify({ kind: 'warning', text: `Step ${step} was partly undone. Left alone: ${skipped.join('; ')}.` })
+      this.host.notify({
+        kind: 'warning',
+        text: `Step ${step} was partly undone. Left alone: ${skipped.join('; ')}.`
+      })
     } else {
-      this.host.notify({ kind: 'warning', text: `Nothing was undone: ${skipped.join('; ') || 'no files'}.` })
+      this.host.notify({
+        kind: 'warning',
+        text: `Nothing was undone: ${skipped.join('; ') || 'no files'}.`
+      })
     }
     this.emit()
   }
@@ -195,9 +260,18 @@ export class RunManager {
   }
 
   // ── internals ────────────────────────────────────────────────────────────────────────────────
-  private askForReview(input: { step: number; changeSet: { changes: FileChange[] }; summary: string }): Promise<ApprovalDecision> {
+  private askForReview(input: {
+    step: number
+    changeSet: { changes: FileChange[] }
+    summary: string
+  }): Promise<ApprovalDecision> {
     return new Promise((resolve) => {
-      this.review = { step: input.step, summary: input.summary, changes: input.changeSet.changes, resolve }
+      this.review = {
+        step: input.step,
+        summary: input.summary,
+        changes: input.changeSet.changes,
+        resolve
+      }
       this.emit()
     })
   }
@@ -220,6 +294,26 @@ export class RunManager {
     this.emit()
   }
 
+  /** Keeps the "run in progress" marker current (written only when it changes) and clears it at the end. */
+  private trackActive(snapshot: RunSnapshot): void {
+    if (!this.host.saveActive) return
+    if (snapshot.state.kind === 'finished') {
+      this.lastMarker = ''
+      return this.host.saveActive(undefined)
+    }
+    const marker: ActiveRunMarker = {
+      id: snapshot.id,
+      task: snapshot.task.slice(0, 300),
+      startedAt: snapshot.startedAt ?? 0,
+      repo: this.repoName,
+      steps: snapshot.steps.length
+    }
+    const key = JSON.stringify(marker)
+    if (key === this.lastMarker) return
+    this.lastMarker = key
+    this.host.saveActive(marker)
+  }
+
   private remember(snapshot: RunSnapshot): void {
     if (snapshot.state.kind !== 'finished') return
     const item: UiHistoryItem = {
@@ -231,7 +325,10 @@ export class RunManager {
       steps: snapshot.steps.length,
       repo: this.repoName
     }
-    this.history = [item, ...this.history.filter((h) => h.id !== item.id)].slice(0, HISTORY_LIMIT)
+    this.history = [item, ...this.history.filter((h) => h.id !== item.id)].slice(
+      0,
+      HISTORY_LIMIT
+    )
     this.host.saveHistory(this.history)
   }
 

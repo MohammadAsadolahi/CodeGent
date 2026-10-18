@@ -10,7 +10,11 @@ afterAll(() => fs.rmSync(sandbox, { recursive: true, force: true }))
 
 let counter = 0
 const git = (cwd: string, ...args: string[]) =>
-  execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+  execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe']
+  }).trim()
 const write = (cwd: string, file: string, content: string) => {
   fs.mkdirSync(path.dirname(path.join(cwd, file)), { recursive: true })
   fs.writeFileSync(path.join(cwd, file), content)
@@ -44,7 +48,11 @@ const githubLikeRepo = () => {
 
 describe('RepoService.status', () => {
   it.each([
-    ['a folder that is not a repository', () => fs.mkdtempSync(path.join(sandbox, 'plain-')), 'no-repo'],
+    [
+      'a folder that is not a repository',
+      () => fs.mkdtempSync(path.join(sandbox, 'plain-')),
+      'no-repo'
+    ],
     ['a repository without commits', () => newRepo(), 'no-commits'],
     [
       'a repository without a remote',
@@ -104,13 +112,19 @@ describe('RepoService.status', () => {
     write(dir, 'wip.txt', 'x\n')
     write(dir, 'wip2.txt', 'x\n')
     const status = await new RepoService(dir).status()
-    expect(status.ok && status.warnings.join('\n')).toMatch(/1 local commit is not pushed/)
-    expect(status.ok && status.warnings.join('\n')).toMatch(/2 files have uncommitted changes/)
+    expect(status.ok && status.warnings.join('\n')).toMatch(
+      /1 local commit is not pushed/
+    )
+    expect(status.ok && status.warnings.join('\n')).toMatch(
+      /2 files have uncommitted changes/
+    )
     expect(status.ok && status.dirtyFiles).toEqual(['wip.txt', 'wip2.txt'])
 
     git(dir, 'checkout', '-q', '-b', 'feature')
     const fresh = await new RepoService(dir).status()
-    expect(fresh.ok && fresh.warnings.join('\n')).toMatch(/Branch "feature" is not on GitHub yet/)
+    expect(fresh.ok && fresh.warnings.join('\n')).toMatch(
+      /Branch "feature" is not on GitHub yet/
+    )
   })
 
   it('warns when GitHub is ahead of the local branch', async () => {
@@ -123,13 +137,17 @@ describe('RepoService.status', () => {
     git(other, 'push', '-q')
 
     // Until something fetches, the local view of GitHub is out of date.
-    expect((await new RepoService(dir).status()).ok && 'no warning yet').toBe('no warning yet')
+    expect((await new RepoService(dir).status()).ok && 'no warning yet').toBe(
+      'no warning yet'
+    )
     const stale = await new RepoService(dir).status()
     expect(stale.ok && stale.warnings).toEqual([])
     // The fake GitHub URL cannot be fetched from, so update the tracking ref from the bare repo.
     git(dir, 'fetch', '-q', bare, 'main:refs/remotes/origin/main')
     const fresh = await new RepoService(dir).status()
-    expect(fresh.ok && fresh.warnings.join('\n')).toMatch(/GitHub has 1 commit you do not have locally/)
+    expect(fresh.ok && fresh.warnings.join('\n')).toMatch(
+      /GitHub has 1 commit you do not have locally/
+    )
   })
 
   it('treats an unreachable remote as "no news" when asked to fetch', async () => {
@@ -149,7 +167,8 @@ describe('RepoService.status', () => {
 
   it('caps the list of dirty files but keeps the count', async () => {
     const { dir } = githubLikeRepo()
-    for (let i = 0; i < 45; i++) write(dir, `many/f${String(i).padStart(2, '0')}.txt`, 'x\n')
+    for (let i = 0; i < 45; i++)
+      write(dir, `many/f${String(i).padStart(2, '0')}.txt`, 'x\n')
     const status = await new RepoService(dir).status()
     expect(status.ok && status.dirtyCount).toBe(45)
     expect(status.ok && status.dirtyFiles.length).toBe(30)
@@ -160,13 +179,21 @@ describe('RepoService.gitPort', () => {
   it('provides the repository context for the agent', async () => {
     const { dir } = githubLikeRepo()
     const context = await new RepoService(dir).gitPort().context()
-    expect(context).toMatchObject({ owner: 'octo', name: 'project', host: 'github.com', branch: 'main', subject: 'initial' })
+    expect(context).toMatchObject({
+      owner: 'octo',
+      name: 'project',
+      host: 'github.com',
+      branch: 'main',
+      subject: 'initial'
+    })
   })
 
   it('refuses a repository ChatGPT could not read', async () => {
     const dir = newRepo()
     commit(dir, 'a.txt', 'a\n')
-    await expect(new RepoService(dir).gitPort().context()).rejects.toThrow(/no GitHub remote/)
+    await expect(new RepoService(dir).gitPort().context()).rejects.toThrow(
+      /no GitHub remote/
+    )
   })
 
   it('commits and pushes through the port', async () => {

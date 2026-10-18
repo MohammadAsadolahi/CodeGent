@@ -56,7 +56,12 @@ export const runVerifyCommand = (options: VerifyOptions): Promise<VerifyResult> 
       clearTimeout(timer)
       options.signal?.removeEventListener('abort', onAbort)
       const output = tail.length > tailLimit ? tail.slice(-tailLimit) : tail
-      resolve({ command: options.command, exitCode, timedOut: timedOut || undefined, outputTail: output.replace(/\u001b\[[0-9;]*m/g, '') })
+      resolve({
+        command: options.command,
+        exitCode,
+        timedOut: timedOut || undefined,
+        outputTail: output.replace(/\u001b\[[0-9;]*m/g, '')
+      })
     }
 
     const onAbort = () => {

@@ -3,7 +3,12 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { BinaryFileError, parseReply, planChanges, type FileChange } from '@codegent/engine'
+import {
+  BinaryFileError,
+  parseReply,
+  planChanges,
+  type FileChange
+} from '@codegent/engine'
 import { FsWorkspace } from '../../src/workspace/fs-workspace'
 import { RepoService } from '../../src/workspace/repo-service'
 
@@ -12,7 +17,11 @@ afterAll(() => fs.rmSync(sandbox, { recursive: true, force: true }))
 
 let counter = 0
 const git = (cwd: string, ...args: string[]) =>
-  execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+  execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe']
+  }).trim()
 
 /** A repo with GitHub-looking identity and a local bare repository to push to. */
 const newRepo = (files: Record<string, string | Buffer> = {}) => {
@@ -41,14 +50,20 @@ const newRepo = (files: Record<string, string | Buffer> = {}) => {
 
 const read = (dir: string, file: string) => fs.readFileSync(path.join(dir, file), 'utf8')
 const exists = (dir: string, file: string) => fs.existsSync(path.join(dir, file))
-const leftovers = (dir: string) => fs.readdirSync(dir, { recursive: true }).filter((name) => String(name).includes('.codegent-'))
+const leftovers = (dir: string) =>
+  fs
+    .readdirSync(dir, { recursive: true })
+    .filter((name) => String(name).includes('.codegent-'))
 const meta = { runId: 'run', step: 1 }
 
 describe('reading (the view used for planning)', () => {
   it('reads text, reports missing files, and recognises what is not editable text', async () => {
     const { workspace } = newRepo({
       'a.txt': 'hello\r\nworld\r\n',
-      'bom.txt': Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('with bom\n')]),
+      'bom.txt': Buffer.concat([
+        Buffer.from([0xef, 0xbb, 0xbf]),
+        Buffer.from('with bom\n')
+      ]),
       'bin.dat': Buffer.from([1, 2, 0, 3]),
       'latin1.txt': Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a]), // "café\n" in Latin-1: invalid UTF-8
       'dir/inner.txt': 'x'
@@ -69,9 +84,17 @@ describe('reading (the view used for planning)', () => {
   })
 
   it('sees uncommitted changes, untracked files and unsaved editor buffers as dirty', async () => {
-    const { dir, repo } = newRepo({ 'clean.txt': 'c\n', 'edited.txt': 'e\n', 'buffered.txt': 'b\n' })
+    const { dir, repo } = newRepo({
+      'clean.txt': 'c\n',
+      'edited.txt': 'e\n',
+      'buffered.txt': 'b\n'
+    })
     const buffers = new Set<string>()
-    const workspace = new FsWorkspace({ root: dir, repo, isBufferDirty: (abs) => buffers.has(abs) })
+    const workspace = new FsWorkspace({
+      root: dir,
+      repo,
+      isBufferDirty: (abs) => buffers.has(abs)
+    })
     fs.writeFileSync(path.join(dir, 'edited.txt'), 'changed\n')
     fs.writeFileSync(path.join(dir, 'untracked.txt'), 'u\n')
     buffers.add(path.join(dir, 'buffered.txt'))
@@ -105,12 +128,22 @@ describe('reading (the view used for planning)', () => {
 
 describe('applying changes', () => {
   it('creates, modifies, deletes and renames; a receipt names the paths', async () => {
-    const { dir, workspace } = newRepo({ 'mod.txt': 'old\n', 'del.txt': 'bye\n', 'from.txt': 'move me\n' })
+    const { dir, workspace } = newRepo({
+      'mod.txt': 'old\n',
+      'del.txt': 'bye\n',
+      'from.txt': 'move me\n'
+    })
     const changes: FileChange[] = [
       { kind: 'create', path: 'deep/new/file.txt', after: 'created\n' },
       { kind: 'modify', path: 'mod.txt', before: 'old\n', after: 'new\n' },
       { kind: 'delete', path: 'del.txt', before: 'bye\n' },
-      { kind: 'rename', from: 'from.txt', to: 'lib/to.txt', before: 'move me\n', after: 'moved\n' }
+      {
+        kind: 'rename',
+        from: 'from.txt',
+        to: 'lib/to.txt',
+        before: 'move me\n',
+        after: 'moved\n'
+      }
     ]
     const receipt = await workspace.apply(changes, meta)
     expect(read(dir, 'deep/new/file.txt')).toBe('created\n')
@@ -118,7 +151,12 @@ describe('applying changes', () => {
     expect(exists(dir, 'del.txt')).toBe(false)
     expect(exists(dir, 'from.txt')).toBe(false)
     expect(read(dir, 'lib/to.txt')).toBe('moved\n')
-    expect(receipt.paths).toEqual(['deep/new/file.txt', 'mod.txt', 'del.txt', 'lib/to.txt'])
+    expect(receipt.paths).toEqual([
+      'deep/new/file.txt',
+      'mod.txt',
+      'del.txt',
+      'lib/to.txt'
+    ])
     expect(leftovers(dir)).toEqual([])
   })
 
@@ -135,18 +173,34 @@ describe('applying changes', () => {
       meta
     )
     expect(fs.readFileSync(path.join(dir, 'crlf.txt'))).toEqual(Buffer.from('a\r\nB\r\n'))
-    expect([...fs.readFileSync(path.join(dir, 'bom.txt'))]).toEqual([...Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('y\r\n')])])
+    expect([...fs.readFileSync(path.join(dir, 'bom.txt'))]).toEqual([
+      ...Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('y\r\n')])
+    ])
   })
 
   it.runIf(process.platform !== 'win32')('keeps the executable bit', async () => {
     const { dir, workspace } = newRepo({ 'run.sh': '#!/bin/sh\necho a\n' })
     fs.chmodSync(path.join(dir, 'run.sh'), 0o755)
-    await workspace.apply([{ kind: 'modify', path: 'run.sh', before: '#!/bin/sh\necho a\n', after: '#!/bin/sh\necho b\n' }], meta)
+    await workspace.apply(
+      [
+        {
+          kind: 'modify',
+          path: 'run.sh',
+          before: '#!/bin/sh\necho a\n',
+          after: '#!/bin/sh\necho b\n'
+        }
+      ],
+      meta
+    )
     expect(fs.statSync(path.join(dir, 'run.sh')).mode & 0o777).toBe(0o755)
   })
 
   it('is all-or-nothing: a failure part-way rolls every earlier change back', async () => {
-    const { dir, workspace } = newRepo({ 'one.txt': '1\n', 'two.txt': '2\n', 'three.txt': '3\n' })
+    const { dir, workspace } = newRepo({
+      'one.txt': '1\n',
+      'two.txt': '2\n',
+      'three.txt': '3\n'
+    })
     await expect(
       workspace.apply(
         [
@@ -168,16 +222,36 @@ describe('applying changes', () => {
   it('refuses to overwrite what changed on disk after planning', async () => {
     const { dir, workspace } = newRepo({ 'a.txt': 'planned\n' })
     fs.writeFileSync(path.join(dir, 'a.txt'), 'user typed something\n')
-    await expect(workspace.apply([{ kind: 'modify', path: 'a.txt', before: 'planned\n', after: 'x\n' }], meta)).rejects.toThrow(/modified on disk/)
+    await expect(
+      workspace.apply(
+        [{ kind: 'modify', path: 'a.txt', before: 'planned\n', after: 'x\n' }],
+        meta
+      )
+    ).rejects.toThrow(/modified on disk/)
     expect(read(dir, 'a.txt')).toBe('user typed something\n')
   })
 
   it('refuses to create over an existing file or directory, and to rename onto one', async () => {
     const { workspace } = newRepo({ 'exists.txt': 'x\n', 'src/a.ts': 'a\n' })
-    await expect(workspace.apply([{ kind: 'create', path: 'exists.txt', after: 'y\n' }], meta)).rejects.toThrow(/already exists/)
-    await expect(workspace.apply([{ kind: 'create', path: 'src', after: 'y\n' }], meta)).rejects.toThrow(/already exists/)
     await expect(
-      workspace.apply([{ kind: 'rename', from: 'src/a.ts', to: 'exists.txt', before: 'a\n', after: 'a\n' }], meta)
+      workspace.apply([{ kind: 'create', path: 'exists.txt', after: 'y\n' }], meta)
+    ).rejects.toThrow(/already exists/)
+    await expect(
+      workspace.apply([{ kind: 'create', path: 'src', after: 'y\n' }], meta)
+    ).rejects.toThrow(/already exists/)
+    await expect(
+      workspace.apply(
+        [
+          {
+            kind: 'rename',
+            from: 'src/a.ts',
+            to: 'exists.txt',
+            before: 'a\n',
+            after: 'a\n'
+          }
+        ],
+        meta
+      )
     ).rejects.toThrow(/already exists/)
   })
 
@@ -185,21 +259,37 @@ describe('applying changes', () => {
     const outside = path.join(sandbox, `outside${counter + 1}`)
     fs.mkdirSync(outside)
     const { dir, workspace } = newRepo()
-    fs.symlinkSync(outside, path.join(dir, 'escape'), process.platform === 'win32' ? 'junction' : 'dir')
-    await expect(workspace.apply([{ kind: 'create', path: 'escape/pwned.txt', after: 'x\n' }], meta)).rejects.toThrow(/outside the repository/)
+    fs.symlinkSync(
+      outside,
+      path.join(dir, 'escape'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    )
+    await expect(
+      workspace.apply([{ kind: 'create', path: 'escape/pwned.txt', after: 'x\n' }], meta)
+    ).rejects.toThrow(/outside the repository/)
     expect(fs.existsSync(path.join(outside, 'pwned.txt'))).toBe(false)
   })
 })
 
 describe('undo', () => {
   it('restores every kind of change', async () => {
-    const { dir, workspace } = newRepo({ 'mod.txt': 'old\n', 'del.txt': 'bye\n', 'from.txt': 'move me\n' })
+    const { dir, workspace } = newRepo({
+      'mod.txt': 'old\n',
+      'del.txt': 'bye\n',
+      'from.txt': 'move me\n'
+    })
     const receipt = await workspace.apply(
       [
         { kind: 'create', path: 'made.txt', after: 'created\n' },
         { kind: 'modify', path: 'mod.txt', before: 'old\n', after: 'new\n' },
         { kind: 'delete', path: 'del.txt', before: 'bye\n' },
-        { kind: 'rename', from: 'from.txt', to: 'to.txt', before: 'move me\n', after: 'moved\n' }
+        {
+          kind: 'rename',
+          from: 'from.txt',
+          to: 'to.txt',
+          before: 'move me\n',
+          after: 'moved\n'
+        }
       ],
       meta
     )
@@ -226,7 +316,9 @@ describe('undo', () => {
     fs.writeFileSync(path.join(dir, 'a.txt'), 'A and then the user kept typing\n')
     const result = await workspace.undo(receipt.id)
     expect(result.undone).toEqual(['b.txt'])
-    expect(result.skipped).toEqual([{ path: 'a.txt', reason: 'it was changed after this step' }])
+    expect(result.skipped).toEqual([
+      { path: 'a.txt', reason: 'it was changed after this step' }
+    ])
     expect(read(dir, 'a.txt')).toBe('A and then the user kept typing\n')
     expect(read(dir, 'b.txt')).toBe('b\n')
     expect(workspace.isUndone(receipt.id)).toBe(false)
@@ -234,10 +326,17 @@ describe('undo', () => {
 
   it('cannot be undone twice, and unknown steps are reported', async () => {
     const { workspace } = newRepo({ 'a.txt': 'a\n' })
-    const receipt = await workspace.apply([{ kind: 'modify', path: 'a.txt', before: 'a\n', after: 'A\n' }], meta)
+    const receipt = await workspace.apply(
+      [{ kind: 'modify', path: 'a.txt', before: 'a\n', after: 'A\n' }],
+      meta
+    )
     await workspace.undo(receipt.id)
-    expect((await workspace.undo(receipt.id)).skipped[0]!.reason).toMatch(/already undone/)
-    expect((await workspace.undo('missing')).skipped[0]!.reason).toMatch(/can no longer be undone/)
+    expect((await workspace.undo(receipt.id)).skipped[0]!.reason).toMatch(
+      /already undone/
+    )
+    expect((await workspace.undo('missing')).skipped[0]!.reason).toMatch(
+      /can no longer be undone/
+    )
   })
 })
 
@@ -249,7 +348,10 @@ describe('the whole pipeline on a real repository', () => {
       'src/old.ts': 'export const old = 1\n',
       '.gitignore': '.env\n'
     })
-    fs.writeFileSync(path.join(dir, 'notes.txt'), 'the user is working on this (untracked)\n')
+    fs.writeFileSync(
+      path.join(dir, 'notes.txt'),
+      'the user is working on this (untracked)\n'
+    )
 
     const reply = [
       'Fixing the bug and tidying up.',
@@ -279,7 +381,9 @@ describe('the whole pipeline on a real repository', () => {
       'CODEGENT_STATUS: done'
     ].join('\n')
 
-    const changeSet = await planChanges(parseReply(reply).edits, workspace.view, { workspaceRoot: dir })
+    const changeSet = await planChanges(parseReply(reply).edits, workspace.view, {
+      workspaceRoot: dir
+    })
     expect(changeSet.outcomes.map((o) => `${o.path}:${o.status}`)).toEqual([
       'src/math.ts:applied',
       'src/math.test.ts:applied',
@@ -293,12 +397,19 @@ describe('the whole pipeline on a real repository', () => {
     const committed = await port.commit(paths, 'codegent: fix add')
     await port.push()
 
-    expect(read(dir, 'src/math.ts')).toBe('export const add = (a: number, b: number) => a + b\n')
+    expect(read(dir, 'src/math.ts')).toBe(
+      'export const add = (a: number, b: number) => a + b\n'
+    )
     expect(exists(dir, 'src/old.ts')).toBe(false)
     expect(exists(dir, '.env')).toBe(false)
     expect(exists(path.dirname(dir), 'escape.txt')).toBe(false)
     expect(committed.committed).toBe(true)
-    expect(git(bare, 'show', '--name-status', '--format=%s', 'main').split('\n').filter(Boolean).sort()).toEqual([
+    expect(
+      git(bare, 'show', '--name-status', '--format=%s', 'main')
+        .split('\n')
+        .filter(Boolean)
+        .sort()
+    ).toEqual([
       'A\tsrc/math.test.ts',
       'D\tsrc/old.ts',
       'M\tsrc/math.ts',

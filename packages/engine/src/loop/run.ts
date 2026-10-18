@@ -1,5 +1,11 @@
 import { newId } from '@codegent/protocol'
-import { parseReply, planChanges, type EditOutcome, type FileChange, type ParsedReply } from '../edits'
+import {
+  parseReply,
+  planChanges,
+  type EditOutcome,
+  type FileChange,
+  type ParsedReply
+} from '../edits'
 import { GitError } from '../git'
 import {
   buildFollowUpPrompt,
@@ -63,7 +69,8 @@ interface StepWork {
   commit?: { sha: string; shortSha: string; message: string }
 }
 
-const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error))
+const errorText = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error)
 
 const explainChatError = (error: ChatError): string => {
   switch (error.code) {
@@ -98,7 +105,11 @@ const changedPaths = (changes: readonly FileChange[]): string[] => {
 /** Files that exist before the change and are about to be modified, deleted or moved. */
 const existingPaths = (changes: readonly FileChange[]): string[] =>
   changes.flatMap((change) =>
-    change.kind === 'create' ? [] : change.kind === 'rename' ? [change.from] : [change.path]
+    change.kind === 'create'
+      ? []
+      : change.kind === 'rename'
+        ? [change.from]
+        : [change.path]
   )
 
 /** Paths that still exist after the change (the ones worth asking the language server about). */
@@ -150,14 +161,19 @@ export class AgentRun {
 
   /** Runs until the task finishes or the run needs the user; resolves with the final snapshot. */
   async start(): Promise<RunSnapshot> {
-    if (this.snap.state.kind !== 'idle') throw new Error('This run has already been started.')
+    if (this.snap.state.kind !== 'idle')
+      throw new Error('This run has already been started.')
     this.snap.startedAt = this.now()
     return this.drive(async () => {
       this.setPhase('preparing', 0, 'Reading the repository')
       this.repo = await this.deps.git.context()
       this.snap.repo = this.repo
       this.pending = {
-        text: buildInitialPrompt({ repo: this.repo, task: this.task, conventions: this.settings.conventions }),
+        text: buildInitialPrompt({
+          repo: this.repo,
+          task: this.task,
+          conventions: this.settings.conventions
+        }),
         kind: 'initial'
       }
     })
@@ -192,7 +208,12 @@ export class AgentRun {
       }
     } catch (error) {
       if (error instanceof PauseSignal) {
-        this.setState({ kind: 'paused', reason: error.reason, message: error.message, step: this.snap.steps.length })
+        this.setState({
+          kind: 'paused',
+          reason: error.reason,
+          message: error.message,
+          step: this.snap.steps.length
+        })
       } else if (error instanceof FinishSignal) {
         this.finish(error.outcome, error.message)
       } else if (error instanceof StopSignal) {
@@ -209,7 +230,8 @@ export class AgentRun {
   /** Sends the pending message, reads the reply, applies it, and prepares the next message. */
   private async exchangeAndHandle(): Promise<void> {
     const message = this.pending
-    if (!message) throw new FinishSignal('error', 'Internal error: there is nothing to send.')
+    if (!message)
+      throw new FinishSignal('error', 'Internal error: there is nothing to send.')
 
     const record: StepRecord = {
       step: this.snap.steps.length + 1,
@@ -232,7 +254,9 @@ export class AgentRun {
       summary: parsed.summary.slice(0, 4_000),
       durationMs: reply.durationMs,
       editCount: parsed.edits.length,
-      problems: parsed.problems.map((problem) => (problem.path ? `“${problem.path}”: ${problem.message}` : problem.message)),
+      problems: parsed.problems.map((problem) =>
+        problem.path ? `“${problem.path}”: ${problem.message}` : problem.message
+      ),
       warnings: parsed.warnings,
       truncated: parsed.truncated
     }
@@ -259,12 +283,18 @@ export class AgentRun {
       })
     } catch (error) {
       this.snap.steps.pop() // this step never produced a reply; the message stays pending
-      if (this.controller.signal.aborted || (error instanceof ChatError && error.code === 'cancelled')) {
+      if (
+        this.controller.signal.aborted ||
+        (error instanceof ChatError && error.code === 'cancelled')
+      ) {
         throw new StopSignal()
       }
       if (error instanceof ChatError) {
         if (error.code === 'tab-unavailable' && this.conversationStarted) {
-          throw new FinishSignal('error', `${error.message} The ChatGPT conversation is gone, so this run cannot continue. Start a new run.`)
+          throw new FinishSignal(
+            'error',
+            `${error.message} The ChatGPT conversation is gone, so this run cannot continue. Start a new run.`
+          )
         }
         throw new PauseSignal('needs-attention', explainChatError(error))
       }
@@ -281,7 +311,11 @@ export class AgentRun {
 
   private onChatStage(stage: ChatStage, step: number): void {
     const phase: Phase =
-      stage === 'waiting-for-browser' ? 'waiting-for-browser' : stage === 'generating' ? 'waiting-for-reply' : 'sending'
+      stage === 'waiting-for-browser'
+        ? 'waiting-for-browser'
+        : stage === 'generating'
+          ? 'waiting-for-reply'
+          : 'sending'
     const detail =
       stage === 'tab-ready'
         ? 'ChatGPT is ready'
@@ -297,8 +331,13 @@ export class AgentRun {
 
   /** A reply with nothing to apply: finish, nudge once, or give up. */
   private afterReplyWithoutChanges(parsed: ParsedReply, record: StepRecord): void {
-    if (parsed.status === 'done') throw new FinishSignal('done', parsed.summary || 'ChatGPT reports the task is complete.')
-    if (parsed.status === 'blocked') throw new FinishSignal('blocked', parsed.summary || 'ChatGPT cannot continue.')
+    if (parsed.status === 'done')
+      throw new FinishSignal(
+        'done',
+        parsed.summary || 'ChatGPT reports the task is complete.'
+      )
+    if (parsed.status === 'blocked')
+      throw new FinishSignal('blocked', parsed.summary || 'ChatGPT cannot continue.')
     this.throwIfOutOfSteps()
     if (this.formatRetriesLeft > 0) {
       this.formatRetriesLeft -= 1
@@ -307,11 +346,17 @@ export class AgentRun {
       this.emit()
       return
     }
-    throw new FinishSignal('no-changes', 'ChatGPT replied without any file changes in the required format.')
+    throw new FinishSignal(
+      'no-changes',
+      'ChatGPT replied without any file changes in the required format.'
+    )
   }
 
   // ── applying ─────────────────────────────────────────────────────────────────────────────────
-  private async applyAndCheck(parsed: ParsedReply, record: StepRecord): Promise<StepWork> {
+  private async applyAndCheck(
+    parsed: ParsedReply,
+    record: StepRecord
+  ): Promise<StepWork> {
     this.setPhase('reading', record.step, 'Checking the changes against your files')
     const changeSet = await planChanges(parsed.edits, this.deps.workspace.view, {
       workspaceRoot: this.settings.workspaceRoot,
@@ -321,9 +366,17 @@ export class AgentRun {
 
     if (!this.settings.autoApply && changes.length > 0) {
       const approval = this.deps.approval
-      if (!approval) throw new FinishSignal('error', 'Review is turned on but nothing is available to ask you.')
+      if (!approval)
+        throw new FinishSignal(
+          'error',
+          'Review is turned on but nothing is available to ask you.'
+        )
       this.setPhase('awaiting-approval', record.step)
-      const decision = await approval.review({ step: record.step, changeSet, summary: parsed.summary })
+      const decision = await approval.review({
+        step: record.step,
+        changeSet,
+        summary: parsed.summary
+      })
       record.decision = decision
       this.throwIfStopped()
       if (decision === 'stop') throw new StopSignal()
@@ -334,7 +387,12 @@ export class AgentRun {
                 ...outcome,
                 status: 'failed' as const,
                 detail: 'not applied (declined by the user)',
-                errors: [{ code: 'conflict' as const, message: 'The user chose not to apply this change.' }]
+                errors: [
+                  {
+                    code: 'conflict' as const,
+                    message: 'The user chose not to apply this change.'
+                  }
+                ]
               }
             : outcome
         )
@@ -348,9 +406,15 @@ export class AgentRun {
       this.throwIfStopped()
       this.setPhase('applying', record.step)
       try {
-        record.receipt = await this.deps.workspace.apply(changes, { runId: this.id, step: record.step })
+        record.receipt = await this.deps.workspace.apply(changes, {
+          runId: this.id,
+          step: record.step
+        })
       } catch (error) {
-        throw new FinishSignal('error', `The changes could not be written: ${errorText(error)}`)
+        throw new FinishSignal(
+          'error',
+          `The changes could not be written: ${errorText(error)}`
+        )
       }
     }
     record.outcomes = outcomes
@@ -360,7 +424,10 @@ export class AgentRun {
     if (changes.length > 0) {
       this.throwIfStopped()
       this.setPhase('checking', record.step)
-      work.diagnostics = await this.deps.checks.diagnostics(livePaths(changes), this.controller.signal)
+      work.diagnostics = await this.deps.checks.diagnostics(
+        livePaths(changes),
+        this.controller.signal
+      )
       this.throwIfStopped()
       work.verify = await this.deps.checks.verify(this.controller.signal)
       record.diagnostics = work.diagnostics
@@ -380,16 +447,24 @@ export class AgentRun {
     record.finishedAt = this.now()
     this.emit()
 
-    const failures = outcomes.filter((outcome) => outcome.status === 'failed').length + parsed.problems.length
-    const checksFailed = (work.diagnostics?.errors ?? 0) > 0 || (work.verify !== undefined && work.verify.exitCode !== 0)
+    const failures =
+      outcomes.filter((outcome) => outcome.status === 'failed').length +
+      parsed.problems.length
+    const checksFailed =
+      (work.diagnostics?.errors ?? 0) > 0 ||
+      (work.verify !== undefined && work.verify.exitCode !== 0)
     this.failedStepsInARow = failures > 0 ? this.failedStepsInARow + 1 : 0
 
-    if (parsed.status === 'blocked') throw new FinishSignal('blocked', parsed.summary || 'ChatGPT cannot continue.')
+    if (parsed.status === 'blocked')
+      throw new FinishSignal('blocked', parsed.summary || 'ChatGPT cannot continue.')
     if (parsed.status === 'done' && failures === 0 && !checksFailed) {
       throw new FinishSignal('done', parsed.summary || 'The task is complete.')
     }
     if (this.failedStepsInARow >= this.settings.maxFailedSteps) {
-      throw new FinishSignal('stuck', `${this.failedStepsInARow} steps in a row had changes that could not be applied.`)
+      throw new FinishSignal(
+        'stuck',
+        `${this.failedStepsInARow} steps in a row had changes that could not be applied.`
+      )
     }
     this.throwIfOutOfSteps()
 
@@ -408,13 +483,18 @@ export class AgentRun {
     this.pending = { text, kind: parsed.truncated ? 'cut-off-reminder' : 'follow-up' }
 
     if (!this.settings.autoContinue) {
-      throw new PauseSignal('awaiting-continue', `Step ${record.step} is done. Press Continue to send the result to ChatGPT.`)
+      throw new PauseSignal(
+        'awaiting-continue',
+        `Step ${record.step} is done. Press Continue to send the result to ChatGPT.`
+      )
     }
   }
 
   private async publish(work: StepWork): Promise<PublishResult> {
-    if (work.changes.length === 0) return { state: 'skipped', reason: 'no file was changed' }
-    if (!this.settings.commit) return { state: 'skipped', reason: 'committing is turned off in the settings' }
+    if (work.changes.length === 0)
+      return { state: 'skipped', reason: 'no file was changed' }
+    if (!this.settings.commit)
+      return { state: 'skipped', reason: 'committing is turned off in the settings' }
 
     this.setPhase('publishing', work.record.step)
     if (!work.commit) {
@@ -429,21 +509,46 @@ export class AgentRun {
         if (!committed.committed || !committed.sha) {
           return { state: 'skipped', reason: 'git found nothing to commit' }
         }
-        work.commit = { sha: committed.sha, shortSha: committed.shortSha ?? committed.sha.slice(0, 7), message: message.split('\n')[0]! }
-        this.repo = { ...this.repo!, sha: committed.sha, shortSha: work.commit.shortSha, subject: work.commit.message }
+        work.commit = {
+          sha: committed.sha,
+          shortSha: committed.shortSha ?? committed.sha.slice(0, 7),
+          message: message.split('\n')[0]!
+        }
+        this.repo = {
+          ...this.repo!,
+          sha: committed.sha,
+          shortSha: work.commit.shortSha,
+          subject: work.commit.message
+        }
       } catch (error) {
         this.work = work
-        throw new PauseSignal('needs-attention', `Git could not commit the changes: ${errorText(error)} Fix it, then press Resume.`)
+        throw new PauseSignal(
+          'needs-attention',
+          `Git could not commit the changes: ${errorText(error)} Fix it, then press Resume.`
+        )
       }
     }
 
     const { sha, shortSha, message } = work.commit
     if (!this.settings.push) {
-      return { state: 'committed', sha, shortSha, message, reason: 'pushing is turned off in the settings' }
+      return {
+        state: 'committed',
+        sha,
+        shortSha,
+        message,
+        reason: 'pushing is turned off in the settings'
+      }
     }
     try {
       const pushed = await this.deps.git.push()
-      return { state: 'pushed', sha, shortSha, message, branch: pushed.branch, remote: pushed.remote }
+      return {
+        state: 'pushed',
+        sha,
+        shortSha,
+        message,
+        branch: pushed.branch,
+        remote: pushed.remote
+      }
     } catch (error) {
       this.work = work
       const hint =
@@ -454,7 +559,10 @@ export class AgentRun {
             : error instanceof GitError && error.kind === 'protected-branch'
               ? 'The branch is protected on GitHub. Switch to another branch, then press Resume.'
               : 'Fix the problem, then press Resume.'
-      throw new PauseSignal('needs-attention', `The push to GitHub failed — ${errorText(error).split('\n')[0]}. ${hint}`)
+      throw new PauseSignal(
+        'needs-attention',
+        `The push to GitHub failed — ${errorText(error).split('\n')[0]}. ${hint}`
+      )
     }
   }
 
@@ -465,7 +573,10 @@ export class AgentRun {
 
   private throwIfOutOfSteps(): void {
     if (this.snap.steps.length >= this.settings.maxSteps) {
-      throw new FinishSignal('step-limit', `Stopped after ${this.settings.maxSteps} steps (the limit in the settings).`)
+      throw new FinishSignal(
+        'step-limit',
+        `Stopped after ${this.settings.maxSteps} steps (the limit in the settings).`
+      )
     }
   }
 

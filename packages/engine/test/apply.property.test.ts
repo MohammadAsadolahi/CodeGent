@@ -4,17 +4,28 @@ import { applyHunks, parseReply } from '../src'
 
 const CODE_CHARS = Array.from(`abcXYZ019_(){};=+*-.,'" `)
 const bodyArb = fc
-  .array(fc.constantFrom(...CODE_CHARS.filter((c) => c !== ' ')), { minLength: 1, maxLength: 16 })
+  .array(fc.constantFrom(...CODE_CHARS.filter((c) => c !== ' ')), {
+    minLength: 1,
+    maxLength: 16
+  })
   .map((chars) => chars.join(''))
 
 /** Source-ish lines, each unique within its file (so exact SEARCH text is unambiguous). */
 const fileArb = fc
-  .array(fc.tuple(fc.integer({ min: 0, max: 3 }), bodyArb), { minLength: 1, maxLength: 40 })
-  .map((rows) => rows.map(([indent, body], index) => `${'  '.repeat(indent)}L${index}:${body}`))
+  .array(fc.tuple(fc.integer({ min: 0, max: 3 }), bodyArb), {
+    minLength: 1,
+    maxLength: 40
+  })
+  .map((rows) =>
+    rows.map(([indent, body], index) => `${'  '.repeat(indent)}L${index}:${body}`)
+  )
 
 const replacementArb = fc.array(
   fc
-    .tuple(fc.integer({ min: 0, max: 6 }), fc.array(fc.constantFrom(...CODE_CHARS), { maxLength: 16 }))
+    .tuple(
+      fc.integer({ min: 0, max: 6 }),
+      fc.array(fc.constantFrom(...CODE_CHARS), { maxLength: 16 })
+    )
     .map(([spaces, chars]) => ' '.repeat(spaces) + chars.join('')),
   { maxLength: 6 }
 )
@@ -43,7 +54,11 @@ describe('applyHunks (property-based)', () => {
 
           const result = applyHunks(original, [{ search, replace: replacement }])
 
-          const expectedLines = [...file.slice(0, from), ...replacement, ...file.slice(to)]
+          const expectedLines = [
+            ...file.slice(0, from),
+            ...replacement,
+            ...file.slice(to)
+          ]
           // A file that ends up empty has no final newline; otherwise the convention is kept.
           const expected = join(expectedLines, effectiveEol, finalNewline)
           expect(result.ok).toBe(true)
@@ -56,34 +71,56 @@ describe('applyHunks (property-based)', () => {
 
   it('is a no-op when the replacement equals the search', () => {
     fc.assert(
-      fc.property(fileArb, fc.nat(), fc.nat(), eolArb, fc.boolean(), (file, a, b, eol, finalNewline) => {
-        const from = a % file.length
-        const to = from + 1 + (b % (file.length - from))
-        const original = join(file, eol, finalNewline)
-        const search = file.slice(from, to)
-        expect(applyHunks(original, [{ search, replace: search }]).content).toBe(original)
-      }),
+      fc.property(
+        fileArb,
+        fc.nat(),
+        fc.nat(),
+        eolArb,
+        fc.boolean(),
+        (file, a, b, eol, finalNewline) => {
+          const from = a % file.length
+          const to = from + 1 + (b % (file.length - from))
+          const original = join(file, eol, finalNewline)
+          const search = file.slice(from, to)
+          expect(applyHunks(original, [{ search, replace: search }]).content).toBe(
+            original
+          )
+        }
+      ),
       { numRuns: 200 }
     )
   })
 
   it('re-indents consistently when the model dedented the code it copied', () => {
     fc.assert(
-      fc.property(fileArb, fc.nat(), fc.nat(), fc.integer({ min: 1, max: 4 }), replacementArb, (file, a, b, shift, replacement) => {
-        // Make the whole file deeper so the model's dedented copy still has the same relative shape.
-        const pad = ' '.repeat(shift)
-        const deeper = file.map((line) => pad + line)
-        const from = a % deeper.length
-        const to = from + 1 + (b % (deeper.length - from))
-        const searchDedented = deeper.slice(from, to).map((line) => line.slice(shift))
-        const replaceDedented = replacement.filter((line) => line.trim() !== '')
+      fc.property(
+        fileArb,
+        fc.nat(),
+        fc.nat(),
+        fc.integer({ min: 1, max: 4 }),
+        replacementArb,
+        (file, a, b, shift, replacement) => {
+          // Make the whole file deeper so the model's dedented copy still has the same relative shape.
+          const pad = ' '.repeat(shift)
+          const deeper = file.map((line) => pad + line)
+          const from = a % deeper.length
+          const to = from + 1 + (b % (deeper.length - from))
+          const searchDedented = deeper.slice(from, to).map((line) => line.slice(shift))
+          const replaceDedented = replacement.filter((line) => line.trim() !== '')
 
-        const result = applyHunks(deeper.join('\n') + '\n', [{ search: searchDedented, replace: replaceDedented }])
+          const result = applyHunks(deeper.join('\n') + '\n', [
+            { search: searchDedented, replace: replaceDedented }
+          ])
 
-        expect(result.ok).toBe(true)
-        const expected = [...deeper.slice(0, from), ...replaceDedented.map((line) => pad + line), ...deeper.slice(to)]
-        expect(result.content).toBe(expected.join('\n') + (expected.length ? '\n' : ''))
-      }),
+          expect(result.ok).toBe(true)
+          const expected = [
+            ...deeper.slice(0, from),
+            ...replaceDedented.map((line) => pad + line),
+            ...deeper.slice(to)
+          ]
+          expect(result.content).toBe(expected.join('\n') + (expected.length ? '\n' : ''))
+        }
+      ),
       { numRuns: 300 }
     )
   })
@@ -105,10 +142,18 @@ describe('applyHunks (property-based)', () => {
 })
 
 /** Renders edits the way the prompt tells ChatGPT to write them. */
-const render = (path: string, hunks: Array<{ search: string[]; replace: string[] }>, fenceLen: number): string => {
+const render = (
+  path: string,
+  hunks: Array<{ search: string[]; replace: string[] }>,
+  fenceLen: number
+): string => {
   const marker = '`'.repeat(fenceLen)
   const body = hunks
-    .map((h) => ['<<<<<<< SEARCH', ...h.search, '=======', ...h.replace, '>>>>>>> REPLACE'].join('\n'))
+    .map((h) =>
+      ['<<<<<<< SEARCH', ...h.search, '=======', ...h.replace, '>>>>>>> REPLACE'].join(
+        '\n'
+      )
+    )
     .join('\n')
   return `### Updated file: \`${path}\`\n\n${marker}ts\n${body}\n${marker}\n`
 }
@@ -125,14 +170,27 @@ describe('parseReply (property-based)', () => {
   it('round-trips any hunks rendered in the documented format', () => {
     fc.assert(
       fc.property(
-        fc.array(fc.constantFrom(...Array.from('abcdefg012_-')), { minLength: 1, maxLength: 12 }).map((chars) => 'src/' + chars.join('') + '.ts'),
-        fc.array(fc.record({ search: fc.array(codeLine, { minLength: 1, maxLength: 5 }), replace: fc.array(codeLine, { maxLength: 5 }) }), {
-          minLength: 1,
-          maxLength: 4
-        }),
+        fc
+          .array(fc.constantFrom(...Array.from('abcdefg012_-')), {
+            minLength: 1,
+            maxLength: 12
+          })
+          .map((chars) => 'src/' + chars.join('') + '.ts'),
+        fc.array(
+          fc.record({
+            search: fc.array(codeLine, { minLength: 1, maxLength: 5 }),
+            replace: fc.array(codeLine, { maxLength: 5 })
+          }),
+          {
+            minLength: 1,
+            maxLength: 4
+          }
+        ),
         fc.integer({ min: 3, max: 6 }),
         (path, hunks, fenceLen) => {
-          const parsed = parseReply(`Intro text.\n\n${render(path, hunks, fenceLen)}\nCODEGENT_STATUS: continue`)
+          const parsed = parseReply(
+            `Intro text.\n\n${render(path, hunks, fenceLen)}\nCODEGENT_STATUS: continue`
+          )
           expect(parsed.problems).toEqual([])
           expect(parsed.status).toBe('continue')
           expect(parsed.edits).toEqual([{ kind: 'update', path, hunks }])
@@ -161,7 +219,13 @@ describe('applyHunks never corrupts on adversarial input', () => {
     fc.assert(
       fc.property(
         fc.string({ maxLength: 300 }),
-        fc.array(fc.record({ search: fc.array(fc.string({ maxLength: 40 }), { maxLength: 4 }), replace: fc.array(fc.string({ maxLength: 40 }), { maxLength: 4 }) }), { maxLength: 4 }),
+        fc.array(
+          fc.record({
+            search: fc.array(fc.string({ maxLength: 40 }), { maxLength: 4 }),
+            replace: fc.array(fc.string({ maxLength: 40 }), { maxLength: 4 })
+          }),
+          { maxLength: 4 }
+        ),
         (content, hunks) => {
           const normalizedHunks = hunks.map((h) => ({
             search: h.search.map((line) => line.replace(/[\r\n]/g, ' ')),
@@ -175,5 +239,3 @@ describe('applyHunks never corrupts on adversarial input', () => {
     )
   })
 })
-
-

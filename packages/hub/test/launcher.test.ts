@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import net, { type AddressInfo } from 'node:net'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { findHub, probeHub } from '@codegent/protocol'
@@ -156,6 +157,37 @@ describe('ensureHub (real child processes)', () => {
     expect(error).toBeInstanceOf(HubStartError)
     expect(String(error.message)).toMatch(/Could not start the CodeGent hub/)
     expect(String(error.message)).toContain(String(ports[0]))
+  })
+
+  it('starts the hub outside any project folder, as a detached process with the Electron-as-Node switch', async () => {
+    const port = await freePort()
+    const calls: Array<{
+      command: string
+      args: string[]
+      options: Record<string, unknown>
+    }> = []
+    const error = await ensureHub({
+      hubScriptPath,
+      ports: [port],
+      startupTimeoutMs: 300,
+      spawn: ((command: string, args: string[], options: Record<string, unknown>) => {
+        calls.push({ command, args, options })
+        throw new Error('stop here')
+      }) as never
+    }).then(
+      () => undefined,
+      (e) => e
+    )
+    expect(error).toBeInstanceOf(HubStartError)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]!.args.slice(0, 3)).toEqual([hubScriptPath, '--port', String(port)])
+    expect(calls[0]!.options).toMatchObject({
+      cwd: os.tmpdir(),
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true
+    })
+    expect((calls[0]!.options.env as NodeJS.ProcessEnv).ELECTRON_RUN_AS_NODE).toBe('1')
   })
 
   it('reports spawn failures without throwing from inside', async () => {

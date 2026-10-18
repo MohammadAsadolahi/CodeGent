@@ -13,7 +13,11 @@ import { buildExtension as buildBrowserExtension } from '../../browser/scripts/b
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-export const buildAll = async ({ outDir = path.join(root, 'out'), production = false, hubPorts } = {}) => {
+export const buildAll = async ({
+  outDir = path.join(root, 'out'),
+  production = false,
+  hubPorts
+} = {}) => {
   await rm(outDir, { recursive: true, force: true })
   await mkdir(outDir, { recursive: true })
 
@@ -43,12 +47,18 @@ export const buildAll = async ({ outDir = path.join(root, 'out'), production = f
     logLevel: 'warning'
   })
 
-  await buildBrowserExtension({ outDir: path.join(outDir, 'browser-extension'), hubPorts, minify: production })
+  await buildBrowserExtension({
+    outDir: path.join(outDir, 'browser-extension'),
+    hubPorts,
+    minify: production
+  })
   return outDir
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const production = process.argv.includes('--production')
   const out = await buildAll({ production })
-  console.log(`extension built (${production ? 'production' : 'development'}) → ${path.relative(process.cwd(), out)}`)
+  console.log(
+    `extension built (${production ? 'production' : 'development'}) → ${path.relative(process.cwd(), out)}`
+  )
 }

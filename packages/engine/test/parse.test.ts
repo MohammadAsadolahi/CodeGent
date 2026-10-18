@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { parseReply, type FileEdit } from '../src'
 
-const fence = (body: string, lang = 'ts', marker = '```') => `${marker}${lang}\n${body}\n${marker}`
+const fence = (body: string, lang = 'ts', marker = '```') =>
+  `${marker}${lang}\n${body}\n${marker}`
 const hunk = (search: string, replace: string, label = ['SEARCH', 'REPLACE']) =>
   `<<<<<<< ${label[0]}\n${search}\n=======\n${replace}\n>>>>>>> ${label[1]}`
 
@@ -19,7 +20,9 @@ describe('the canonical format', () => {
       '',
       '### Updated file: `src/utils/math.ts`',
       '',
-      fence(`${hunk('export const add = (a, b) => a - b', 'export const add = (a, b) => a + b')}\n${hunk('// TODO', '// done')}`),
+      fence(
+        `${hunk('export const add = (a, b) => a - b', 'export const add = (a, b) => a + b')}\n${hunk('// TODO', '// done')}`
+      ),
       '',
       '### Created file: `src/utils/log.ts`',
       '',
@@ -40,17 +43,26 @@ describe('the canonical format', () => {
     expect(parsed.warnings).toEqual([])
     expect(parsed.truncated).toBe(false)
     expect(parsed.status).toBe('continue')
-    expect(parsed.summary).toBe('I will rename the helper and add logging.\n\nMore text here.')
+    expect(parsed.summary).toBe(
+      'I will rename the helper and add logging.\n\nMore text here.'
+    )
     expect(parsed.edits).toEqual([
       {
         kind: 'update',
         path: 'src/utils/math.ts',
         hunks: [
-          { search: ['export const add = (a, b) => a - b'], replace: ['export const add = (a, b) => a + b'] },
+          {
+            search: ['export const add = (a, b) => a - b'],
+            replace: ['export const add = (a, b) => a + b']
+          },
           { search: ['// TODO'], replace: ['// done'] }
         ]
       },
-      { kind: 'create', path: 'src/utils/log.ts', content: 'export const log = console.log' },
+      {
+        kind: 'create',
+        path: 'src/utils/log.ts',
+        content: 'export const log = console.log'
+      },
       { kind: 'delete', path: 'src/old.ts' },
       { kind: 'rename', from: 'src/a.ts', to: 'src/b.ts', hunks: [] }
     ])
@@ -63,13 +75,23 @@ describe('the canonical format', () => {
     expect(edit).toEqual({
       kind: 'update',
       path: 'a.ts',
-      hunks: [{ search: ['function a() {', '', '  return 1', '}'], replace: ['function a() {', '  return 2', '}', ''] }]
+      hunks: [
+        {
+          search: ['function a() {', '', '  return 1', '}'],
+          replace: ['function a() {', '  return 2', '}', '']
+        }
+      ]
     })
   })
 
   it('supports empty REPLACE sections (deletions) and empty SEARCH+REPLACE bodies', () => {
-    const edit = only(`### Updated file: \`a.ts\`\n${fence('<<<<<<< SEARCH\nremove me\n=======\n>>>>>>> REPLACE')}`)
-    expect(edit).toMatchObject({ kind: 'update', hunks: [{ search: ['remove me'], replace: [] }] })
+    const edit = only(
+      `### Updated file: \`a.ts\`\n${fence('<<<<<<< SEARCH\nremove me\n=======\n>>>>>>> REPLACE')}`
+    )
+    expect(edit).toMatchObject({
+      kind: 'update',
+      hunks: [{ search: ['remove me'], replace: [] }]
+    })
   })
 })
 
@@ -86,7 +108,10 @@ describe('tolerated variations', () => {
     ['Updated file: `a.ts`'],
     ['### UPDATED FILE: `a.ts`']
   ])('recognises the heading %s', (heading) => {
-    expect(only(`${heading}\n\n${fence(hunk('x', 'y'))}`)).toMatchObject({ kind: 'update', path: 'a.ts' })
+    expect(only(`${heading}\n\n${fence(hunk('x', 'y'))}`)).toMatchObject({
+      kind: 'update',
+      path: 'a.ts'
+    })
   })
 
   it.each([
@@ -96,7 +121,11 @@ describe('tolerated variations', () => {
     ['### Replaced file: `a.ts`', 'replace'],
     ['### Rewrote file: `a.ts`', 'replace']
   ])('maps %s to %s', (heading, kind) => {
-    expect(only(`${heading}\n${fence('content')}`)).toMatchObject({ kind, path: 'a.ts', content: 'content' })
+    expect(only(`${heading}\n${fence('content')}`)).toMatchObject({
+      kind,
+      path: 'a.ts',
+      content: 'content'
+    })
   })
 
   it('accepts other conflict-marker labels and lengths', () => {
@@ -107,7 +136,9 @@ describe('tolerated variations', () => {
   })
 
   it('accepts tilde fences and longer fences that contain shorter ones', () => {
-    expect(only(`### Created file: \`a.md\`\n${fence('hello', 'md', '~~~')}`)).toMatchObject({ content: 'hello' })
+    expect(
+      only(`### Created file: \`a.md\`\n${fence('hello', 'md', '~~~')}`)
+    ).toMatchObject({ content: 'hello' })
     const nested = fence('# Title\n\n```ts\nconst x = 1\n```\n\nEnd', 'md', '````')
     expect(only(`### Created file: \`README.md\`\n${nested}`)).toMatchObject({
       content: '# Title\n\n```ts\nconst x = 1\n```\n\nEnd'
@@ -115,14 +146,20 @@ describe('tolerated variations', () => {
   })
 
   it('strips the indentation of a fence nested in a list item', () => {
-    const reply = '1. Next:\n\n   ### Created file: `a.ts`\n\n   ```ts\n   const x = 1\n     const y = 2\n   ```'
-    expect(only(reply)).toMatchObject({ kind: 'create', content: 'const x = 1\n  const y = 2' })
+    const reply =
+      '1. Next:\n\n   ### Created file: `a.ts`\n\n   ```ts\n   const x = 1\n     const y = 2\n   ```'
+    expect(only(reply)).toMatchObject({
+      kind: 'create',
+      content: 'const x = 1\n  const y = 2'
+    })
   })
 
   it('accepts CRLF input', () => {
     const reply = `### Created file: \`a.ts\`\r\n\`\`\`ts\r\nline1\r\nline2\r\n\`\`\`\r\nCODEGENT_STATUS: done\r\n`
     const parsed = parseReply(reply)
-    expect(parsed.edits).toEqual([{ kind: 'create', path: 'a.ts', content: 'line1\nline2' }])
+    expect(parsed.edits).toEqual([
+      { kind: 'create', path: 'a.ts', content: 'line1\nline2' }
+    ])
     expect(parsed.status).toBe('done')
   })
 
@@ -133,8 +170,14 @@ describe('tolerated variations', () => {
       to: 'new.ts',
       hunks: []
     })
-    expect(only('### Renamed file: `old.ts` → `new.ts`')).toMatchObject({ from: 'old.ts', to: 'new.ts' })
-    expect(only('### Renamed file: old/a.ts -> new/a.ts')).toMatchObject({ from: 'old/a.ts', to: 'new/a.ts' })
+    expect(only('### Renamed file: `old.ts` → `new.ts`')).toMatchObject({
+      from: 'old.ts',
+      to: 'new.ts'
+    })
+    expect(only('### Renamed file: old/a.ts -> new/a.ts')).toMatchObject({
+      from: 'old/a.ts',
+      to: 'new/a.ts'
+    })
   })
 
   it('lets a rename carry an edit', () => {
@@ -148,12 +191,17 @@ describe('tolerated variations', () => {
   })
 
   it('keeps raw paths (spaces, backslashes) for the planner to validate', () => {
-    expect(only('### Deleted file: `dir with space\\file.ts`')).toEqual({ kind: 'delete', path: 'dir with space\\file.ts' })
+    expect(only('### Deleted file: `dir with space\\file.ts`')).toEqual({
+      kind: 'delete',
+      path: 'dir with space\\file.ts'
+    })
   })
 
   it('accepts an update block without markers as a complete file, with a warning', () => {
     const parsed = parseReply(`### Updated file: \`a.ts\`\n${fence('whole file')}`)
-    expect(parsed.edits).toEqual([{ kind: 'replace', path: 'a.ts', content: 'whole file' }])
+    expect(parsed.edits).toEqual([
+      { kind: 'replace', path: 'a.ts', content: 'whole file' }
+    ])
     expect(parsed.warnings[0]).toMatch(/complete new file/)
   })
 })
@@ -174,7 +222,9 @@ describe('status line', () => {
   })
 
   it('uses the last status and also finds one alone in a code block', () => {
-    expect(parseReply('CODEGENT_STATUS: continue\nlater\nCODEGENT_STATUS: done').status).toBe('done')
+    expect(
+      parseReply('CODEGENT_STATUS: continue\nlater\nCODEGENT_STATUS: done').status
+    ).toBe('done')
     expect(parseReply('Done.\n\n```\nCODEGENT_STATUS: done\n```').status).toBe('done')
   })
 
@@ -190,7 +240,9 @@ describe('status line', () => {
 
 describe('things that must NOT become edits', () => {
   it('ignores code samples that are not attached to a file heading', () => {
-    const parsed = parseReply(`Run this:\n\n${fence('npm test', 'bash')}\n\nCODEGENT_STATUS: done`)
+    const parsed = parseReply(
+      `Run this:\n\n${fence('npm test', 'bash')}\n\nCODEGENT_STATUS: done`
+    )
     expect(parsed.edits).toEqual([])
     expect(parsed.problems).toEqual([])
   })
@@ -219,7 +271,9 @@ describe('things that must NOT become edits', () => {
       fence('use(a)', 'ts')
     ].join('\n')
     const parsed = parseReply(reply)
-    expect(parsed.edits).toEqual([{ kind: 'update', path: 'a.ts', hunks: [{ search: ['x'], replace: ['y'] }] }])
+    expect(parsed.edits).toEqual([
+      { kind: 'update', path: 'a.ts', hunks: [{ search: ['x'], replace: ['y'] }] }
+    ])
     expect(parsed.problems).toEqual([])
   })
 
@@ -243,7 +297,10 @@ describe('things that must NOT become edits', () => {
   it('reports a heading without a block and a marker block without a heading', () => {
     const noBlock = parseReply('### Updated file: `a.ts`\n\nCODEGENT_STATUS: done')
     expect(noBlock.edits).toEqual([])
-    expect(noBlock.problems[0]).toMatchObject({ path: 'a.ts', message: expect.stringMatching(/without a code block/) })
+    expect(noBlock.problems[0]).toMatchObject({
+      path: 'a.ts',
+      message: expect.stringMatching(/without a code block/)
+    })
 
     const noHeading = parseReply(fence(hunk('x', 'y')))
     expect(noHeading.edits).toEqual([])
@@ -251,15 +308,21 @@ describe('things that must NOT become edits', () => {
   })
 
   it('drops blocks with text outside the markers, malformed or unterminated markers', () => {
-    const stray = parseReply(`### Updated file: \`a.ts\`\n${fence(`some code\n${hunk('x', 'y')}`)}`)
+    const stray = parseReply(
+      `### Updated file: \`a.ts\`\n${fence(`some code\n${hunk('x', 'y')}`)}`
+    )
     expect(stray.edits).toEqual([])
     expect(stray.problems[0]!.message).toMatch(/outside the SEARCH\/REPLACE markers/)
 
-    const unterminated = parseReply(`### Updated file: \`a.ts\`\n${fence('<<<<<<< SEARCH\nx\n=======\ny')}`)
+    const unterminated = parseReply(
+      `### Updated file: \`a.ts\`\n${fence('<<<<<<< SEARCH\nx\n=======\ny')}`
+    )
     expect(unterminated.edits).toEqual([])
     expect(unterminated.problems[0]!.message).toMatch(/never closed/)
 
-    const nested = parseReply(`### Updated file: \`a.ts\`\n${fence('<<<<<<< SEARCH\n<<<<<<< SEARCH\nx\n=======\ny\n>>>>>>> REPLACE')}`)
+    const nested = parseReply(
+      `### Updated file: \`a.ts\`\n${fence('<<<<<<< SEARCH\n<<<<<<< SEARCH\nx\n=======\ny\n>>>>>>> REPLACE')}`
+    )
     expect(nested.edits).toEqual([])
     expect(nested.problems[0]!.message).toMatch(/malformed/)
   })
@@ -279,7 +342,9 @@ describe('things that must NOT become edits', () => {
 
 describe('truncated replies', () => {
   it('flags an unclosed code fence and discards that block', () => {
-    const parsed = parseReply(`### Created file: \`a.ts\`\n\`\`\`ts\nconst x = 1\nconst y =`)
+    const parsed = parseReply(
+      `### Created file: \`a.ts\`\n\`\`\`ts\nconst x = 1\nconst y =`
+    )
     expect(parsed.truncated).toBe(true)
     expect(parsed.edits).toEqual([])
     expect(parsed.problems[0]!.message).toMatch(/cut off/)
@@ -301,11 +366,18 @@ describe('truncated replies', () => {
 
 describe('summary', () => {
   it('contains only prose, with blank runs collapsed', () => {
-    const parsed = parseReply(`First.\n\n\n\n### Created file: \`a.ts\`\n${fence('code')}\n\nSecond.\nCODEGENT_STATUS: done`)
+    const parsed = parseReply(
+      `First.\n\n\n\n### Created file: \`a.ts\`\n${fence('code')}\n\nSecond.\nCODEGENT_STATUS: done`
+    )
     expect(parsed.summary).toBe('First.\n\nSecond.')
   })
 
   it('copes with empty input', () => {
-    expect(parseReply('')).toMatchObject({ edits: [], status: undefined, summary: '', truncated: false })
+    expect(parseReply('')).toMatchObject({
+      edits: [],
+      status: undefined,
+      summary: '',
+      truncated: false
+    })
   })
 })

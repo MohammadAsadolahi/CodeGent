@@ -9,7 +9,7 @@ import { HubConnection } from './bridge/hub-connection'
 import { installBrowserExtension } from './browser-extension-installer'
 import { VsCodeChecks } from './checks/vscode-checks'
 import { Log } from './logger'
-import { RunManager, type RunHost } from './run/run-manager'
+import { RunManager, type ActiveRunMarker, type RunHost } from './run/run-manager'
 import { readSettings, updateSetting } from './settings'
 import { DIFF_SCHEME, DiffContentProvider } from './ui/diff-provider'
 import { PanelProvider } from './ui/panel-provider'
@@ -25,13 +25,17 @@ export interface CodeGentApi {
   send(message: ToExtension): Promise<void>
   waitFor(predicate: (state: UiState) => boolean, timeoutMs?: number): Promise<UiState>
   /** Answers the "commit and push?" question in advance (undefined forgets the answer). */
-  setPublishingConsent(repo: string, value: 'allow' | 'commit-only' | undefined): Promise<void>
+  setPublishingConsent(
+    repo: string,
+    value: 'allow' | 'commit-only' | undefined
+  ): Promise<void>
   hub(): { port: number | null; editorId: string }
   browserExtensionPath(): string | undefined
   webview(): { resolved: boolean; received: readonly string[] }
 }
 
 const HISTORY_KEY = 'codegent.history'
+const ACTIVE_KEY = 'codegent.activeRun'
 const BROWSER_KEY = 'codegent.browserId'
 const consentKey = (repo: string) => `codegent.publish.${repo}`
 
@@ -59,7 +63,9 @@ export class App implements vscode.Disposable {
     const storage = context.globalStorageUri.fsPath
     fs.mkdirSync(storage, { recursive: true })
 
-    const configuredPorts = vscode.workspace.getConfiguration('codegent').get<number[]>('advanced.hubPorts', [])
+    const configuredPorts = vscode.workspace
+      .getConfiguration('codegent')
+      .get<number[]>('advanced.hubPorts', [])
     this.hub = new HubConnection({
       hubScriptPath: context.asAbsolutePath(path.join('out', 'hub.cjs')),
       version,
@@ -69,7 +75,11 @@ export class App implements vscode.Disposable {
     })
 
     this.manager = new RunManager(this.runHost())
-    this.panel = new PanelProvider(context.extensionUri, (message) => void this.handle(message), () => void this.refreshRepo())
+    this.panel = new PanelProvider(
+      context.extensionUri,
+      (message) => void this.handle(message),
+      () => void this.refreshRepo()
+    )
     this.status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50)
     this.status.command = 'codegent.focus'
   }
@@ -80,12 +90,19 @@ export class App implements vscode.Disposable {
     this.disposables.push(
       this.log,
       this.status,
-      vscode.window.registerWebviewViewProvider(PanelProvider.viewType, this.panel, { webviewOptions: { retainContextWhenHidden: true } }),
+      vscode.window.registerWebviewViewProvider(PanelProvider.viewType, this.panel, {
+        webviewOptions: { retainContextWhenHidden: true }
+      }),
       vscode.workspace.registerTextDocumentContentProvider(DIFF_SCHEME, this.diffs),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (!event.affectsConfiguration('codegent')) return
         const { run } = readSettings()
-        this.manager.updateActiveSettings({ autoApply: run.autoApply, autoContinue: run.autoContinue, commit: run.commit, push: run.push })
+        this.manager.updateActiveSettings({
+          autoApply: run.autoApply,
+          autoContinue: run.autoContinue,
+          commit: run.commit,
+          push: run.push
+        })
         this.pushState()
       }),
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
@@ -142,7 +159,8 @@ export class App implements vscode.Disposable {
   private repo(): RepoService | undefined {
     const folder = this.folderPath()
     if (!folder) return undefined
-    if (!this.repoService || this.repoService.folder !== folder) this.repoService = new RepoService(folder)
+    if (!this.repoService || this.repoService.folder !== folder)
+      this.repoService = new RepoService(folder)
     return this.repoService
   }
 
@@ -154,7 +172,11 @@ export class App implements vscode.Disposable {
         repo,
         isBufferDirty: (absolute) =>
           vscode.workspace.textDocuments.some(
-            (doc) => doc.isDirty && doc.uri.scheme === 'file' && path.normalize(doc.uri.fsPath).toLowerCase() === path.normalize(absolute).toLowerCase()
+            (doc) =>
+              doc.isDirty &&
+              doc.uri.scheme === 'file' &&
+              path.normalize(doc.uri.fsPath).toLowerCase() ===
+                path.normalize(absolute).toLowerCase()
           ),
         log: (line) => this.log.info(line)
       })
@@ -169,9 +191,17 @@ export class App implements vscode.Disposable {
         const repo = this.repo()
         this.repoStatus = repo
           ? await repo.status({ fetch: true })
-          : { ok: false, problem: 'no-repo', reason: 'Open a folder that is a git repository with a GitHub remote.' }
+          : {
+              ok: false,
+              problem: 'no-repo',
+              reason: 'Open a folder that is a git repository with a GitHub remote.'
+            }
       } catch (error) {
-        this.repoStatus = { ok: false, problem: 'no-repo', reason: (error as Error).message }
+        this.repoStatus = {
+          ok: false,
+          problem: 'no-repo',
+          reason: (error as Error).message
+        }
       } finally {
         this.refreshing = undefined
         if (!this.disposed) this.pushState()
@@ -190,7 +220,8 @@ export class App implements vscode.Disposable {
   // ── the run host ─────────────────────────────────────────────────────────────────────────────
   private runHost(): RunHost {
     return {
-      readSettings: () => readSettings(this.repoStatus?.ok ? this.repoStatus.root : this.folderPath()),
+      readSettings: () =>
+        readSettings(this.repoStatus?.ok ? this.repoStatus.root : this.folderPath()),
       createDeps: (settings) => {
         const status = this.repoStatus
         if (!status?.ok) throw new Error('The repository is not ready.')
@@ -203,8 +234,10 @@ export class App implements vscode.Disposable {
             replyTimeoutMs: () => readSettings().bridge.replyTimeoutMs,
             browserWaitMs: () => readSettings().bridge.browserWaitMs,
             chooseBrowser: (browsers) => this.chooseBrowser(browsers),
-            preferredBrowserId: () => this.context.workspaceState.get<string>(BROWSER_KEY),
-            rememberBrowser: (id) => void this.context.workspaceState.update(BROWSER_KEY, id)
+            preferredBrowserId: () =>
+              this.context.workspaceState.get<string>(BROWSER_KEY),
+            rememberBrowser: (id) =>
+              void this.context.workspaceState.update(BROWSER_KEY, id)
           }),
           workspace,
           git: repo.gitPort(),
@@ -227,7 +260,12 @@ export class App implements vscode.Disposable {
       },
       repoStatus: async (options) => {
         const repo = this.repo()
-        if (!repo) return { ok: false, problem: 'no-repo', reason: 'Open a folder that is a git repository with a GitHub remote.' }
+        if (!repo)
+          return {
+            ok: false,
+            problem: 'no-repo',
+            reason: 'Open a folder that is a git repository with a GitHub remote.'
+          }
         this.repoStatus = await repo.status(options)
         this.pushState()
         return this.repoStatus
@@ -235,11 +273,16 @@ export class App implements vscode.Disposable {
       confirmPublishing: (repo) => this.confirmPublishing(repo),
       loadHistory: () => this.context.globalState.get(HISTORY_KEY, []),
       saveHistory: (items) => void this.context.globalState.update(HISTORY_KEY, items),
+      // Per workspace, so another window never mistakes this window's run for a lost one.
+      loadActive: () => this.context.workspaceState.get<ActiveRunMarker>(ACTIVE_KEY),
+      saveActive: (marker) => void this.context.workspaceState.update(ACTIVE_KEY, marker),
       notify: (notice) => this.notify(notice)
     }
   }
 
-  private async confirmPublishing(repo: RepoOk): Promise<'allow' | 'commit-only' | 'cancel'> {
+  private async confirmPublishing(
+    repo: RepoOk
+  ): Promise<'allow' | 'commit-only' | 'cancel'> {
     const key = consentKey(`${repo.owner}/${repo.name}`)
     const saved = this.context.workspaceState.get<'allow' | 'commit-only'>(key)
     if (saved) return saved
@@ -249,7 +292,8 @@ export class App implements vscode.Disposable {
       `CodeGent will commit each applied step to "${repo.branch}" of ${repo.owner}/${repo.name} and push it to GitHub, so ChatGPT can read the new code through its GitHub connector.`,
       {
         modal: true,
-        detail: 'Only the files CodeGent changed are committed — never your other work. You can change this later in the CodeGent settings. “Commit only” keeps everything local, but then ChatGPT cannot see its own changes on GitHub.'
+        detail:
+          'Only the files CodeGent changed are committed — never your other work. You can change this later in the CodeGent settings. “Commit only” keeps everything local, but then ChatGPT cannot see its own changes on GitHub.'
       },
       push,
       commitOnly
@@ -265,14 +309,19 @@ export class App implements vscode.Disposable {
     return 'cancel'
   }
 
-  private async chooseBrowser(browsers: readonly BrowserInfo[]): Promise<string | undefined> {
+  private async chooseBrowser(
+    browsers: readonly BrowserInfo[]
+  ): Promise<string | undefined> {
     const picked = await vscode.window.showQuickPick(
       browsers.map((browser) => ({
         label: browser.profile ? `${browser.name} — ${browser.profile}` : browser.name,
         description: `${browser.chatgptTabs} ChatGPT tab${browser.chatgptTabs === 1 ? '' : 's'}`,
         id: browser.id
       })),
-      { title: 'CodeGent', placeHolder: 'Several browsers are connected. Which one should CodeGent use?' }
+      {
+        title: 'CodeGent',
+        placeHolder: 'Several browsers are connected. Which one should CodeGent use?'
+      }
     )
     return picked?.id
   }
@@ -283,8 +332,15 @@ export class App implements vscode.Disposable {
     const selected = this.context.workspaceState.get<string>(BROWSER_KEY)
     return {
       version: (this.context.extension.packageJSON as { version: string }).version,
-      connection: toUiConnection(this.hub.state, this.hub.browsers, this.hub.browsers.some((b) => b.id === selected) ? selected : undefined, this.hub.lastError),
-      repo: this.repoStatus ? toUiRepo(this.repoStatus) : { ok: false, problem: 'loading', reason: 'Reading the repository…' },
+      connection: toUiConnection(
+        this.hub.state,
+        this.hub.browsers,
+        this.hub.browsers.some((b) => b.id === selected) ? selected : undefined,
+        this.hub.lastError
+      ),
+      repo: this.repoStatus
+        ? toUiRepo(this.repoStatus)
+        : { ok: false, problem: 'loading', reason: 'Reading the repository…' },
       toggles: {
         autoApply: settings.run.autoApply,
         autoContinue: settings.run.autoContinue,
@@ -326,7 +382,9 @@ export class App implements vscode.Disposable {
 
   private notify(notice: UiNotice): void {
     this.notice = notice
-    this.log[notice.kind === 'error' ? 'error' : notice.kind === 'warning' ? 'warn' : 'info'](notice.text)
+    this.log[
+      notice.kind === 'error' ? 'error' : notice.kind === 'warning' ? 'warn' : 'info'
+    ](notice.text)
     if (this.noticeTimer) clearTimeout(this.noticeTimer)
     if (notice.kind === 'info') {
       this.noticeTimer = setTimeout(() => {
@@ -336,7 +394,12 @@ export class App implements vscode.Disposable {
     }
     this.pushState()
     if (!this.panel.visible) {
-      const show = notice.kind === 'error' ? vscode.window.showErrorMessage : notice.kind === 'warning' ? vscode.window.showWarningMessage : vscode.window.showInformationMessage
+      const show =
+        notice.kind === 'error'
+          ? vscode.window.showErrorMessage
+          : notice.kind === 'warning'
+            ? vscode.window.showWarningMessage
+            : vscode.window.showInformationMessage
       void show(`CodeGent: ${notice.text}`, 'Open panel').then((choice) => {
         if (choice) void vscode.commands.executeCommand('codegent.focus')
       })
@@ -374,7 +437,10 @@ export class App implements vscode.Disposable {
         case 'pushNow':
           return await this.pushNow()
         case 'openDiff':
-          return await this.openDiff(String(message.path), typeof message.step === 'number' ? message.step : undefined)
+          return await this.openDiff(
+            String(message.path),
+            typeof message.step === 'number' ? message.step : undefined
+          )
         case 'openFile':
           return await this.openFile(String(message.path))
         case 'openUrl':
@@ -384,7 +450,10 @@ export class App implements vscode.Disposable {
         case 'copyBrowserExtensionPath':
           if (this.browserExtensionPath) {
             await vscode.env.clipboard.writeText(this.browserExtensionPath)
-            this.notify({ kind: 'info', text: 'Folder path copied. In your browser: extensions page → Load unpacked → paste it.' })
+            this.notify({
+              kind: 'info',
+              text: 'Folder path copied. In your browser: extensions page → Load unpacked → paste it.'
+            })
           }
           return
         case 'restartHub':
@@ -398,18 +467,30 @@ export class App implements vscode.Disposable {
           return this.log.show()
       }
     } catch (error) {
-      this.log.error(`message "${message.type}" failed: ${(error as Error).stack ?? error}`)
+      this.log.error(
+        `message "${message.type}" failed: ${(error as Error).stack ?? error}`
+      )
       this.notify({ kind: 'error', text: (error as Error).message })
     }
   }
 
   private async setToggle(key: ToggleKey, value: boolean): Promise<void> {
-    const setting = { autoApply: 'autoApply', autoContinue: 'autoContinue', commit: 'git.commit', push: 'git.push', autoSubmit: 'autoSubmit' }[key]
+    const setting = {
+      autoApply: 'autoApply',
+      autoContinue: 'autoContinue',
+      commit: 'git.commit',
+      push: 'git.push',
+      autoSubmit: 'autoSubmit'
+    }[key]
     if (!setting) return
     await updateSetting(setting, value)
     if (key === 'push' && value) {
       const repo = this.repoStatus
-      if (repo?.ok) await this.context.workspaceState.update(consentKey(`${repo.owner}/${repo.name}`), 'allow')
+      if (repo?.ok)
+        await this.context.workspaceState.update(
+          consentKey(`${repo.owner}/${repo.name}`),
+          'allow'
+        )
     }
   }
 
@@ -417,19 +498,36 @@ export class App implements vscode.Disposable {
     const repo = this.repo()
     if (!repo) return
     try {
-      const pushed = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'CodeGent: pushing to GitHub…' }, () => repo.pushNow())
+      const pushed = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'CodeGent: pushing to GitHub…'
+        },
+        () => repo.pushNow()
+      )
       this.notify({ kind: 'info', text: `Pushed ${pushed.branch} to ${pushed.remote}.` })
     } catch (error) {
-      this.notify({ kind: 'error', text: `Push failed: ${(error as Error).message.split('\n')[0]}` })
+      this.notify({
+        kind: 'error',
+        text: `Push failed: ${(error as Error).message.split('\n')[0]}`
+      })
     }
     await this.refreshRepo()
   }
 
   private async openDiff(file: string, step: number | undefined): Promise<void> {
-    const changes = step === undefined ? this.manager.pendingChanges() : this.manager.stepChanges(step)
+    const changes =
+      step === undefined ? this.manager.pendingChanges() : this.manager.stepChanges(step)
     const change = changes?.find((c) => (c.kind === 'rename' ? c.to : c.path) === file)
-    if (!change) return void this.notify({ kind: 'warning', text: 'That diff is no longer available.' })
-    await this.diffs.open(change, `${file} — CodeGent${step === undefined ? ' (proposed)' : ` step ${step}`}`)
+    if (!change)
+      return void this.notify({
+        kind: 'warning',
+        text: 'That diff is no longer available.'
+      })
+    await this.diffs.open(
+      change,
+      `${file} — CodeGent${step === undefined ? ' (proposed)' : ` step ${step}`}`
+    )
   }
 
   private async openFile(file: string): Promise<void> {
@@ -438,14 +536,22 @@ export class App implements vscode.Disposable {
     // The path comes from the panel, which shows text that originates from ChatGPT: only plain
     // repository-relative paths are opened.
     const safe = normalizeRepoPath(file)
-    if (!safe.ok) return void this.notify({ kind: 'warning', text: `Cannot open "${file}": ${safe.reason}.` })
-    await vscode.window.showTextDocument(vscode.Uri.file(path.join(root, ...safe.path.split('/'))), { preview: true })
+    if (!safe.ok)
+      return void this.notify({
+        kind: 'warning',
+        text: `Cannot open "${file}": ${safe.reason}.`
+      })
+    await vscode.window.showTextDocument(
+      vscode.Uri.file(path.join(root, ...safe.path.split('/'))),
+      { preview: true }
+    )
   }
 
   private openUrl(url: string): void {
     try {
       const parsed = new URL(url)
-      if (parsed.protocol === 'https:') void vscode.env.openExternal(vscode.Uri.parse(parsed.toString()))
+      if (parsed.protocol === 'https:')
+        void vscode.env.openExternal(vscode.Uri.parse(parsed.toString()))
     } catch {
       // not a URL
     }
@@ -453,20 +559,32 @@ export class App implements vscode.Disposable {
 
   private async revealBrowserExtension(): Promise<void> {
     if (!this.browserExtensionPath) {
-      return void this.notify({ kind: 'error', text: 'The browser extension files were not found in this installation.' })
+      return void this.notify({
+        kind: 'error',
+        text: 'The browser extension files were not found in this installation.'
+      })
     }
-    await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(path.join(this.browserExtensionPath, 'manifest.json')))
+    await vscode.commands.executeCommand(
+      'revealFileInOS',
+      vscode.Uri.file(path.join(this.browserExtensionPath, 'manifest.json'))
+    )
   }
 
   // ── commands ─────────────────────────────────────────────────────────────────────────────────
   private commands(): vscode.Disposable[] {
     return [
-      vscode.commands.registerCommand('codegent.focus', () => vscode.commands.executeCommand('workbench.view.extension.codegent')),
+      vscode.commands.registerCommand('codegent.focus', () =>
+        vscode.commands.executeCommand('workbench.view.extension.codegent')
+      ),
       vscode.commands.registerCommand('codegent.startRun', async (task?: unknown) => {
         const text =
           typeof task === 'string' && task.trim()
             ? task
-            : await vscode.window.showInputBox({ title: 'CodeGent', prompt: 'What should ChatGPT build or fix?', ignoreFocusOut: true })
+            : await vscode.window.showInputBox({
+                title: 'CodeGent',
+                prompt: 'What should ChatGPT build or fix?',
+                ignoreFocusOut: true
+              })
         if (text) await this.manager.start(text)
       }),
       vscode.commands.registerCommand('codegent.stopRun', () => this.manager.stop()),
@@ -477,13 +595,22 @@ export class App implements vscode.Disposable {
         if (step) await this.manager.undoStep(step.n)
         else this.notify({ kind: 'warning', text: 'There is no step to undo.' })
       }),
-      vscode.commands.registerCommand('codegent.openBrowserExtensionFolder', () => this.revealBrowserExtension()),
+      vscode.commands.registerCommand('codegent.openBrowserExtensionFolder', () =>
+        this.revealBrowserExtension()
+      ),
       vscode.commands.registerCommand('codegent.restartHub', () => this.hub.restartHub()),
       vscode.commands.registerCommand('codegent.showLog', () => this.log.show()),
       vscode.commands.registerCommand('codegent.resetPublishingConsent', async () => {
         const repo = this.repoStatus
-        if (repo?.ok) await this.context.workspaceState.update(consentKey(`${repo.owner}/${repo.name}`), undefined)
-        this.notify({ kind: 'info', text: 'CodeGent will ask again before it commits and pushes.' })
+        if (repo?.ok)
+          await this.context.workspaceState.update(
+            consentKey(`${repo.owner}/${repo.name}`),
+            undefined
+          )
+        this.notify({
+          kind: 'info',
+          text: 'CodeGent will ask again before it commits and pushes.'
+        })
       })
     ]
   }
@@ -499,12 +626,15 @@ export class App implements vscode.Disposable {
           const state = this.buildState()
           if (predicate(state)) return state
           if (Date.now() > deadline) {
-            throw new Error(`timed out waiting for the extension state; run: ${JSON.stringify(state.run)} notice: ${JSON.stringify(state.notice)}`)
+            throw new Error(
+              `timed out waiting for the extension state; run: ${JSON.stringify(state.run)} notice: ${JSON.stringify(state.notice)}`
+            )
           }
           await new Promise((resolve) => setTimeout(resolve, 100))
         }
       },
-      setPublishingConsent: (repo, value) => Promise.resolve(this.context.workspaceState.update(consentKey(repo), value)),
+      setPublishingConsent: (repo, value) =>
+        Promise.resolve(this.context.workspaceState.update(consentKey(repo), value)),
       hub: () => ({ port: this.hub.port, editorId: this.hub.editorId }),
       browserExtensionPath: () => this.browserExtensionPath,
       webview: () => ({ resolved: this.panel.resolved, received: this.panel.received })

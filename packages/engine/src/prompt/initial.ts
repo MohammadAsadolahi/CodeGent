@@ -1,4 +1,9 @@
-import { FORMAT_RULES, REPLY_FORMAT_EXAMPLE, STATUS_RULES, STATUS_LINES } from './instructions'
+import {
+  FORMAT_RULES,
+  REPLY_FORMAT_EXAMPLE,
+  STATUS_RULES,
+  STATUS_LINES
+} from './instructions'
 
 export interface RepoContext {
   owner: string
@@ -25,7 +30,11 @@ const oneLine = (text: string, max: number): string => {
 }
 
 /** The first message of a run: who the repository is, what to do and exactly how to answer. */
-export const buildInitialPrompt = ({ repo, task, conventions }: InitialPromptInput): string => {
+export const buildInitialPrompt = ({
+  repo,
+  task,
+  conventions
+}: InitialPromptInput): string => {
   const sections = [
     `You are a coding agent. You work on a GitHub repository through ChatGPT's GitHub connector, and a program on my computer called CodeGent applies the file changes you write and sends you the result, so you can continue step by step until the task is done.`,
 
@@ -39,7 +48,9 @@ export const buildInitialPrompt = ({ repo, task, conventions }: InitialPromptInp
     ].join('\n'),
 
     ['## Task', task.trim()].join('\n'),
-    ...(conventions?.trim() ? [['## Project conventions', conventions.trim()].join('\n')] : []),
+    ...(conventions?.trim()
+      ? [['## Project conventions', conventions.trim()].join('\n')]
+      : []),
 
     [
       '## How to reply',

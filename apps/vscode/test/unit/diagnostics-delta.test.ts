@@ -24,14 +24,22 @@ describe('newProblems', () => {
   })
 
   it('counts duplicates: a second identical error is new', () => {
-    const result = newProblems([item({ line: 1 })], [item({ line: 1 }), item({ line: 40 })])
+    const result = newProblems(
+      [item({ line: 1 })],
+      [item({ line: 1 }), item({ line: 40 })]
+    )
     expect(result).toHaveLength(1)
     expect(result[0]!.line).toBe(40)
   })
 
   it('treats a different file, severity, code or source as a different problem', () => {
     const baseline = [item()]
-    for (const changed of [{ path: 'src/b.ts' }, { severity: 'warning' as const }, { code: 'TS9999' }, { source: 'eslint' }]) {
+    for (const changed of [
+      { path: 'src/b.ts' },
+      { severity: 'warning' as const },
+      { code: 'TS9999' },
+      { source: 'eslint' }
+    ]) {
       expect(newProblems(baseline, [item(changed)])).toHaveLength(1)
     }
   })
@@ -47,7 +55,11 @@ describe('newProblems', () => {
 
 describe('summarize', () => {
   it('counts errors and warnings separately', () => {
-    const summary = summarize([item(), item({ severity: 'warning' }), item({ severity: 'warning', message: 'w2' })])
+    const summary = summarize([
+      item(),
+      item({ severity: 'warning' }),
+      item({ severity: 'warning', message: 'w2' })
+    ])
     expect(summary).toMatchObject({ errors: 1, warnings: 2 })
     expect(summary.items).toHaveLength(3)
   })

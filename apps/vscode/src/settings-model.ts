@@ -27,14 +27,16 @@ const text = (value: unknown, max: number): string =>
   typeof value === 'string' ? value.slice(0, max) : ''
 
 /** A setting of the wrong type counts as unset, so the default applies. */
-const flag = (value: unknown, fallback: boolean): boolean => (typeof value === 'boolean' ? value : fallback)
+const flag = (value: unknown, fallback: boolean): boolean =>
+  typeof value === 'boolean' ? value : fallback
 
 /** Only chatgpt.com may be opened; anything else silently falls back to the default. */
 export const sanitizeChatUrl = (value: unknown): string => {
   if (typeof value !== 'string') return DEFAULT_CHAT_URL
   try {
     const url = new URL(value.trim())
-    if (url.protocol !== 'https:' || !ALLOWED_CHAT_HOSTS.has(url.hostname)) return DEFAULT_CHAT_URL
+    if (url.protocol !== 'https:' || !ALLOWED_CHAT_HOSTS.has(url.hostname))
+      return DEFAULT_CHAT_URL
     url.username = ''
     url.password = ''
     return url.toString()
@@ -47,13 +49,32 @@ export const sanitizeChatUrl = (value: unknown): string => {
 export const buildSettings = (get: Getter, workspaceRoot?: string): Settings => ({
   run: {
     ...DEFAULT_SETTINGS,
-    maxSteps: clamp(get('maxSteps', DEFAULT_SETTINGS.maxSteps), 1, 100, DEFAULT_SETTINGS.maxSteps),
-    maxFailedSteps: clamp(get('maxFailedSteps', DEFAULT_SETTINGS.maxFailedSteps), 1, 20, DEFAULT_SETTINGS.maxFailedSteps),
-    autoApply: flag(get('autoApply', DEFAULT_SETTINGS.autoApply), DEFAULT_SETTINGS.autoApply),
-    autoContinue: flag(get('autoContinue', DEFAULT_SETTINGS.autoContinue), DEFAULT_SETTINGS.autoContinue),
+    maxSteps: clamp(
+      get('maxSteps', DEFAULT_SETTINGS.maxSteps),
+      1,
+      100,
+      DEFAULT_SETTINGS.maxSteps
+    ),
+    maxFailedSteps: clamp(
+      get('maxFailedSteps', DEFAULT_SETTINGS.maxFailedSteps),
+      1,
+      20,
+      DEFAULT_SETTINGS.maxFailedSteps
+    ),
+    autoApply: flag(
+      get('autoApply', DEFAULT_SETTINGS.autoApply),
+      DEFAULT_SETTINGS.autoApply
+    ),
+    autoContinue: flag(
+      get('autoContinue', DEFAULT_SETTINGS.autoContinue),
+      DEFAULT_SETTINGS.autoContinue
+    ),
     commit: flag(get('git.commit', DEFAULT_SETTINGS.commit), DEFAULT_SETTINGS.commit),
     push: flag(get('git.push', DEFAULT_SETTINGS.push), DEFAULT_SETTINGS.push),
-    commitPrefix: text(get('git.commitPrefix', DEFAULT_SETTINGS.commitPrefix), 40).replace(/[\r\n]+/g, ' '),
+    commitPrefix: text(
+      get('git.commitPrefix', DEFAULT_SETTINGS.commitPrefix),
+      40
+    ).replace(/[\r\n]+/g, ' '),
     conventions: text(get('conventions', ''), 4_000).trim() || undefined,
     allowDirty: flag(get('allowEditingDirtyFiles', false), false),
     workspaceRoot

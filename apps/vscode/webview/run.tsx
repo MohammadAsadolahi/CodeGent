@@ -18,22 +18,43 @@ const EDIT_VERB: Record<UiEdit['kind'], string> = {
 }
 
 const EditRow = ({ edit, step }: { edit: UiEdit; step: number }) => {
-  const tone = edit.status === 'applied' ? 'ok' : edit.status === 'failed' ? 'bad' : 'skip'
+  const tone =
+    edit.status === 'applied' ? 'ok' : edit.status === 'failed' ? 'bad' : 'skip'
   const opens = edit.status === 'applied' && edit.kind !== 'deleted'
   return (
     <li>
-      <span class={tone}>{edit.status === 'applied' ? <Check /> : edit.status === 'failed' ? <Cross /> : <Dot size={6} />}</span>
+      <span class={tone}>
+        {edit.status === 'applied' ? (
+          <Check />
+        ) : edit.status === 'failed' ? (
+          <Cross />
+        ) : (
+          <Dot size={6} />
+        )}
+      </span>
       <div class="edit-main">
-        <span>{edit.status === 'failed' ? 'Could not change' : edit.status === 'skipped' ? 'No change' : EDIT_VERB[edit.kind]} </span>
+        <span>
+          {edit.status === 'failed'
+            ? 'Could not change'
+            : edit.status === 'skipped'
+              ? 'No change'
+              : EDIT_VERB[edit.kind]}{' '}
+        </span>
         {opens ? (
-          <button class="link mono wrap" onClick={() => post({ type: 'openFile', path: edit.path })} title="Open file">
+          <button
+            class="link mono wrap"
+            onClick={() => post({ type: 'openFile', path: edit.path })}
+            title="Open file"
+          >
             {edit.path}
           </button>
         ) : (
           <span class="mono wrap">{edit.path}</span>
         )}
         {edit.fromPath && <span class="muted"> (from {edit.fromPath})</span>}
-        {edit.status === 'applied' && edit.detail && <span class="muted"> — {edit.detail}</span>}
+        {edit.status === 'applied' && edit.detail && (
+          <span class="muted"> — {edit.detail}</span>
+        )}
         {edit.status === 'skipped' && <span class="muted"> — {edit.detail}</span>}
         {edit.errors.map((error) => (
           <div class="edit-errors" key={error}>
@@ -47,7 +68,12 @@ const EditRow = ({ edit, step }: { edit: UiEdit; step: number }) => {
         ))}
       </div>
       {edit.status === 'applied' && (
-        <button class="small" title="Show what changed" aria-label={`Show diff of ${edit.path}`} onClick={() => post({ type: 'openDiff', path: edit.path, step })}>
+        <button
+          class="small"
+          title="Show what changed"
+          aria-label={`Show diff of ${edit.path}`}
+          onClick={() => post({ type: 'openDiff', path: edit.path, step })}
+        >
           <Diff />
         </button>
       )}
@@ -55,9 +81,25 @@ const EditRow = ({ edit, step }: { edit: UiEdit; step: number }) => {
   )
 }
 
-const Fact = ({ tone, children }: { tone: 'ok' | 'bad' | 'warn' | 'muted'; children: preact.ComponentChildren }) => (
+const Fact = ({
+  tone,
+  children
+}: {
+  tone: 'ok' | 'bad' | 'warn' | 'muted'
+  children: preact.ComponentChildren
+}) => (
   <div class={`fact ${tone}`}>
-    <span>{tone === 'ok' ? <Check /> : tone === 'bad' ? <Cross /> : tone === 'warn' ? <Warn /> : <Info />}</span>
+    <span>
+      {tone === 'ok' ? (
+        <Check />
+      ) : tone === 'bad' ? (
+        <Cross />
+      ) : tone === 'warn' ? (
+        <Warn />
+      ) : (
+        <Info />
+      )}
+    </span>
     <span>{children}</span>
   </div>
 )
@@ -69,7 +111,9 @@ const StepCard = ({ step }: { step: UiStep }) => (
       <span class="muted">{KIND_LABEL[step.kind]}</span>
       <span class="spacer" />
       {step.working && <Spinner />}
-      {step.durationSeconds !== undefined && <span class="muted">ChatGPT {formatDuration(step.durationSeconds)}</span>}
+      {step.durationSeconds !== undefined && (
+        <span class="muted">ChatGPT {formatDuration(step.durationSeconds)}</span>
+      )}
       {step.undone && <span class="muted">· undone</span>}
     </div>
     {step.summary && <div class="step-summary">{step.summary}</div>}
@@ -91,14 +135,18 @@ const StepCard = ({ step }: { step: UiStep }) => (
           {warning}
         </Fact>
       ))}
-      {step.decision === 'skip' && <Fact tone="warn">You chose not to apply this step.</Fact>}
+      {step.decision === 'skip' && (
+        <Fact tone="warn">You chose not to apply this step.</Fact>
+      )}
       {step.diagnostics &&
         (step.diagnostics.errors === 0 && step.diagnostics.warnings === 0 ? (
           <Fact tone="ok">No new errors or warnings in the changed files.</Fact>
         ) : (
           <>
             <Fact tone={step.diagnostics.errors > 0 ? 'bad' : 'warn'}>
-              {step.diagnostics.errors} new error{step.diagnostics.errors === 1 ? '' : 's'}, {step.diagnostics.warnings} warning{step.diagnostics.warnings === 1 ? '' : 's'} in the changed files
+              {step.diagnostics.errors} new error
+              {step.diagnostics.errors === 1 ? '' : 's'}, {step.diagnostics.warnings}{' '}
+              warning{step.diagnostics.warnings === 1 ? '' : 's'} in the changed files
             </Fact>
             <details>
               <summary>Show problems</summary>
@@ -116,14 +164,36 @@ const StepCard = ({ step }: { step: UiStep }) => (
       {step.verify && (
         <Fact tone={step.verify.outcome === 'passed' ? 'ok' : 'bad'}>
           <span class="mono">{step.verify.command}</span>{' '}
-          {step.verify.outcome === 'passed' ? 'passed' : step.verify.outcome === 'timed-out' ? 'timed out' : step.verify.outcome === 'could-not-run' ? 'could not run' : `failed (exit code ${step.verify.exitCode})`}
+          {step.verify.outcome === 'passed'
+            ? 'passed'
+            : step.verify.outcome === 'timed-out'
+              ? 'timed out'
+              : step.verify.outcome === 'could-not-run'
+                ? 'could not run'
+                : `failed (exit code ${step.verify.exitCode})`}
         </Fact>
       )}
-      {step.publish && <Fact tone={step.publish.state === 'pushed' ? 'ok' : step.publish.state === 'committed' ? 'warn' : 'muted'}>{step.publish.label}</Fact>}
+      {step.publish && (
+        <Fact
+          tone={
+            step.publish.state === 'pushed'
+              ? 'ok'
+              : step.publish.state === 'committed'
+                ? 'warn'
+                : 'muted'
+          }
+        >
+          {step.publish.label}
+        </Fact>
+      )}
     </div>
     {step.canUndo && (
       <div class="actions">
-        <button class="small" onClick={() => post({ type: 'undo', step: step.n })} title="Put the files of this step back in your working tree">
+        <button
+          class="small"
+          onClick={() => post({ type: 'undo', step: step.n })}
+          title="Put the files of this step back in your working tree"
+        >
           <Undo /> Undo this step
         </button>
       </div>
@@ -131,7 +201,8 @@ const StepCard = ({ step }: { step: UiStep }) => (
   </article>
 )
 
-const outcomeTone = (outcome: UiRun['outcome']): 'ok' | 'bad' | 'warn' => (outcome === 'done' ? 'ok' : outcome === 'error' ? 'bad' : 'warn')
+const outcomeTone = (outcome: UiRun['outcome']): 'ok' | 'bad' | 'warn' =>
+  outcome === 'done' ? 'ok' : outcome === 'error' ? 'bad' : 'warn'
 
 export const RunCard = ({ run }: { run: UiRun }) => {
   const now = useNow(run.state === 'running')
@@ -156,10 +227,19 @@ export const RunCard = ({ run }: { run: UiRun }) => {
       )}
 
       {run.state === 'paused' && (
-        <div class={`status-line ${run.pauseReason === 'needs-attention' ? 'warn' : ''}`} role="alert">
-          {run.pauseReason === 'needs-attention' ? <Warn size={16} /> : <Info size={16} />}
+        <div
+          class={`status-line ${run.pauseReason === 'needs-attention' ? 'warn' : ''}`}
+          role="alert"
+        >
+          {run.pauseReason === 'needs-attention' ? (
+            <Warn size={16} />
+          ) : (
+            <Info size={16} />
+          )}
           <div style="flex:1">
-            <strong>{run.pauseReason === 'needs-attention' ? 'Needs your attention' : 'Paused'}</strong>
+            <strong>
+              {run.pauseReason === 'needs-attention' ? 'Needs your attention' : 'Paused'}
+            </strong>
             <div class="wrap">{run.message}</div>
             <div class="actions">
               <button class="primary" onClick={() => post({ type: 'resume' })}>
@@ -175,13 +255,22 @@ export const RunCard = ({ run }: { run: UiRun }) => {
 
       {run.state === 'finished' && (
         <div class={`status-line ${outcomeTone(run.outcome)}`} role="status">
-          {run.outcome === 'done' ? <Check size={16} /> : run.outcome === 'error' ? <Cross size={16} /> : <Info size={16} />}
+          {run.outcome === 'done' ? (
+            <Check size={16} />
+          ) : run.outcome === 'error' ? (
+            <Cross size={16} />
+          ) : (
+            <Info size={16} />
+          )}
           <div style="flex:1">
             <strong>{TITLES[run.outcome ?? 'done']}</strong>
             <div class="wrap">{run.message}</div>
             <div class="actions">
               {run.conversationUrl && (
-                <button class="small" onClick={() => post({ type: 'openUrl', url: run.conversationUrl! })}>
+                <button
+                  class="small"
+                  onClick={() => post({ type: 'openUrl', url: run.conversationUrl! })}
+                >
                   <Folder /> Open conversation
                 </button>
               )}
@@ -217,9 +306,19 @@ export const ReviewCard = ({ review }: { review: UiReview }) => (
     <ul class="edits">
       {review.files.map((file) => (
         <li key={file.path}>
-          <span class={file.kind === 'delete' ? 'bad' : 'ok'}>{file.kind === 'delete' ? <Cross /> : <Check />}</span>
+          <span class={file.kind === 'delete' ? 'bad' : 'ok'}>
+            {file.kind === 'delete' ? <Cross /> : <Check />}
+          </span>
           <div class="edit-main">
-            <span>{file.kind === 'create' ? 'Create' : file.kind === 'delete' ? 'Delete' : file.kind === 'rename' ? 'Rename' : 'Change'} </span>
+            <span>
+              {file.kind === 'create'
+                ? 'Create'
+                : file.kind === 'delete'
+                  ? 'Delete'
+                  : file.kind === 'rename'
+                    ? 'Rename'
+                    : 'Change'}{' '}
+            </span>
             <span class="mono wrap">{file.path}</span>
             {file.fromPath && <span class="muted"> (from {file.fromPath})</span>}
             <span class="muted">
@@ -227,7 +326,11 @@ export const ReviewCard = ({ review }: { review: UiReview }) => (
               +{file.added} −{file.removed}
             </span>
           </div>
-          <button class="small" aria-label={`Show diff of ${file.path}`} onClick={() => post({ type: 'openDiff', path: file.path })}>
+          <button
+            class="small"
+            aria-label={`Show diff of ${file.path}`}
+            onClick={() => post({ type: 'openDiff', path: file.path })}
+          >
             <Diff />
           </button>
         </li>
@@ -237,7 +340,9 @@ export const ReviewCard = ({ review }: { review: UiReview }) => (
       <button class="primary" onClick={() => post({ type: 'decide', decision: 'apply' })}>
         <Check /> Apply
       </button>
-      <button onClick={() => post({ type: 'decide', decision: 'skip' })}>Skip this step</button>
+      <button onClick={() => post({ type: 'decide', decision: 'skip' })}>
+        Skip this step
+      </button>
       <button class="danger" onClick={() => post({ type: 'decide', decision: 'stop' })}>
         <Stop /> Stop run
       </button>
@@ -255,11 +360,24 @@ export const History = ({ items }: { items: UiHistoryItem[] }) => {
       </summary>
       {items.map((item) => (
         <div class="history-item" key={item.id}>
-          <span class={item.outcome === 'done' ? 'ok' : item.outcome === 'error' ? 'bad' : 'warn'}>{item.outcome === 'done' ? <Check /> : item.outcome === 'error' ? <Cross /> : <Info />}</span>
+          <span
+            class={
+              item.outcome === 'done' ? 'ok' : item.outcome === 'error' ? 'bad' : 'warn'
+            }
+          >
+            {item.outcome === 'done' ? (
+              <Check />
+            ) : item.outcome === 'error' ? (
+              <Cross />
+            ) : (
+              <Info />
+            )}
+          </span>
           <div style="flex:1;min-width:0">
             <div class="wrap">{item.task}</div>
             <div class="muted wrap">
-              {item.repo} · {item.steps} step{item.steps === 1 ? '' : 's'} · {formatAgo(item.startedAt, now)} — {item.message}
+              {item.repo} · {item.steps} step{item.steps === 1 ? '' : 's'} ·{' '}
+              {formatAgo(item.startedAt, now)} — {item.message}
             </div>
           </div>
         </div>

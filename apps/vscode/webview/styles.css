@@ -4,7 +4,10 @@
   --cg-warn: var(--vscode-editorWarning-foreground, #d29922);
   --cg-info: var(--vscode-textLink-foreground, #3794ff);
   --cg-muted: var(--vscode-descriptionForeground, #8b949e);
-  --cg-line: var(--vscode-widget-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.35)));
+  --cg-line: var(
+    --vscode-widget-border,
+    var(--vscode-panel-border, rgba(128, 128, 128, 0.35))
+  );
   --cg-card: var(--vscode-editorWidget-background, rgba(128, 128, 128, 0.08));
 }
 

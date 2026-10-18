@@ -4,7 +4,7 @@ import path from 'node:path'
 import * as vscode from 'vscode'
 import type { JobRequest } from '@codegent/protocol'
 import { FakeBrowser, until } from '../support/fake-browser'
-import { git, write } from '../support/git-fixture'
+import { git } from '../support/git-fixture'
 import { chatReply, createdFile, updatedFile } from '../support/replies'
 import { sandbox, workRepo } from './env'
 import { CONVERSATION, installRunHooks } from './fixture'
@@ -14,10 +14,12 @@ describe('when things go wrong', () => {
   const repo = workRepo()
   const run = () => ctx.api.state().run!
   const start = (task: string) => ctx.api.send({ type: 'start', task })
-  const exists = (relative: string) => fs.existsSync(path.join(repo.dir, ...relative.split('/')))
+  const exists = (relative: string) =>
+    fs.existsSync(path.join(repo.dir, ...relative.split('/')))
 
   /** Answers the first message with `first` and every later one with the next entry of `later`. */
-  const script = (...replies: string[]) => ctx.browser.answerWith((_job, index) => replies[Math.min(index, replies.length - 1)]!)
+  const script = (...replies: string[]) =>
+    ctx.browser.answerWith((_job, index) => replies[Math.min(index, replies.length - 1)]!)
 
   it('keeps waiting through a hub restart and takes the reply the browser delivers afterwards', async () => {
     const asked: JobRequest[] = []
@@ -29,12 +31,19 @@ describe('when things go wrong', () => {
     await ctx.api.waitFor((state) => state.connection.hub === 'connected', 30_000)
 
     // The browser extension reconnects by itself and hands over the reply it was holding.
-    const reconnected = await new FakeBrowser(ctx.api.hub().port!, ctx.browser.id).connect()
+    const reconnected = await new FakeBrowser(
+      ctx.api.hub().port!,
+      ctx.browser.id
+    ).connect()
     try {
       await ctx.api.waitFor((state) => state.connection.browsers.length === 1)
       reconnected.reply(asked[0]!, {
         kind: 'completed',
-        markdown: chatReply('Added the greeting.', [createdFile('hello.txt', 'hi')], 'done'),
+        markdown: chatReply(
+          'Added the greeting.',
+          [createdFile('hello.txt', 'hi')],
+          'done'
+        ),
         conversationUrl: CONVERSATION,
         durationMs: 1
       })
@@ -74,8 +83,16 @@ describe('when things go wrong', () => {
 
   it('is told exactly what was wrong when its SEARCH text is not quite in the file, and the file stays as it was', async () => {
     script(
-      chatReply('Changing the greeting.', [updatedFile('src/greeting.txt', 'hello\nwurld', 'hello\nearth')], 'continue'),
-      chatReply('Now with the right text.', [updatedFile('src/greeting.txt', 'hello\nworld', 'hello\nearth')], 'done')
+      chatReply(
+        'Changing the greeting.',
+        [updatedFile('src/greeting.txt', 'hello\nwurld', 'hello\nearth')],
+        'continue'
+      ),
+      chatReply(
+        'Now with the right text.',
+        [updatedFile('src/greeting.txt', 'hello\nworld', 'hello\nearth')],
+        'done'
+      )
     )
     await start('Change the greeting')
 
@@ -83,19 +100,33 @@ describe('when things go wrong', () => {
     const report = ctx.browser.jobs[1]!.text
     assert.ok(report.includes('src/greeting.txt'), report)
     assert.match(report, /was not found/)
-    assert.ok(report.includes('The closest text in the file') && report.includes('world'), `the real lines are shown: ${report}`)
-    assert.equal(fs.readFileSync(path.join(repo.dir, 'src/greeting.txt'), 'utf8'), 'hello\nearth\n', 'only the corrected edit was applied')
+    assert.ok(
+      report.includes('The closest text in the file') && report.includes('world'),
+      `the real lines are shown: ${report}`
+    )
+    assert.equal(
+      fs.readFileSync(path.join(repo.dir, 'src/greeting.txt'), 'utf8'),
+      'hello\nearth\n',
+      'only the corrected edit was applied'
+    )
     assert.equal(run().outcome, 'done')
   })
 
   it('asks for the rest when the reply is cut off, keeping what arrived complete', async () => {
     script(
-      chatReply('Adding two files.', [createdFile('a.txt', 'alpha'), '### Created file: `b.txt`\n\n```txt\nbeta'], undefined),
+      chatReply(
+        'Adding two files.',
+        [createdFile('a.txt', 'alpha'), '### Created file: `b.txt`\n\n```txt\nbeta'],
+        undefined
+      ),
       chatReply('The second file.', [createdFile('b.txt', 'beta')], 'done')
     )
     await start('Create a.txt and b.txt')
 
-    assert.equal(run().steps[0]!.edits.filter((edit) => edit.status === 'applied').length, 1)
+    assert.equal(
+      run().steps[0]!.edits.filter((edit) => edit.status === 'applied').length,
+      1
+    )
     assert.equal(run().steps[1]!.kind, 'cut-off-reminder')
     assert.ok(exists('a.txt') && exists('b.txt'))
     assert.equal(run().outcome, 'done')
@@ -128,7 +159,19 @@ describe('when things go wrong', () => {
   it('pauses when GitHub rejects the push, never claims it was pushed, and finishes the push after Resume', async () => {
     // Someone else pushed to GitHub in the meantime (a commit made straight in the remote).
     const tree = git(repo.bare, 'rev-parse', 'main^{tree}')
-    const theirs = git(repo.bare, '-c', 'user.name=Other', '-c', 'user.email=other@example.com', 'commit-tree', tree, '-p', 'main', '-m', 'other work')
+    const theirs = git(
+      repo.bare,
+      '-c',
+      'user.name=Other',
+      '-c',
+      'user.email=other@example.com',
+      'commit-tree',
+      tree,
+      '-p',
+      'main',
+      '-m',
+      'other work'
+    )
     git(repo.bare, 'update-ref', 'refs/heads/main', theirs)
 
     script(chatReply('Added the greeting.', [createdFile('hello.txt', 'hi')], 'done'))
@@ -137,8 +180,16 @@ describe('when things go wrong', () => {
     assert.equal(run().state, 'paused')
     assert.match(run().message ?? '', /push to GitHub failed/i)
     assert.match(run().message ?? '', /Pull/)
-    assert.equal(ctx.browser.jobs.length, 1, 'ChatGPT has not been told anything about a push')
-    assert.equal(git(repo.dir, 'log', '-1', '--format=%s').startsWith('codegent: '), true, 'the commit exists locally')
+    assert.equal(
+      ctx.browser.jobs.length,
+      1,
+      'ChatGPT has not been told anything about a push'
+    )
+    assert.equal(
+      git(repo.dir, 'log', '-1', '--format=%s').startsWith('codegent: '),
+      true,
+      'the commit exists locally'
+    )
 
     // The user pulls what GitHub has (the "fix" the message asks for) and resumes.
     git(repo.dir, 'pull', '-q', '--no-edit', '--no-rebase', repo.bare, 'main')
@@ -147,6 +198,10 @@ describe('when things go wrong', () => {
     assert.equal(run().outcome, 'done')
     assert.equal(run().steps[0]!.publish?.state, 'pushed')
     assert.equal(git(repo.bare, 'rev-parse', 'main'), git(repo.dir, 'rev-parse', 'HEAD'))
-    assert.ok(exists('hello.txt') && exists('other.txt'))
+    assert.ok(
+      git(repo.bare, 'log', '--format=%s', 'main').split('\n').includes('other work'),
+      'their commit is still there'
+    )
+    assert.ok(exists('hello.txt'))
   })
 })

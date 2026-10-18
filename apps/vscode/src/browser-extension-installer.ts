@@ -25,7 +25,10 @@ export const installBrowserExtension = async (options: {
     return null
   }
   const installed = await fs.readFile(path.join(target, STAMP), 'utf8').catch(() => '')
-  const manifestPresent = await fs.access(path.join(target, 'manifest.json')).then(() => true, () => false)
+  const manifestPresent = await fs.access(path.join(target, 'manifest.json')).then(
+    () => true,
+    () => false
+  )
   if (installed.trim() === version && manifestPresent) return target
 
   // Replace in place (rather than delete-then-copy) so a browser holding the folder open
@@ -33,11 +36,15 @@ export const installBrowserExtension = async (options: {
   await fs.mkdir(target, { recursive: true })
   const stale = new Set(await fs.readdir(target).catch(() => [] as string[]))
   for (const entry of await fs.readdir(source)) {
-    await fs.cp(path.join(source, entry), path.join(target, entry), { recursive: true, force: true })
+    await fs.cp(path.join(source, entry), path.join(target, entry), {
+      recursive: true,
+      force: true
+    })
     stale.delete(entry)
   }
   stale.delete(STAMP)
-  for (const entry of stale) await fs.rm(path.join(target, entry), { recursive: true, force: true })
+  for (const entry of stale)
+    await fs.rm(path.join(target, entry), { recursive: true, force: true })
   await fs.writeFile(path.join(target, STAMP), version)
   return target
 }

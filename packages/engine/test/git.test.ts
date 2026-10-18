@@ -3,7 +3,13 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { classifyPushFailure, GitClient, GitError, parseRemoteUrl, sanitizeRemoteUrl } from '../src'
+import {
+  classifyPushFailure,
+  GitClient,
+  GitError,
+  parseRemoteUrl,
+  sanitizeRemoteUrl
+} from '../src'
 
 describe('parseRemoteUrl', () => {
   it.each([
@@ -19,7 +25,12 @@ describe('parseRemoteUrl', () => {
     ['ssh://git@github.com:22/octo/repo.git', 'github.com', 'octo', 'repo'],
     ['git://github.com/octo/repo.git', 'github.com', 'octo', 'repo'],
     ['https://GitHub.com/Octo/Repo.git', 'github.com', 'Octo', 'Repo'],
-    ['https://github.example.corp/team/service.git', 'github.example.corp', 'team', 'service'],
+    [
+      'https://github.example.corp/team/service.git',
+      'github.example.corp',
+      'team',
+      'service'
+    ],
     ['git@gitlab.com:group/sub/project.git', 'gitlab.com', 'group/sub', 'project'],
     ['https://github.com/octo/my.dotted.repo.git', 'github.com', 'octo', 'my.dotted.repo']
   ])('%s', (url, host, owner, repo) => {
@@ -43,7 +54,9 @@ describe('parseRemoteUrl', () => {
   })
 
   it('strips credentials from displayable URLs', () => {
-    expect(sanitizeRemoteUrl('https://ghp_x@github.com/o/r.git')).toBe('https://github.com/o/r.git')
+    expect(sanitizeRemoteUrl('https://ghp_x@github.com/o/r.git')).toBe(
+      'https://github.com/o/r.git'
+    )
     expect(sanitizeRemoteUrl('git@github.com:o/r.git')).toBe('git@github.com:o/r.git')
   })
 })
@@ -56,10 +69,16 @@ describe('classifyPushFailure', () => {
     ['remote: error: GH006: Protected branch update failed', 'protected-branch'],
     ['remote: error: protected branch hook declined', 'protected-branch'],
     ["fatal: Authentication failed for 'https://github.com/o/r.git/'", 'auth'],
-    ['fatal: could not read Username for https://github.com: terminal prompts disabled', 'auth'],
+    [
+      'fatal: could not read Username for https://github.com: terminal prompts disabled',
+      'auth'
+    ],
     ['git@github.com: Permission denied (publickey).', 'auth'],
     ['remote: Repository not found.', 'auth'],
-    ["fatal: unable to access 'https://github.com/o/r.git/': Could not resolve host: github.com", 'network'],
+    [
+      "fatal: unable to access 'https://github.com/o/r.git/': Could not resolve host: github.com",
+      'network'
+    ],
     ['ssh: connect to host github.com port 22: Connection timed out', 'network'],
     ['fatal: No configured push destination.', 'no-remote'],
     ["fatal: 'origin' does not appear to be a git repository", 'no-remote'],
@@ -75,7 +94,11 @@ afterAll(() => fs.rmSync(sandbox, { recursive: true, force: true }))
 
 let counter = 0
 const git = (cwd: string, ...args: string[]) =>
-  execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+  execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe']
+  }).trim()
 
 const write = (cwd: string, file: string, content: string) => {
   const full = path.join(cwd, file)
@@ -123,7 +146,9 @@ describe('GitClient', () => {
   it('knows whether it is in a repository and where the root is', async () => {
     expect(await client.available()).toBe(true)
     expect(await client.isRepo()).toBe(true)
-    expect(path.normalize(await client.root()).toLowerCase()).toBe(path.normalize(dir).toLowerCase().replace(/\\$/, ''))
+    expect(path.normalize(await client.root()).toLowerCase()).toBe(
+      path.normalize(dir).toLowerCase().replace(/\\$/, '')
+    )
     expect(await new GitClient(os.tmpdir()).isRepo()).toBe(false)
   })
 
@@ -148,7 +173,9 @@ describe('GitClient', () => {
     write(dir, 'sub/dir/deep.txt', 'x\n')
     fs.rmSync(path.join(dir, 'b.txt'))
     const dirty = await client.dirtyPaths()
-    expect(dirty).toEqual(new Set(['a.txt', 'new file ü.txt', 'sub/dir/deep.txt', 'b.txt']))
+    expect(dirty).toEqual(
+      new Set(['a.txt', 'new file ü.txt', 'sub/dir/deep.txt', 'b.txt'])
+    )
     git(dir, 'add', '-A')
     git(dir, 'mv', 'a.txt', 'renamed.txt')
     const afterRename = await client.dirtyPaths()
@@ -186,18 +213,31 @@ describe('GitClient', () => {
 
       expect(result.committed).toBe(true)
       expect(result.paths).toEqual(['a.txt'])
-      expect(git(dir, 'show', '--name-only', '--format=%s', 'HEAD').split('\n')).toEqual(['codegent: change a', '', 'a.txt'])
-      expect(git(dir, 'status', '--porcelain').split('\n').sort()).toEqual(['?? mine.txt', 'A  staged.txt'])
+      expect(git(dir, 'show', '--name-only', '--format=%s', 'HEAD').split('\n')).toEqual([
+        'codegent: change a',
+        '',
+        'a.txt'
+      ])
+      expect(git(dir, 'status', '--porcelain').split('\n').sort()).toEqual([
+        '?? mine.txt',
+        'A  staged.txt'
+      ])
     })
 
     it('commits new files, deletions and renames', async () => {
       write(dir, 'created.txt', 'x\n')
       fs.rmSync(path.join(dir, 'b.txt'))
       git(dir, 'mv', 'a.txt', 'moved.txt')
-      const result = await client.commitPaths(['created.txt', 'b.txt', 'a.txt', 'moved.txt'], 'multi')
+      const result = await client.commitPaths(
+        ['created.txt', 'b.txt', 'a.txt', 'moved.txt'],
+        'multi'
+      )
       expect(result.committed).toBe(true)
       expect(git(dir, 'status', '--porcelain')).toBe('')
-      expect(git(dir, 'ls-files').split('\n').sort()).toEqual(['created.txt', 'moved.txt'])
+      expect(git(dir, 'ls-files').split('\n').sort()).toEqual([
+        'created.txt',
+        'moved.txt'
+      ])
     })
 
     it('returns committed:false when there is nothing to commit', async () => {
@@ -214,7 +254,10 @@ describe('GitClient', () => {
     it('handles paths with spaces, dashes and unicode', async () => {
       write(dir, '--weird name.txt', 'x\n')
       write(dir, 'dossier é/ü file.md', 'x\n')
-      const result = await client.commitPaths(['--weird name.txt', 'dossier é/ü file.md'], 'odd names')
+      const result = await client.commitPaths(
+        ['--weird name.txt', 'dossier é/ü file.md'],
+        'odd names'
+      )
       expect(result.committed).toBe(true)
       expect(git(dir, 'status', '--porcelain')).toBe('')
     })
@@ -230,7 +273,9 @@ describe('GitClient', () => {
       const hook = path.join(dir, '.git', 'hooks', 'pre-commit')
       fs.writeFileSync(hook, '#!/bin/sh\necho blocked >&2\nexit 1\n', { mode: 0o755 })
       write(dir, 'a.txt', 'x\n')
-      await expect(client.commitPaths(['a.txt'], 'with hook', { noVerify: false })).rejects.toBeInstanceOf(GitError)
+      await expect(
+        client.commitPaths(['a.txt'], 'with hook', { noVerify: false })
+      ).rejects.toBeInstanceOf(GitError)
     })
   })
 })
@@ -303,9 +348,20 @@ describe('pushing and syncing', () => {
   it('identifies the hosted repository from origin, never leaking embedded credentials', async () => {
     const dir = initRepo()
     git(dir, 'remote', 'add', 'upstream', 'https://github.com/other/fork.git')
-    git(dir, 'remote', 'add', 'origin', 'https://ghp_TOKEN123@github.com/octo/project.git')
+    git(
+      dir,
+      'remote',
+      'add',
+      'origin',
+      'https://ghp_TOKEN123@github.com/octo/project.git'
+    )
     const remote = await new GitClient(dir).remote()
-    expect(remote).toMatchObject({ name: 'origin', owner: 'octo', repo: 'project', host: 'github.com' })
+    expect(remote).toMatchObject({
+      name: 'origin',
+      owner: 'octo',
+      repo: 'project',
+      host: 'github.com'
+    })
     expect(remote!.url).toBe('https://github.com/octo/project.git')
     expect(JSON.stringify(remote)).not.toMatch(/TOKEN123/)
   })

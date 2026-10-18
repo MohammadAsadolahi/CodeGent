@@ -2,15 +2,26 @@ import { describe, expect, it } from 'vitest'
 import { applyHunks, conformContent, findBlock, type Hunk } from '../src'
 
 const L = (text: string): string[] => (text === '' ? [] : text.split('\n'))
-const hunk = (search: string, replace: string): Hunk => ({ search: L(search), replace: L(replace) })
+const hunk = (search: string, replace: string): Hunk => ({
+  search: L(search),
+  replace: L(replace)
+})
 const apply = (content: string, ...hunks: Array<[string, string]>) =>
-  applyHunks(content, hunks.map(([s, r]) => hunk(s, r)))
+  applyHunks(
+    content,
+    hunks.map(([s, r]) => hunk(s, r))
+  )
 
 describe('exact matches', () => {
   it('replaces a single line, leaving everything else byte-identical', () => {
     const result = apply('one\ntwo\nthree\n', ['two', 'TWO'])
     expect(result).toMatchObject({ ok: true, content: 'one\nTWO\nthree\n' })
-    expect(result.hunks[0]).toMatchObject({ ok: true, tier: 'exact', startLine: 2, endLine: 2 })
+    expect(result.hunks[0]).toMatchObject({
+      ok: true,
+      tier: 'exact',
+      startLine: 2,
+      endLine: 2
+    })
   })
 
   it('handles the first line, the last line and the whole file', () => {
@@ -20,12 +31,16 @@ describe('exact matches', () => {
   })
 
   it('replaces multi-line blocks with a different number of lines', () => {
-    expect(apply('a\nb\nc\nd\n', ['b\nc', 'B1\nB2\nB3']).content).toBe('a\nB1\nB2\nB3\nd\n')
+    expect(apply('a\nb\nc\nd\n', ['b\nc', 'B1\nB2\nB3']).content).toBe(
+      'a\nB1\nB2\nB3\nd\n'
+    )
     expect(apply('a\nb\nc\nd\n', ['b\nc', 'X']).content).toBe('a\nX\nd\n')
   })
 
   it('deletes lines when the replacement is empty', () => {
-    expect(applyHunks('a\nb\nc\n', [{ search: ['b'], replace: [] }]).content).toBe('a\nc\n')
+    expect(applyHunks('a\nb\nc\n', [{ search: ['b'], replace: [] }]).content).toBe(
+      'a\nc\n'
+    )
     expect(applyHunks('a\n', [{ search: ['a'], replace: [] }]).content).toBe('')
   })
 
@@ -54,16 +69,28 @@ describe('ambiguity and failure', () => {
     const result = apply('x\nfoo\nbar\nfoo\n', ['foo', 'FOO'])
     expect(result.ok).toBe(false)
     expect(result.content).toBe('x\nfoo\nbar\nfoo\n')
-    expect(result.hunks[0]!.error).toMatchObject({ code: 'ambiguous', candidates: [2, 4], hunk: 1 })
+    expect(result.hunks[0]!.error).toMatchObject({
+      code: 'ambiguous',
+      candidates: [2, 4],
+      hunk: 1
+    })
   })
 
   it('succeeds once more context makes the match unique', () => {
-    expect(apply('x\nfoo\nbar\nfoo\n', ['bar\nfoo', 'bar\nFOO']).content).toBe('x\nfoo\nbar\nFOO\n')
+    expect(apply('x\nfoo\nbar\nfoo\n', ['bar\nfoo', 'bar\nFOO']).content).toBe(
+      'x\nfoo\nbar\nFOO\n'
+    )
   })
 
   it('reports not-found and points at the closest text', () => {
-    const file = ['function area(r) {', '  return Math.PI * r * r', '}', '', 'export { area }'].join('\n') + '\n'
-    const result = apply(file, ['function area(radius) {\n  return Math.PI * radius * radius\n}', 'x'])
+    const file =
+      ['function area(r) {', '  return Math.PI * r * r', '}', '', 'export { area }'].join(
+        '\n'
+      ) + '\n'
+    const result = apply(file, [
+      'function area(radius) {\n  return Math.PI * radius * radius\n}',
+      'x'
+    ])
     expect(result.ok).toBe(false)
     const error = result.hunks[0]!.error!
     expect(error.code).toBe('not-found')
@@ -73,7 +100,10 @@ describe('ambiguity and failure', () => {
   })
 
   it('reports not-found without a closest match when nothing resembles the text', () => {
-    const result = apply('alpha\nbeta\ngamma\n', ['completely different content here\nnothing similar', 'x'])
+    const result = apply('alpha\nbeta\ngamma\n', [
+      'completely different content here\nnothing similar',
+      'x'
+    ])
     expect(result.hunks[0]!.error).toMatchObject({ code: 'not-found' })
     expect(result.hunks[0]!.error!.closest).toBeUndefined()
   })
@@ -105,17 +135,32 @@ describe('looser matches (the model copied the code slightly differently)', () =
   })
 
   it('ignores indentation and re-indents the replacement to the file (deeper file)', () => {
-    const file = ['class A {', '    method() {', '        return 1', '    }', '}', ''].join('\n')
-    const result = apply(file, ['method() {\n    return 1\n}', 'method() {\n    return 2\n}'])
+    const file = [
+      'class A {',
+      '    method() {',
+      '        return 1',
+      '    }',
+      '}',
+      ''
+    ].join('\n')
+    const result = apply(file, [
+      'method() {\n    return 1\n}',
+      'method() {\n    return 2\n}'
+    ])
     expect(result.ok).toBe(true)
-    expect(result.content).toBe(['class A {', '    method() {', '        return 2', '    }', '}', ''].join('\n'))
+    expect(result.content).toBe(
+      ['class A {', '    method() {', '        return 2', '    }', '}', ''].join('\n')
+    )
     expect(result.hunks[0]).toMatchObject({ tier: 'trim' })
     expect(result.hunks[0]!.note).toMatch(/indentation of the replacement was adjusted/)
   })
 
   it('removes surplus indentation when the SEARCH text was over-indented', () => {
     const file = 'if (x) {\n  y()\n}\n'
-    const result = apply(file, ['      if (x) {\n        y()\n      }', '      if (x) {\n        z()\n      }'])
+    const result = apply(file, [
+      '      if (x) {\n        y()\n      }',
+      '      if (x) {\n        z()\n      }'
+    ])
     expect(result.content).toBe('if (x) {\n  z()\n}\n')
   })
 
@@ -133,7 +178,10 @@ describe('looser matches (the model copied the code slightly differently)', () =
   })
 
   it('collapses runs of spaces inside lines', () => {
-    const result = apply('const   a  =   1\nconst b = 2\n', ['const a = 1', 'const a = 5'])
+    const result = apply('const   a  =   1\nconst b = 2\n', [
+      'const a = 1',
+      'const a = 5'
+    ])
     expect(result.content).toBe('const a = 5\nconst b = 2\n')
     expect(result.hunks[0]).toMatchObject({ tier: 'collapse-space' })
   })
@@ -146,7 +194,9 @@ describe('looser matches (the model copied the code slightly differently)', () =
   })
 
   it('drops blank lines at the edges of the SEARCH text that the file does not have', () => {
-    const result = applyHunks('a\nb\nc\n', [{ search: ['', 'b', ''], replace: ['', 'B', ''] }])
+    const result = applyHunks('a\nb\nc\n', [
+      { search: ['', 'b', ''], replace: ['', 'B', ''] }
+    ])
     expect(result.content).toBe('a\nB\nc\n')
   })
 
@@ -206,9 +256,15 @@ describe('findBlock', () => {
   })
 
   it('handles a large file quickly', () => {
-    const content = Array.from({ length: 40_000 }, (_, i) => `line ${i} of the file with some text`)
+    const content = Array.from(
+      { length: 40_000 },
+      (_, i) => `line ${i} of the file with some text`
+    )
     const started = Date.now()
-    const found = findBlock(content, ['line 39990 of the file with some text', 'line 39991 of the file with some text'])
+    const found = findBlock(content, [
+      'line 39990 of the file with some text',
+      'line 39991 of the file with some text'
+    ])
     expect(found).toMatchObject({ ok: true, match: { start: 39_990, end: 39_992 } })
     expect(Date.now() - started).toBeLessThan(1_000)
   })

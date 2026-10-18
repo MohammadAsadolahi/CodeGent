@@ -73,13 +73,19 @@ export const planChanges = async (
     if (await view.isIgnored?.(path)) {
       return {
         ok: false as const,
-        reason: 'it is ignored by git (.gitignore), so ChatGPT cannot see it and it would never be committed'
+        reason:
+          'it is ignored by git (.gitignore), so ChatGPT cannot see it and it would never be committed'
       }
     }
     return { ok: true as const, path }
   }
 
-  const failure = (edit: FileEdit, path: string, errors: EditError[], notes: string[] = []): EditOutcome => ({
+  const failure = (
+    edit: FileEdit,
+    path: string,
+    errors: EditError[],
+    notes: string[] = []
+  ): EditOutcome => ({
     edit,
     path,
     status: 'failed',
@@ -87,7 +93,12 @@ export const planChanges = async (
     errors,
     notes
   })
-  const success = (edit: FileEdit, path: string, detail: string, notes: string[] = []): EditOutcome => ({
+  const success = (
+    edit: FileEdit,
+    path: string,
+    detail: string,
+    notes: string[] = []
+  ): EditOutcome => ({
     edit,
     path,
     status: 'applied',
@@ -105,12 +116,20 @@ export const planChanges = async (
   })
 
   /** Reads a file, turning "binary" into an ordinary edit error. */
-  const readText = async (path: string): Promise<{ ok: true; text: string | null } | { ok: false; error: EditError }> => {
+  const readText = async (
+    path: string
+  ): Promise<{ ok: true; text: string | null } | { ok: false; error: EditError }> => {
     try {
       return { ok: true, text: await current(path) }
     } catch (error) {
       if (error instanceof BinaryFileError) {
-        return { ok: false, error: { code: 'binary-file', message: `\`${path}\` is a binary file and cannot be edited as text.` } }
+        return {
+          ok: false,
+          error: {
+            code: 'binary-file',
+            message: `\`${path}\` is a binary file and cannot be edited as text.`
+          }
+        }
       }
       throw error
     }
@@ -138,8 +157,12 @@ export const planChanges = async (
     notes: string[]
   ): Promise<EditOutcome> => {
     const after = conformContent(content, before)
-    if (after === before) return skipped(edit, path, 'no change (the file already has this content)')
-    if (before.length >= SHRINK_GUARD_MIN_CHARS && after.length < before.length * SHRINK_GUARD_RATIO) {
+    if (after === before)
+      return skipped(edit, path, 'no change (the file already has this content)')
+    if (
+      before.length >= SHRINK_GUARD_MIN_CHARS &&
+      after.length < before.length * SHRINK_GUARD_RATIO
+    ) {
       return failure(edit, path, [
         {
           code: 'conflict',
@@ -158,7 +181,14 @@ export const planChanges = async (
       case 'update': {
         const resolved = await resolve(edit.path)
         if (!resolved.ok) {
-          outcomes.push(failure(edit, edit.path, [{ code: 'path', message: `Invalid path \`${edit.path}\`: ${resolved.reason}.` }]))
+          outcomes.push(
+            failure(edit, edit.path, [
+              {
+                code: 'path',
+                message: `Invalid path \`${edit.path}\`: ${resolved.reason}.`
+              }
+            ])
+          )
           break
         }
         const { path } = resolved
@@ -170,7 +200,10 @@ export const planChanges = async (
         if (read.text === null) {
           outcomes.push(
             failure(edit, path, [
-              { code: 'missing-file', message: `\`${path}\` does not exist. To add a new file use “Created file” with its full content.` }
+              {
+                code: 'missing-file',
+                message: `\`${path}\` does not exist. To add a new file use “Created file” with its full content.`
+              }
             ])
           )
           break
@@ -187,12 +220,23 @@ export const planChanges = async (
           break
         }
         if (result.content === read.text) {
-          outcomes.push(skipped(edit, path, 'no change (the replacement equals the original text)'))
+          outcomes.push(
+            skipped(edit, path, 'no change (the replacement equals the original text)')
+          )
           break
         }
         await write(path, result.content)
-        const notes = result.hunks.flatMap((hunk) => (hunk.note ? [`hunk ${hunk.index}: ${hunk.note}`] : []))
-        outcomes.push(success(edit, path, `${edit.hunks.length} ${edit.hunks.length === 1 ? 'hunk' : 'hunks'}`, notes))
+        const notes = result.hunks.flatMap((hunk) =>
+          hunk.note ? [`hunk ${hunk.index}: ${hunk.note}`] : []
+        )
+        outcomes.push(
+          success(
+            edit,
+            path,
+            `${edit.hunks.length} ${edit.hunks.length === 1 ? 'hunk' : 'hunks'}`,
+            notes
+          )
+        )
         break
       }
 
@@ -200,7 +244,14 @@ export const planChanges = async (
       case 'create': {
         const resolved = await resolve(edit.path)
         if (!resolved.ok) {
-          outcomes.push(failure(edit, edit.path, [{ code: 'path', message: `Invalid path \`${edit.path}\`: ${resolved.reason}.` }]))
+          outcomes.push(
+            failure(edit, edit.path, [
+              {
+                code: 'path',
+                message: `Invalid path \`${edit.path}\`: ${resolved.reason}.`
+              }
+            ])
+          )
           break
         }
         const { path } = resolved
@@ -213,7 +264,12 @@ export const planChanges = async (
           const content = conformContent(edit.content, null)
           await write(path, content)
           outcomes.push(
-            success(edit, path, 'created', edit.kind === 'replace' ? ['the file did not exist, so it was created'] : [])
+            success(
+              edit,
+              path,
+              'created',
+              edit.kind === 'replace' ? ['the file did not exist, so it was created'] : []
+            )
           )
           break
         }
@@ -228,7 +284,9 @@ export const planChanges = async (
             path,
             read.text,
             edit.content,
-            edit.kind === 'create' ? ['the file already existed; its content was replaced'] : []
+            edit.kind === 'create'
+              ? ['the file already existed; its content was replaced']
+              : []
           )
         )
         break
@@ -237,7 +295,14 @@ export const planChanges = async (
       case 'delete': {
         const resolved = await resolve(edit.path)
         if (!resolved.ok) {
-          outcomes.push(failure(edit, edit.path, [{ code: 'path', message: `Invalid path \`${edit.path}\`: ${resolved.reason}.` }]))
+          outcomes.push(
+            failure(edit, edit.path, [
+              {
+                code: 'path',
+                message: `Invalid path \`${edit.path}\`: ${resolved.reason}.`
+              }
+            ])
+          )
           break
         }
         const { path } = resolved
@@ -264,7 +329,11 @@ export const planChanges = async (
         const [from, to] = await Promise.all([resolve(edit.from), resolve(edit.to)])
         if (!from.ok || !to.ok) {
           const reason = !from.ok ? from.reason : !to.ok ? to.reason : ''
-          outcomes.push(failure(edit, edit.to, [{ code: 'path', message: `Invalid rename path: ${reason}.` }]))
+          outcomes.push(
+            failure(edit, edit.to, [
+              { code: 'path', message: `Invalid rename path: ${reason}.` }
+            ])
+          )
           break
         }
         const source = await readText(from.path)
@@ -273,7 +342,14 @@ export const planChanges = async (
           break
         }
         if (source.text === null) {
-          outcomes.push(failure(edit, to.path, [{ code: 'missing-file', message: `Cannot rename \`${from.path}\`: it does not exist.` }]))
+          outcomes.push(
+            failure(edit, to.path, [
+              {
+                code: 'missing-file',
+                message: `Cannot rename \`${from.path}\`: it does not exist.`
+              }
+            ])
+          )
           break
         }
         if (from.path === to.path) {
@@ -282,7 +358,14 @@ export const planChanges = async (
         }
         const destination = await current(to.path)
         if (destination !== null) {
-          outcomes.push(failure(edit, to.path, [{ code: 'exists', message: `Cannot rename to \`${to.path}\`: a file with that name already exists.` }]))
+          outcomes.push(
+            failure(edit, to.path, [
+              {
+                code: 'exists',
+                message: `Cannot rename to \`${to.path}\`: a file with that name already exists.`
+              }
+            ])
+          )
           break
         }
         const blocked = await dirtyError(from.path)
@@ -295,11 +378,21 @@ export const planChanges = async (
         if (edit.hunks.length > 0) {
           const result = applyHunks(content, edit.hunks)
           if (!result.ok) {
-            outcomes.push(failure(edit, to.path, result.hunks.flatMap((hunk) => (hunk.error ? [hunk.error] : []))))
+            outcomes.push(
+              failure(
+                edit,
+                to.path,
+                result.hunks.flatMap((hunk) => (hunk.error ? [hunk.error] : []))
+              )
+            )
             break
           }
           content = result.content
-          notes.push(...result.hunks.flatMap((hunk) => (hunk.note ? [`hunk ${hunk.index}: ${hunk.note}`] : [])))
+          notes.push(
+            ...result.hunks.flatMap((hunk) =>
+              hunk.note ? [`hunk ${hunk.index}: ${hunk.note}`] : []
+            )
+          )
         }
         await write(to.path, content)
         await write(from.path, null)
@@ -317,7 +410,11 @@ export const planChanges = async (
   for (const [to, from] of renamedFrom) {
     const before = originals.get(from)
     const after = overlay.get(to)
-    if (typeof before === 'string' && typeof after === 'string' && overlay.get(from) === null) {
+    if (
+      typeof before === 'string' &&
+      typeof after === 'string' &&
+      overlay.get(from) === null
+    ) {
       changes.push({ kind: 'rename', from, to, before, after })
       covered.add(from)
       covered.add(to)
@@ -328,8 +425,10 @@ export const planChanges = async (
     const before = originals.get(path) ?? null
     const after = overlay.get(path) ?? null
     if (before === null && after !== null) changes.push({ kind: 'create', path, after })
-    else if (before !== null && after === null) changes.push({ kind: 'delete', path, before })
-    else if (before !== null && after !== null && before !== after) changes.push({ kind: 'modify', path, before, after })
+    else if (before !== null && after === null)
+      changes.push({ kind: 'delete', path, before })
+    else if (before !== null && after !== null && before !== after)
+      changes.push({ kind: 'modify', path, before, after })
   }
 
   return { outcomes, changes }

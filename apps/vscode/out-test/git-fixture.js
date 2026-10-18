@@ -39,7 +39,11 @@ module.exports = __toCommonJS(git_fixture_exports);
 var import_node_child_process = require("node:child_process");
 var import_node_fs = __toESM(require("node:fs"));
 var import_node_path = __toESM(require("node:path"));
-var git = (cwd, ...args) => (0, import_node_child_process.execFileSync)("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trimEnd();
+var git = (cwd, ...args) => (0, import_node_child_process.execFileSync)("git", args, {
+  cwd,
+  encoding: "utf8",
+  stdio: ["ignore", "pipe", "pipe"]
+}).trimEnd();
 var write = (cwd, file, content) => {
   import_node_fs.default.mkdirSync(import_node_path.default.dirname(import_node_path.default.join(cwd, file)), { recursive: true });
   import_node_fs.default.writeFileSync(import_node_path.default.join(cwd, file), content);

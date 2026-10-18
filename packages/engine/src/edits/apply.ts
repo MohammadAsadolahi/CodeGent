@@ -115,12 +115,19 @@ export const applyHunks = (content: string, hunks: readonly Hunk[]): ApplyResult
     }
 
     const { match } = found
-    const replacement = adjustReplacement(hunk.replace, match).map((text) => ({ text, eol }))
+    const replacement = adjustReplacement(hunk.replace, match).map((text) => ({
+      text,
+      eol
+    }))
     lines.splice(match.start, match.end - match.start, ...replacement)
     const notes: string[] = []
     if (match.tier !== 'exact') notes.push(`matched ignoring ${describeTier(match.tier)}`)
-    if (match.indent) notes.push('indentation of the replacement was adjusted to the file')
-    if (match.indentUnresolved) notes.push('indentation differed inconsistently; the replacement was inserted as written')
+    if (match.indent)
+      notes.push('indentation of the replacement was adjusted to the file')
+    if (match.indentUnresolved)
+      notes.push(
+        'indentation differed inconsistently; the replacement was inserted as written'
+      )
     outcomes.push({
       index,
       ok: true,
@@ -134,7 +141,11 @@ export const applyHunks = (content: string, hunks: readonly Hunk[]): ApplyResult
   const ok = outcomes.every((outcome) => outcome.ok)
   if (!ok) return { ok: false, content, hunks: outcomes }
 
-  return { ok: true, content: join(lines, hadFinalNewline, eol, content === ''), hunks: outcomes }
+  return {
+    ok: true,
+    content: join(lines, hadFinalNewline, eol, content === ''),
+    hunks: outcomes
+  }
 }
 
 const describeTier = (tier: MatchTier): string => {
@@ -152,7 +163,12 @@ const describeTier = (tier: MatchTier): string => {
   }
 }
 
-const join = (lines: readonly Line[], hadFinalNewline: boolean, eol: string, wasEmpty: boolean): string => {
+const join = (
+  lines: readonly Line[],
+  hadFinalNewline: boolean,
+  eol: string,
+  wasEmpty: boolean
+): string => {
   if (lines.length === 0) return ''
   const finalNewline = wasEmpty ? true : hadFinalNewline
   let out = ''
@@ -171,7 +187,8 @@ export const conformContent = (content: string, original: string | null): string
   const eol = original === null ? '\n' : dominantEol(original)
   let result = eol === '\n' ? normalized : normalized.replace(/\n/g, eol)
   if (result === '') return result
-  const originalEndsWithNewline = original === null || original === '' || /\n$/.test(original)
+  const originalEndsWithNewline =
+    original === null || original === '' || /\n$/.test(original)
   if (originalEndsWithNewline && !result.endsWith('\n')) result += eol
   return result
 }

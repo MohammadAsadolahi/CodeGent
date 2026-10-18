@@ -17,14 +17,29 @@ const make = (files: Record<string, string>) => {
   fs.mkdirSync(dir, { recursive: true })
   return dir
 }
-const listing = (dir: string) => (fs.readdirSync(dir, { recursive: true }) as string[]).map((p) => p.replace(/\\/g, '/')).sort()
+const listing = (dir: string) =>
+  (fs.readdirSync(dir, { recursive: true }) as string[])
+    .map((p) => p.replace(/\\/g, '/'))
+    .sort()
 
 describe('installBrowserExtension', () => {
   it('copies the bundle and stamps the version', async () => {
-    const source = make({ 'manifest.json': '{}', 'background.js': 'bg', 'icons/a.png': 'png' })
+    const source = make({
+      'manifest.json': '{}',
+      'background.js': 'bg',
+      'icons/a.png': 'png'
+    })
     const target = path.join(sandbox, 'stable1')
-    expect(await installBrowserExtension({ source, target, version: '1.0.0' })).toBe(target)
-    expect(listing(target)).toEqual(['.codegent-version', 'background.js', 'icons', 'icons/a.png', 'manifest.json'])
+    expect(await installBrowserExtension({ source, target, version: '1.0.0' })).toBe(
+      target
+    )
+    expect(listing(target)).toEqual([
+      '.codegent-version',
+      'background.js',
+      'icons',
+      'icons/a.png',
+      'manifest.json'
+    ])
     expect(fs.readFileSync(path.join(target, '.codegent-version'), 'utf8')).toBe('1.0.0')
   })
 
@@ -62,6 +77,12 @@ describe('installBrowserExtension', () => {
   })
 
   it('returns null when the extension does not ship a bundle', async () => {
-    expect(await installBrowserExtension({ source: path.join(sandbox, 'missing'), target: path.join(sandbox, 'x'), version: '1' })).toBeNull()
+    expect(
+      await installBrowserExtension({
+        source: path.join(sandbox, 'missing'),
+        target: path.join(sandbox, 'x'),
+        version: '1'
+      })
+    ).toBeNull()
   })
 })

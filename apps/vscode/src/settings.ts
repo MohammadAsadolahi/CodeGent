@@ -3,7 +3,10 @@ import { buildSettings, type Settings } from './settings-model'
 
 export const readSettings = (workspaceRoot?: string): Settings => {
   const config = vscode.workspace.getConfiguration('codegent')
-  return buildSettings(<T>(key: string, fallback: T) => config.get<T>(key, fallback), workspaceRoot)
+  return buildSettings(
+    <T>(key: string, fallback: T) => config.get<T>(key, fallback),
+    workspaceRoot
+  )
 }
 
 /** Writes a setting where the user already has it set, so the change is actually effective. */

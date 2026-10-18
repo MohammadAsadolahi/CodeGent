@@ -2,7 +2,11 @@ import type { JSX } from 'preact'
 
 type IconProps = { size?: number; class?: string }
 
-const Svg = ({ size = 14, class: className, children }: IconProps & { children: JSX.Element | JSX.Element[] }) => (
+const Svg = ({
+  size = 14,
+  class: className,
+  children
+}: IconProps & { children: JSX.Element | JSX.Element[] }) => (
   <svg
     class={`icon ${className ?? ''}`}
     width={size}
@@ -93,7 +97,13 @@ export const Spinner = (p: IconProps) => (
   </Svg>
 )
 export const Dot = ({ size = 8, class: className }: IconProps) => (
-  <svg class={`dot ${className ?? ''}`} width={size} height={size} viewBox="0 0 8 8" aria-hidden="true">
+  <svg
+    class={`dot ${className ?? ''}`}
+    width={size}
+    height={size}
+    viewBox="0 0 8 8"
+    aria-hidden="true"
+  >
     <circle cx="4" cy="4" r="4" fill="currentColor" />
   </svg>
 )

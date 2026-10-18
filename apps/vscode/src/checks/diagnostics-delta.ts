@@ -1,14 +1,19 @@
 import type { DiagnosticItem, DiagnosticsSummary } from '@codegent/engine'
 
 const keyOf = (item: DiagnosticItem): string =>
-  [item.path, item.severity, item.source ?? '', item.code ?? '', item.message].join('\u0000')
+  [item.path, item.severity, item.source ?? '', item.code ?? '', item.message].join(
+    '\u0000'
+  )
 
 /**
  * The problems in `current` that were not already in `baseline`. Line numbers are ignored when
  * comparing (an edit shifts them), and duplicates are counted, so two identical new errors are
  * both reported even if one identical error was there before.
  */
-export const newProblems = (baseline: readonly DiagnosticItem[], current: readonly DiagnosticItem[]): DiagnosticItem[] => {
+export const newProblems = (
+  baseline: readonly DiagnosticItem[],
+  current: readonly DiagnosticItem[]
+): DiagnosticItem[] => {
   const known = new Map<string, number>()
   for (const item of baseline) known.set(keyOf(item), (known.get(keyOf(item)) ?? 0) + 1)
   const fresh: DiagnosticItem[] = []

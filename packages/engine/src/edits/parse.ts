@@ -73,10 +73,16 @@ const extractPaths = (rest: string, operation: Operation): string[] => {
     return spans.map((span) => span.text).filter(looksLikePath)
   }
   // Unquoted: accept only something that is clearly a path (has a slash or an extension).
-  const cleaned = stripEmphasis(rest).replace(/^\s*[:\-–—]\s*/, '').trim()
+  const cleaned = stripEmphasis(rest)
+    .replace(/^\s*[:\-–—]\s*/, '')
+    .trim()
   if (operation === 'rename') {
     const parts = cleaned.split(/\s*(?:->|→|=>|\bto\b)\s*/i).map((part) => part.trim())
-    if (parts.length === 2 && parts.every((part) => /[/.]/.test(part) && !/\s/.test(part))) return parts
+    if (
+      parts.length === 2 &&
+      parts.every((part) => /[/.]/.test(part) && !/\s/.test(part))
+    )
+      return parts
     return []
   }
   const token = cleaned.split(/\s+/)[0]?.replace(/[:,;.)]+$/, '') ?? ''
@@ -141,13 +147,24 @@ const parseHunks = (body: readonly string[]): HunkParse => {
 }
 
 /** Records why a block of hunks cannot be trusted; returns whether it can be used. */
-const acceptHunks = (parsed: HunkParse, path: string, problems: ParseProblem[]): boolean => {
+const acceptHunks = (
+  parsed: HunkParse,
+  path: string,
+  problems: ParseProblem[]
+): boolean => {
   if (parsed.unterminated) {
-    problems.push({ path, message: 'a SEARCH/REPLACE section was never closed; nothing from this block was used' })
+    problems.push({
+      path,
+      message:
+        'a SEARCH/REPLACE section was never closed; nothing from this block was used'
+    })
     return false
   }
   if (parsed.malformed) {
-    problems.push({ path, message: `malformed SEARCH/REPLACE block: ${parsed.malformed}` })
+    problems.push({
+      path,
+      message: `malformed SEARCH/REPLACE block: ${parsed.malformed}`
+    })
     return false
   }
   if (parsed.stray.length > 0) {
@@ -166,7 +183,12 @@ const acceptHunks = (parsed: HunkParse, path: string, problems: ParseProblem[]):
 
 const stripIndent = (line: string, width: number): string => {
   let removed = 0
-  while (removed < width && removed < line.length && (line[removed] === ' ' || line[removed] === '\t')) removed++
+  while (
+    removed < width &&
+    removed < line.length &&
+    (line[removed] === ' ' || line[removed] === '\t')
+  )
+    removed++
   return line.slice(removed)
 }
 
@@ -192,7 +214,12 @@ export const parseReply = (markdown: string): ParsedReply => {
 
   const closePending = () => {
     const open = pending as Pending | null
-    if (open && !open.consumed && open.header.operation !== 'delete' && open.header.operation !== 'rename') {
+    if (
+      open &&
+      !open.consumed &&
+      open.header.operation !== 'delete' &&
+      open.header.operation !== 'rename'
+    ) {
       problems.push({
         path: open.header.paths[0],
         message: `“${open.header.operation} file” heading without a code block holding the content`
@@ -211,7 +238,9 @@ export const parseReply = (markdown: string): ParsedReply => {
     const current = pending as Pending | null
     if (!current) {
       if (body.some((line) => CONFLICT_START.test(line))) {
-        problems.push({ message: 'a SEARCH/REPLACE block was not preceded by a file heading' })
+        problems.push({
+          message: 'a SEARCH/REPLACE block was not preceded by a file heading'
+        })
       }
       return // an ordinary code sample
     }
@@ -219,7 +248,10 @@ export const parseReply = (markdown: string): ParsedReply => {
     const path = operation === 'rename' ? paths[1]! : paths[0]!
 
     if (cutOff) {
-      problems.push({ path, message: 'the reply was cut off inside this code block; nothing from it was used' })
+      problems.push({
+        path,
+        message: 'the reply was cut off inside this code block; nothing from it was used'
+      })
       current.consumed = true
       return
     }
@@ -238,7 +270,9 @@ export const parseReply = (markdown: string): ParsedReply => {
     switch (operation) {
       case 'update': {
         if (!parsed.hasMarkers) {
-          warnings.push(`“${path}”: no SEARCH/REPLACE markers, so the block was treated as the complete new file`)
+          warnings.push(
+            `“${path}”: no SEARCH/REPLACE markers, so the block was treated as the complete new file`
+          )
           const edit: FileEdit = { kind: 'replace', path, content: body.join('\n') }
           edits.push(edit)
           current.edit = edit
@@ -253,7 +287,10 @@ export const parseReply = (markdown: string): ParsedReply => {
       case 'create':
       case 'replace': {
         if (parsed.hasMarkers) {
-          problems.push({ path, message: 'SEARCH/REPLACE markers are not valid in a complete-file block' })
+          problems.push({
+            path,
+            message: 'SEARCH/REPLACE markers are not valid in a complete-file block'
+          })
           return
         }
         const edit: FileEdit = { kind: operation, path, content: body.join('\n') }
@@ -264,7 +301,8 @@ export const parseReply = (markdown: string): ParsedReply => {
       case 'rename': {
         const rename = current.edit as Extendable | undefined
         if (parsed.hasMarkers) {
-          if (acceptHunks(parsed, path, problems) && rename?.kind === 'rename') rename.hunks.push(...parsed.hunks)
+          if (acceptHunks(parsed, path, problems) && rename?.kind === 'rename')
+            rename.hunks.push(...parsed.hunks)
         } else if (meaningful.length > 0) {
           edits.push({ kind: 'replace', path, content: body.join('\n') })
         }
@@ -281,7 +319,9 @@ export const parseReply = (markdown: string): ParsedReply => {
     const fence = FENCE_RE.exec(line)
     if (fence?.groups) {
       const { indent, marker } = fence.groups
-      const closing = new RegExp(`^\\s*${marker![0] === '`' ? '`' : '~'}{${marker!.length},}\\s*$`)
+      const closing = new RegExp(
+        `^\\s*${marker![0] === '`' ? '`' : '~'}{${marker!.length},}\\s*$`
+      )
       const body: string[] = []
       let closed = false
       let j = i + 1
@@ -311,7 +351,12 @@ export const parseReply = (markdown: string): ParsedReply => {
         edits.push({ kind: 'delete', path: header.paths[0]! })
         pending = { header, consumed: true }
       } else if (header.operation === 'rename') {
-        const edit: FileEdit = { kind: 'rename', from: header.paths[0]!, to: header.paths[1]!, hunks: [] }
+        const edit: FileEdit = {
+          kind: 'rename',
+          from: header.paths[0]!,
+          to: header.paths[1]!,
+          hunks: []
+        }
         edits.push(edit)
         pending = { header, consumed: false, edit }
       } else {
@@ -327,7 +372,10 @@ export const parseReply = (markdown: string): ParsedReply => {
   return {
     edits,
     status,
-    summary: prose.join('\n').replace(/\n{3,}/g, '\n\n').trim(),
+    summary: prose
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim(),
     warnings,
     problems,
     truncated

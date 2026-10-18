@@ -27,7 +27,8 @@ const BOM = Buffer.from([0xef, 0xbb, 0xbf])
 const MAX_TEXT_BYTES = 5 * 1024 * 1024
 const CASE_INSENSITIVE = process.platform === 'win32' || process.platform === 'darwin'
 
-const hasBom = (bytes: Uint8Array): boolean => bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf
+const hasBom = (bytes: Uint8Array): boolean =>
+  bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf
 
 const isInside = (root: string, candidate: string): boolean => {
   const a = CASE_INSENSITIVE ? root.toLowerCase() : root
@@ -128,7 +129,8 @@ export class FsWorkspace implements WorkspacePort {
     for (;;) {
       try {
         const real = await fs.realpath(probe)
-        if (!isInside(rootReal, real)) throw new Error(`\`${relative}\` resolves outside the repository`)
+        if (!isInside(rootReal, real))
+          throw new Error(`\`${relative}\` resolves outside the repository`)
         return
       } catch (error) {
         const code = (error as NodeJS.ErrnoException).code
@@ -140,7 +142,11 @@ export class FsWorkspace implements WorkspacePort {
     }
   }
 
-  private async writeAtomic(absolute: string, bytes: Uint8Array, mode?: number): Promise<void> {
+  private async writeAtomic(
+    absolute: string,
+    bytes: Uint8Array,
+    mode?: number
+  ): Promise<void> {
     await fs.mkdir(path.dirname(absolute), { recursive: true })
     const temp = `${absolute}.codegent-${process.pid}-${Date.now()}.tmp`
     try {
@@ -183,9 +189,12 @@ export class FsWorkspace implements WorkspacePort {
   /** Reads the current bytes and insists they still equal what the plan was based on. */
   private async currentMatching(relative: string, expected: string): Promise<Uint8Array> {
     const bytes = await this.readBytes(relative)
-    if (bytes === null) throw new Error(`\`${relative}\` disappeared while the change was being prepared`)
+    if (bytes === null)
+      throw new Error(`\`${relative}\` disappeared while the change was being prepared`)
     if (this.decode(bytes) !== expected) {
-      throw new Error(`\`${relative}\` was modified on disk while the change was being prepared; nothing was written`)
+      throw new Error(
+        `\`${relative}\` was modified on disk while the change was being prepared; nothing was written`
+      )
     }
     return bytes
   }
@@ -195,7 +204,10 @@ export class FsWorkspace implements WorkspacePort {
     return bom ? Buffer.concat([BOM, body]) : body
   }
 
-  async apply(changes: readonly FileChange[], meta: { runId: string; step: number }): Promise<ApplyReceipt> {
+  async apply(
+    changes: readonly FileChange[],
+    meta: { runId: string; step: number }
+  ): Promise<ApplyReceipt> {
     const rollback: Array<() => Promise<void>> = []
     try {
       for (const change of changes) await this.applyOne(change, rollback)
@@ -214,7 +226,10 @@ export class FsWorkspace implements WorkspacePort {
     return { id, paths: pathsOf(changes) }
   }
 
-  private async applyOne(change: FileChange, rollback: Array<() => Promise<void>>): Promise<void> {
+  private async applyOne(
+    change: FileChange,
+    rollback: Array<() => Promise<void>>
+  ): Promise<void> {
     switch (change.kind) {
       case 'create': {
         const target = this.abs(change.path)
@@ -279,10 +294,27 @@ export class FsWorkspace implements WorkspacePort {
   async undo(id: string): Promise<UndoResult> {
     const receipt = this.receipts.get(id)
     const result: UndoResult = { undone: [], skipped: [] }
-    if (!receipt) return { undone: [], skipped: [{ path: '', reason: 'this step can no longer be undone (it was made before the window was reloaded)' }] }
-    if (receipt.undone) return { undone: [], skipped: [{ path: '', reason: 'this step was already undone' }] }
+    if (!receipt)
+      return {
+        undone: [],
+        skipped: [
+          {
+            path: '',
+            reason:
+              'this step can no longer be undone (it was made before the window was reloaded)'
+          }
+        ]
+      }
+    if (receipt.undone)
+      return {
+        undone: [],
+        skipped: [{ path: '', reason: 'this step was already undone' }]
+      }
 
-    const matches = async (relative: string, expected: string): Promise<{ bytes: Uint8Array } | 'absent' | 'different'> => {
+    const matches = async (
+      relative: string,
+      expected: string
+    ): Promise<{ bytes: Uint8Array } | 'absent' | 'different'> => {
       const bytes = await this.readBytes(relative).catch(() => null)
       if (bytes === null) return 'absent'
       try {
@@ -297,39 +329,68 @@ export class FsWorkspace implements WorkspacePort {
         if (change.kind === 'create') {
           const state = await matches(change.path, change.after)
           if (state === 'absent') result.undone.push(change.path)
-          else if (state === 'different') result.skipped.push({ path: change.path, reason: 'it was changed after this step' })
+          else if (state === 'different')
+            result.skipped.push({
+              path: change.path,
+              reason: 'it was changed after this step'
+            })
           else {
             await fs.rm(this.abs(change.path), { force: true })
             result.undone.push(change.path)
           }
         } else if (change.kind === 'modify') {
           const state = await matches(change.path, change.after)
-          if (state === 'absent') result.skipped.push({ path: change.path, reason: 'it no longer exists' })
-          else if (state === 'different') result.skipped.push({ path: change.path, reason: 'it was changed after this step' })
+          if (state === 'absent')
+            result.skipped.push({ path: change.path, reason: 'it no longer exists' })
+          else if (state === 'different')
+            result.skipped.push({
+              path: change.path,
+              reason: 'it was changed after this step'
+            })
           else {
-            await this.writeAtomic(this.abs(change.path), this.encode(change.before, hasBom(state.bytes)), await this.modeOf(this.abs(change.path)))
+            await this.writeAtomic(
+              this.abs(change.path),
+              this.encode(change.before, hasBom(state.bytes)),
+              await this.modeOf(this.abs(change.path))
+            )
             result.undone.push(change.path)
           }
         } else if (change.kind === 'delete') {
           if ((await this.readBytes(change.path).catch(() => null)) !== null) {
-            result.skipped.push({ path: change.path, reason: 'a file with that name exists again' })
+            result.skipped.push({
+              path: change.path,
+              reason: 'a file with that name exists again'
+            })
           } else {
-            await this.writeAtomic(this.abs(change.path), this.encode(change.before, false))
+            await this.writeAtomic(
+              this.abs(change.path),
+              this.encode(change.before, false)
+            )
             result.undone.push(change.path)
           }
         } else {
           const state = await matches(change.to, change.after)
-          const sourceBack = (await this.readBytes(change.from).catch(() => null)) !== null
+          const sourceBack =
+            (await this.readBytes(change.from).catch(() => null)) !== null
           if (state === 'different' || state === 'absent' || sourceBack) {
-            result.skipped.push({ path: change.to, reason: 'it was changed or moved after this step' })
+            result.skipped.push({
+              path: change.to,
+              reason: 'it was changed or moved after this step'
+            })
           } else {
-            await this.writeAtomic(this.abs(change.from), this.encode(change.before, hasBom(state.bytes)))
+            await this.writeAtomic(
+              this.abs(change.from),
+              this.encode(change.before, hasBom(state.bytes))
+            )
             await fs.rm(this.abs(change.to), { force: true })
             result.undone.push(change.from)
           }
         }
       } catch (error) {
-        result.skipped.push({ path: pathsOf([change])[0]!, reason: (error as Error).message })
+        result.skipped.push({
+          path: pathsOf([change])[0]!,
+          reason: (error as Error).message
+        })
       }
     }
     if (result.skipped.length === 0) receipt.undone = true

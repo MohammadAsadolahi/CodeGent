@@ -13,7 +13,10 @@ describe('what the user can do', () => {
   const repo = workRepo()
   const run = () => ctx.api.state().run!
   const start = (task: string) => ctx.api.send({ type: 'start', task })
-  const greeting = () => ctx.browser.answerWith(() => chatReply('Added the greeting.', [createdFile('hello.txt', 'hi')], 'done'))
+  const greeting = () =>
+    ctx.browser.answerWith(() =>
+      chatReply('Added the greeting.', [createdFile('hello.txt', 'hi')], 'done')
+    )
   const openEditors = () => vscode.window.visibleTextEditors.length
 
   /** Starts over with the repository at its first commit (the answer to the consent question stays). */
@@ -26,12 +29,20 @@ describe('what the user can do', () => {
   describe('opening a file from the panel', () => {
     it('opens a file of the repository', async () => {
       await ctx.api.send({ type: 'openFile', path: 'src/greeting.txt' })
-      assert.match(vscode.window.activeTextEditor?.document.uri.fsPath ?? '', /src[\\/]greeting\.txt$/)
+      assert.match(
+        vscode.window.activeTextEditor?.document.uri.fsPath ?? '',
+        /src[\\/]greeting\.txt$/
+      )
     })
 
     it('refuses paths that lead out of the repository, even into a sibling folder that starts with its name', async () => {
       await vscode.commands.executeCommand('workbench.action.closeAllEditors')
-      for (const unsafe of ['../work.git/HEAD', '..\\work.git\\HEAD', '.git/config', 'C:/Windows/win.ini']) {
+      for (const unsafe of [
+        '../work.git/HEAD',
+        '..\\work.git\\HEAD',
+        '.git/config',
+        'C:/Windows/win.ini'
+      ]) {
         await ctx.api.send({ type: 'openFile', path: unsafe })
         assert.equal(openEditors(), 0, `${unsafe} must not be opened`)
       }
@@ -74,8 +85,18 @@ describe('what the user can do', () => {
     it('"Resume" continues a run that stopped for a problem', async () => {
       let attempts = 0
       ctx.browser.onJob = (_job, send) => {
-        if (attempts++ === 0) return send({ kind: 'failed', code: 'login-required', message: 'Sign in to ChatGPT first.' })
-        send({ kind: 'completed', markdown: chatReply('Added.', [createdFile('hello.txt', 'hi')], 'done'), conversationUrl: CONVERSATION, durationMs: 1 })
+        if (attempts++ === 0)
+          return send({
+            kind: 'failed',
+            code: 'login-required',
+            message: 'Sign in to ChatGPT first.'
+          })
+        send({
+          kind: 'completed',
+          markdown: chatReply('Added.', [createdFile('hello.txt', 'hi')], 'done'),
+          conversationUrl: CONVERSATION,
+          durationMs: 1
+        })
       }
       await start('Create hello.txt')
       assert.equal(run().state, 'paused')
@@ -103,11 +124,18 @@ describe('what the user can do', () => {
     /** Answers the modal question with `answer` (undefined = the dialog is closed) and records it. */
     const answerQuestion = (answer: string | undefined) => {
       const asked: Array<{ message: string; detail?: string; items: string[] }> = []
-      const restore = replaceWindowFunction('showInformationMessage', async (message: string, options?: { modal?: boolean; detail?: string }, ...items: string[]) => {
-        if (typeof options !== 'object' || !options?.modal) return undefined // ordinary toasts
-        asked.push({ message, detail: options.detail, items })
-        return answer
-      })
+      const restore = replaceWindowFunction(
+        'showInformationMessage',
+        async (
+          message: string,
+          options?: { modal?: boolean; detail?: string },
+          ...items: string[]
+        ) => {
+          if (typeof options !== 'object' || !options?.modal) return undefined // ordinary toasts
+          asked.push({ message, detail: options.detail, items })
+          return answer
+        }
+      )
       return { asked, restore }
     }
 
@@ -121,10 +149,17 @@ describe('what the user can do', () => {
       try {
         await start('Create hello.txt')
         assert.equal(asked.length, 1)
-        assert.ok(asked[0]!.message.includes(REPO) && asked[0]!.message.includes('main'), asked[0]!.message)
+        assert.ok(
+          asked[0]!.message.includes(REPO) && asked[0]!.message.includes('main'),
+          asked[0]!.message
+        )
         assert.deepEqual(asked[0]!.items, ['Commit and push', 'Commit only'])
         assert.equal(run().steps[0]!.publish?.state, 'committed')
-        assert.equal(git(repo.bare, 'rev-parse', 'main'), repo.base, 'nothing reached GitHub')
+        assert.equal(
+          git(repo.bare, 'rev-parse', 'main'),
+          repo.base,
+          'nothing reached GitHub'
+        )
 
         await startOver()
         await start('Create hello.txt again')
@@ -140,7 +175,10 @@ describe('what the user can do', () => {
       try {
         await start('Create hello.txt')
         assert.equal(run().steps[0]!.publish?.state, 'pushed')
-        assert.equal(git(repo.bare, 'rev-parse', 'main'), git(repo.dir, 'rev-parse', 'HEAD'))
+        assert.equal(
+          git(repo.bare, 'rev-parse', 'main'),
+          git(repo.dir, 'rev-parse', 'HEAD')
+        )
 
         await startOver()
         await start('Create hello.txt again')
@@ -182,12 +220,18 @@ describe('what the user can do', () => {
       const second = await new FakeBrowser(ctx.api.hub().port!).connect()
       try {
         await ctx.api.waitFor((state) => state.connection.browsers.length === 2)
-        for (const browser of [ctx.browser, second]) browser.answerWith(() => chatReply('Added the greeting.', [createdFile('hello.txt', 'hi')], 'done'))
+        for (const browser of [ctx.browser, second])
+          browser.answerWith(() =>
+            chatReply('Added the greeting.', [createdFile('hello.txt', 'hi')], 'done')
+          )
         const asked: Array<Array<{ label: string; description: string; id: string }>> = []
-        const restore = replaceWindowFunction('showQuickPick', async (items: Array<{ label: string; description: string; id: string }>) => {
-          asked.push(items)
-          return items.find((item) => item.id === second.id)
-        })
+        const restore = replaceWindowFunction(
+          'showQuickPick',
+          async (items: Array<{ label: string; description: string; id: string }>) => {
+            asked.push(items)
+            return items.find((item) => item.id === second.id)
+          }
+        )
         try {
           await start('Create hello.txt')
           assert.equal(asked.length, 1)
@@ -212,7 +256,11 @@ describe('what the user can do', () => {
       try {
         await ctx.api.waitFor((state) => state.connection.browsers.length === 2)
         assert.equal(ctx.api.state().connection.selectedBrowserId, undefined)
-        const restore = replaceWindowFunction('showQuickPick', async (items: Array<{ id: string }>) => items.find((item) => item.id === second.id))
+        const restore = replaceWindowFunction(
+          'showQuickPick',
+          async (items: Array<{ id: string }>) =>
+            items.find((item) => item.id === second.id)
+        )
         try {
           await ctx.api.send({ type: 'chooseBrowser' })
         } finally {

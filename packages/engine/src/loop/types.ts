@@ -1,5 +1,12 @@
 import type { JobFailureCode } from '@codegent/protocol'
-import type { ChangeSet, EditOutcome, FileChange, ParsedReply, ReplyStatus, WorkspaceView } from '../edits'
+import type {
+  ChangeSet,
+  EditOutcome,
+  FileChange,
+  ParsedReply,
+  ReplyStatus,
+  WorkspaceView
+} from '../edits'
 import type {
   DiagnosticsSummary,
   PublishResult,
@@ -9,7 +16,8 @@ import type {
 
 // ── ports: everything the loop needs from the outside world ────────────────────────────────────
 
-export type ChatStage = 'waiting-for-browser' | 'tab-ready' | 'filled' | 'submitted' | 'generating'
+export type ChatStage =
+  'waiting-for-browser' | 'tab-ready' | 'filled' | 'submitted' | 'generating'
 
 export interface ChatRequest {
   sessionId: string
@@ -50,13 +58,19 @@ export interface ApplyReceipt {
 export interface WorkspacePort {
   view: WorkspaceView
   /** Writes all changes (or none). */
-  apply(changes: readonly FileChange[], meta: { runId: string; step: number }): Promise<ApplyReceipt>
+  apply(
+    changes: readonly FileChange[],
+    meta: { runId: string; step: number }
+  ): Promise<ApplyReceipt>
 }
 
 export interface GitPort {
   /** Identity and head of the repository ChatGPT will read. Rejects if there is no GitHub remote. */
   context(): Promise<RepoContext>
-  commit(paths: readonly string[], message: string): Promise<{ committed: boolean; sha?: string; shortSha?: string }>
+  commit(
+    paths: readonly string[],
+    message: string
+  ): Promise<{ committed: boolean; sha?: string; shortSha?: string }>
   push(): Promise<{ branch: string; remote: string }>
 }
 
@@ -74,7 +88,11 @@ export interface ChecksPort {
 export type ApprovalDecision = 'apply' | 'skip' | 'stop'
 
 export interface ApprovalPort {
-  review(input: { step: number; changeSet: ChangeSet; summary: string }): Promise<ApprovalDecision>
+  review(input: {
+    step: number
+    changeSet: ChangeSet
+    summary: string
+  }): Promise<ApprovalDecision>
 }
 
 export interface AgentDeps {
@@ -160,13 +178,7 @@ export interface StepRecord {
 }
 
 export type FinishKind =
-  | 'done'
-  | 'blocked'
-  | 'stopped'
-  | 'step-limit'
-  | 'stuck'
-  | 'no-changes'
-  | 'error'
+  'done' | 'blocked' | 'stopped' | 'step-limit' | 'stuck' | 'no-changes' | 'error'
 
 export type PauseKind = 'needs-attention' | 'awaiting-continue'
 

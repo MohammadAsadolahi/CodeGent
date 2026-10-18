@@ -84,14 +84,23 @@ export interface UiStep {
   problems: string[]
   warnings: string[]
   diagnostics?: { errors: number; warnings: number; items: UiDiagnostic[] }
-  verify?: { command: string; outcome: 'passed' | 'failed' | 'timed-out' | 'could-not-run'; exitCode: number | null }
-  publish?: { state: 'pushed' | 'committed' | 'skipped'; label: string; shortSha?: string }
+  verify?: {
+    command: string
+    outcome: 'passed' | 'failed' | 'timed-out' | 'could-not-run'
+    exitCode: number | null
+  }
+  publish?: {
+    state: 'pushed' | 'committed' | 'skipped'
+    label: string
+    shortSha?: string
+  }
   decision?: 'apply' | 'skip' | 'stop'
   canUndo: boolean
   undone: boolean
 }
 
-export type UiFinishKind = 'done' | 'blocked' | 'stopped' | 'step-limit' | 'stuck' | 'no-changes' | 'error'
+export type UiFinishKind =
+  'done' | 'blocked' | 'stopped' | 'step-limit' | 'stuck' | 'no-changes' | 'error'
 
 export interface UiRun {
   id: string

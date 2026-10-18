@@ -65,7 +65,8 @@ export interface EditError {
   closest?: ClosestMatch
 }
 
-export type MatchTier = 'exact' | 'trailing-space' | 'trim' | 'collapse-space' | 'ignore-blank-lines'
+export type MatchTier =
+  'exact' | 'trailing-space' | 'trim' | 'collapse-space' | 'ignore-blank-lines'
 
 export type FileChange =
   | { kind: 'create'; path: string; after: string }

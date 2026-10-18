@@ -1,33 +1,47 @@
-// Runs the integration tests inside a real VS Code: builds the extension, bundles the tests,
-// prepares a throw-away git repository and an isolated VS Code profile, launches the installed VS
-// Code with the extension loaded, and always shuts the test hub down afterwards.
+// Runs the integration tests inside a real VS Code. Two suites, each in its own VS Code launch with
+// its own throw-away profile and git repository:
+//   protocol  the extension against a scripted browser that speaks the real protocol
+//   chain     the extension against the REAL browser extension in a real Chromium, talking to a
+//             pretend chatgpt.com (the whole product, minus the actual ChatGPT)
+// Usage: node scripts/integration.mjs [title filter] [--suite=protocol|chain]
 //   CODEGENT_VSCODE=<path to Code.exe / code>   use a specific VS Code (default: the installed one,
 //                                                else the latest stable build is downloaded)
+//   CODEGENT_IT_NO_BROWSER=1                    skip the chain suite
 import { build } from 'esbuild'
 import { downloadAndUnzipVSCode, runTests } from '@vscode/test-electron'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import WebSocket from 'ws'
 import { buildAll } from './build.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const TEST_PORTS = [47680, 47681]
 
+const args = process.argv.slice(2)
+const wantedSuite = args
+  .find((arg) => arg.startsWith('--suite='))
+  ?.slice('--suite='.length)
+const grep = args.find((arg) => !arg.startsWith('--')) ?? ''
+
 const installedVsCode = () =>
   [
     process.env.CODEGENT_VSCODE,
-    process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Programs', 'Microsoft VS Code', 'Code.exe'),
-    process.env.ProgramFiles && path.join(process.env.ProgramFiles, 'Microsoft VS Code', 'Code.exe'),
+    process.env.LOCALAPPDATA &&
+      path.join(process.env.LOCALAPPDATA, 'Programs', 'Microsoft VS Code', 'Code.exe'),
+    process.env.ProgramFiles &&
+      path.join(process.env.ProgramFiles, 'Microsoft VS Code', 'Code.exe'),
     '/Applications/Visual Studio Code.app/Contents/MacOS/Electron',
     '/usr/share/code/code'
   ].find((candidate) => candidate && fs.existsSync(candidate))
 
 const isUp = async (port) => {
   try {
-    return (await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(500) })).ok
+    return (
+      await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(500) })
+    ).ok
   } catch {
     return false
   }
@@ -37,119 +51,171 @@ const isUp = async (port) => {
 const stopHub = async (port) => {
   if (!(await isUp(port))) return
   await new Promise((resolve) => {
-    const socket = new WebSocket(`ws://127.0.0.1:${port}/ws?role=editor&id=${crypto.randomUUID()}&protocol=1`)
+    const socket = new WebSocket(
+      `ws://127.0.0.1:${port}/ws?role=editor&id=${crypto.randomUUID()}&protocol=1`
+    )
     socket.once('open', () => {
       socket.send(JSON.stringify({ type: 'shutdown' }))
       setTimeout(resolve, 200)
     })
     socket.once('error', resolve)
   })
-  for (let i = 0; i < 50 && (await isUp(port)); i++) await new Promise((resolve) => setTimeout(resolve, 100))
-  if (await isUp(port)) throw new Error(`a hub keeps running on port ${port}; stop it and try again`)
+  for (let i = 0; i < 50 && (await isUp(port)); i++) {
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  if (await isUp(port))
+    throw new Error(`a hub keeps running on port ${port}; stop it and try again`)
 }
 const stopTestHubs = async () => {
   for (const port of TEST_PORTS) await stopHub(port)
 }
 
-const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'codegent-it-'))
-
 /** VS Code's helper processes can still be shutting down; leftovers in the temp folder are harmless. */
-const removeSandbox = async () => {
+const removeDir = async (dir) => {
   for (let attempt = 0; attempt < 20; attempt++) {
     try {
-      fs.rmSync(sandbox, { recursive: true, force: true })
+      fs.rmSync(dir, { recursive: true, force: true })
       return
     } catch {
       await new Promise((resolve) => setTimeout(resolve, 500))
     }
   }
-  console.warn(`could not remove ${sandbox}; delete it by hand`)
+  console.warn(`could not remove ${dir}; delete it by hand`)
 }
 
-let exitCode = 1
-try {
-  await stopTestHubs() // a hub left over from an earlier run would be old code
+// ── preparing ────────────────────────────────────────────────────────────────────────────────────
+await stopTestHubs() // a hub left over from an earlier run would be old code
+await buildAll({ hubPorts: TEST_PORTS })
 
-  await buildAll({ hubPorts: TEST_PORTS })
-
-  const outTest = path.join(root, 'out-test')
-  fs.rmSync(outTest, { recursive: true, force: true })
-  const entryPoints = { 'git-fixture': path.join(root, 'test', 'support', 'git-fixture.ts') }
-  for (const file of fs.readdirSync(path.join(root, 'test', 'integration'))) {
-    if (file.endsWith('.ts')) entryPoints[file.slice(0, -3)] = path.join(root, 'test', 'integration', file)
+const outTest = path.join(root, 'out-test')
+fs.rmSync(outTest, { recursive: true, force: true })
+const entryPoints = {
+  'git-fixture': path.join(root, 'test', 'support', 'git-fixture.ts')
+}
+for (const file of fs.readdirSync(path.join(root, 'test', 'integration'))) {
+  if (file.endsWith('.ts')) {
+    entryPoints[file.slice(0, -3)] = path.join(root, 'test', 'integration', file)
   }
-  await build({
-    entryPoints,
-    outdir: outTest,
-    bundle: true,
-    platform: 'node',
-    format: 'cjs',
-    target: 'node20',
-    external: ['vscode', 'mocha'],
-    logLevel: 'warning'
-  })
+}
+await build({
+  entryPoints,
+  outdir: outTest,
+  bundle: true,
+  platform: 'node',
+  format: 'cjs',
+  target: 'node20',
+  external: ['vscode', 'mocha'],
+  logLevel: 'warning'
+})
+// The chain harness runs in Node (not in VS Code) and is loaded as an ES module.
+await build({
+  entryPoints: {
+    'chain-harness': path.join(root, 'test', 'support', 'chain-harness.ts')
+  },
+  outdir: outTest,
+  outExtension: { '.js': '.mjs' },
+  bundle: true,
+  packages: 'external',
+  platform: 'node',
+  format: 'esm',
+  target: 'node20',
+  logLevel: 'warning'
+})
+const { githubLikeRepo } = createRequire(import.meta.url)(
+  path.join(outTest, 'git-fixture.js')
+)
 
-  const { githubLikeRepo } = createRequire(import.meta.url)(path.join(outTest, 'git-fixture.js'))
-  githubLikeRepo(sandbox, 'work', {
-    'README.md': '# Demo project\n',
-    'src/greeting.txt': 'hello\nworld\n',
-    'src/keep.txt': 'untouched\n'
-  })
+// The installed VS Code must not think it is a child of the VS Code this script may be run from.
+for (const key of Object.keys(process.env)) {
+  if (key.startsWith('VSCODE_') || key === 'ELECTRON_RUN_AS_NODE') delete process.env[key]
+}
+const vscodeExecutablePath = installedVsCode() ?? (await downloadAndUnzipVSCode('stable'))
+console.log(`running the integration tests in ${vscodeExecutablePath}`)
 
-  const userData = path.join(sandbox, 'user-data')
-  fs.mkdirSync(path.join(userData, 'User'), { recursive: true })
-  fs.writeFileSync(
-    path.join(userData, 'User', 'settings.json'),
-    JSON.stringify(
-      {
-        'codegent.advanced.hubPorts': TEST_PORTS,
-        'codegent.diagnosticsWaitSeconds': 0,
-        'security.workspace.trust.enabled': false,
-        'telemetry.telemetryLevel': 'off',
-        'update.mode': 'none',
-        'extensions.autoUpdate': false,
-        'workbench.startupEditor': 'none',
-        'window.restoreWindows': 'none',
-        'git.enabled': false,
-        'chat.disableAIFeatures': true
-      },
-      null,
-      2
+// ── one suite = one VS Code launch ───────────────────────────────────────────────────────────────
+const runSuite = async (suite) => {
+  console.log(`\n=== suite: ${suite} ===`)
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'codegent-it-'))
+  let chain
+  try {
+    await stopTestHubs()
+    githubLikeRepo(sandbox, 'work', {
+      'README.md': '# Demo project\n',
+      'src/greeting.txt': 'hello\nworld\n',
+      'src/keep.txt': 'untouched\n'
+    })
+
+    const userData = path.join(sandbox, 'user-data')
+    fs.mkdirSync(path.join(userData, 'User'), { recursive: true })
+    fs.writeFileSync(
+      path.join(userData, 'User', 'settings.json'),
+      JSON.stringify(
+        {
+          'codegent.advanced.hubPorts': TEST_PORTS,
+          'codegent.diagnosticsWaitSeconds': 0,
+          'security.workspace.trust.enabled': false,
+          'telemetry.telemetryLevel': 'off',
+          'update.mode': 'none',
+          'extensions.autoUpdate': false,
+          'workbench.startupEditor': 'none',
+          'window.restoreWindows': 'none',
+          'git.enabled': false,
+          'chat.disableAIFeatures': true
+        },
+        null,
+        2
+      )
     )
-  )
 
-  // The test VS Code must not think it is a child of the VS Code this script may be run from.
-  for (const key of Object.keys(process.env)) {
-    if (key.startsWith('VSCODE_') || key === 'ELECTRON_RUN_AS_NODE') delete process.env[key]
-  }
-
-  const vscodeExecutablePath = installedVsCode() ?? (await downloadAndUnzipVSCode('stable'))
-  console.log(`running the integration tests in ${vscodeExecutablePath}`)
-  await runTests({
-    vscodeExecutablePath,
-    extensionDevelopmentPath: root,
-    extensionTestsPath: path.join(outTest, 'index.js'),
-    launchArgs: [
-      path.join(sandbox, 'work'),
-      `--user-data-dir=${userData}`,
-      `--extensions-dir=${path.join(sandbox, 'extensions')}`,
-      '--disable-extension=vscode.git',
-      '--disable-workspace-trust'
-    ],
-    extensionTestsEnv: {
-      CODEGENT_IT_DIR: sandbox,
-      CODEGENT_IT_PORTS: TEST_PORTS.join(','),
-      // Optional: run only the tests whose title matches (`npm run test:integration -- "undo"`).
-      CODEGENT_IT_GREP: process.argv[2] ?? '',
-      // Fetching the pretend GitHub address must fail at once instead of reaching the real one.
-      GIT_ALLOW_PROTOCOL: 'file'
+    // The real browser extension starts first: it has to find the hub when VS Code starts it.
+    if (suite === 'chain') {
+      const { startChain } = await import(
+        pathToFileURL(path.join(outTest, 'chain-harness.mjs')).href
+      )
+      chain = await startChain({
+        extensionDir: path.join(root, 'out', 'browser-extension'),
+        profileDir: path.join(sandbox, 'chromium-profile'),
+        mockPageEntry: path.join(root, '..', 'browser', 'e2e', 'mock', 'mock-page.ts')
+      })
     }
-  })
-  exitCode = 0
-} catch (error) {
-  console.error(error instanceof Error ? error.message : error)
-} finally {
-  await stopTestHubs().catch((error) => console.error(error.message))
-  await removeSandbox()
+
+    await runTests({
+      vscodeExecutablePath,
+      extensionDevelopmentPath: root,
+      extensionTestsPath: path.join(outTest, 'index.js'),
+      launchArgs: [
+        path.join(sandbox, 'work'),
+        `--user-data-dir=${userData}`,
+        `--extensions-dir=${path.join(sandbox, 'extensions')}`,
+        '--disable-extension=vscode.git',
+        '--disable-workspace-trust'
+      ],
+      extensionTestsEnv: {
+        CODEGENT_IT_DIR: sandbox,
+        CODEGENT_IT_PORTS: TEST_PORTS.join(','),
+        CODEGENT_IT_SUITE: suite,
+        CODEGENT_IT_MOCK_PORT: chain ? String(chain.mockPort) : '',
+        // Optional: run only the tests whose title matches.
+        CODEGENT_IT_GREP: grep,
+        // Fetching the pretend GitHub address must fail at once instead of reaching the real one.
+        GIT_ALLOW_PROTOCOL: 'file'
+      }
+    })
+    return true
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error)
+    return false
+  } finally {
+    await chain?.close().catch(() => undefined)
+    await stopTestHubs().catch((error) => console.error(error.message))
+    await removeDir(sandbox)
+  }
 }
-process.exit(exitCode)
+
+let ok = true
+for (const suite of ['protocol', 'chain']) {
+  if (wantedSuite && wantedSuite !== suite) continue
+  if (suite === 'chain' && process.env.CODEGENT_IT_NO_BROWSER) continue
+  ok = (await runSuite(suite)) && ok
+}
+process.exit(ok ? 0 : 1)

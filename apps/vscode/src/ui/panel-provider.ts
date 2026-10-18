@@ -4,7 +4,8 @@ import type { ToExtension, UiState } from './protocol'
 const nonce = (): string => {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
   let out = ''
-  for (let i = 0; i < 32; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)]
+  for (let i = 0; i < 32; i++)
+    out += alphabet[Math.floor(Math.random() * alphabet.length)]
   return out
 }
 
@@ -45,7 +46,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     view.onDidChangeVisibility(() => {
       if (view.visible) {
         this.onVisible()
-        if (this.lastState) void view.webview.postMessage({ type: 'state', state: this.lastState })
+        if (this.lastState)
+          void view.webview.postMessage({ type: 'state', state: this.lastState })
       }
     })
     view.onDidDispose(() => {

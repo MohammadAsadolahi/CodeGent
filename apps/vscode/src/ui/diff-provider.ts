@@ -31,6 +31,8 @@ export class DiffContentProvider implements vscode.TextDocumentContentProvider {
     const after = change.kind === 'delete' ? '' : change.after
     const left = this.uriFor(before, `${path} (before)`)
     const right = this.uriFor(after, `${path} (after)`)
-    await vscode.commands.executeCommand('vscode.diff', left, right, title, { preview: true })
+    await vscode.commands.executeCommand('vscode.diff', left, right, title, {
+      preview: true
+    })
   }
 }

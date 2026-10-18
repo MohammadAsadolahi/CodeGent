@@ -1,6 +1,11 @@
 import path from 'node:path'
 import * as vscode from 'vscode'
-import type { ChecksPort, DiagnosticItem, DiagnosticsSummary, VerifyResult } from '@codegent/engine'
+import type {
+  ChecksPort,
+  DiagnosticItem,
+  DiagnosticsSummary,
+  VerifyResult
+} from '@codegent/engine'
 import { newProblems, summarize } from './diagnostics-delta'
 import { runVerifyCommand } from './verify-runner'
 
@@ -20,7 +25,9 @@ const MAX_REVEALED_FILES = 12
 /** URIs of the text files that are open in some editor tab. */
 const openTabUris = (): string[] =>
   vscode.window.tabGroups.all.flatMap((group) =>
-    group.tabs.flatMap((tab) => (tab.input instanceof vscode.TabInputText ? [tab.input.uri.toString()] : []))
+    group.tabs.flatMap((tab) =>
+      tab.input instanceof vscode.TabInputText ? [tab.input.uri.toString()] : []
+    )
   )
 
 const codeOf = (code: vscode.Diagnostic['code']): string | undefined => {
@@ -45,7 +52,11 @@ export class VsCodeChecks implements ChecksPort {
   async prepare(existingPaths: readonly string[], signal: AbortSignal): Promise<void> {
     this.baseline.clear()
     if (existingPaths.length === 0) return
-    const items = await this.collect(existingPaths, Math.min(this.options.diagnosticsWaitMs(), BASELINE_WAIT_CAP_MS), signal)
+    const items = await this.collect(
+      existingPaths,
+      Math.min(this.options.diagnosticsWaitMs(), BASELINE_WAIT_CAP_MS),
+      signal
+    )
     for (const item of items) {
       const list = this.baseline.get(item.path) ?? []
       list.push(item)
@@ -53,7 +64,10 @@ export class VsCodeChecks implements ChecksPort {
     }
   }
 
-  async diagnostics(paths: readonly string[], signal: AbortSignal): Promise<DiagnosticsSummary> {
+  async diagnostics(
+    paths: readonly string[],
+    signal: AbortSignal
+  ): Promise<DiagnosticsSummary> {
     if (paths.length === 0) return summarize([])
     const current = await this.collect(paths, this.options.diagnosticsWaitMs(), signal)
     const before = paths.flatMap((p) => this.baseline.get(p) ?? [])
@@ -72,7 +86,11 @@ export class VsCodeChecks implements ChecksPort {
    * closed again afterwards. With a wait of 0 nothing is opened and only what is already known
    * is read.
    */
-  private async collect(paths: readonly string[], waitMs: number, signal: AbortSignal): Promise<DiagnosticItem[]> {
+  private async collect(
+    paths: readonly string[],
+    waitMs: number,
+    signal: AbortSignal
+  ): Promise<DiagnosticItem[]> {
     const uris = paths.map((p) => this.uri(p))
     const revealed = waitMs > 0 ? await this.reveal(uris) : []
     try {
@@ -84,12 +102,17 @@ export class VsCodeChecks implements ChecksPort {
     const items: DiagnosticItem[] = []
     paths.forEach((relative, index) => {
       for (const diagnostic of vscode.languages.getDiagnostics(uris[index]!)) {
-        if (diagnostic.severity !== vscode.DiagnosticSeverity.Error && diagnostic.severity !== vscode.DiagnosticSeverity.Warning) continue
+        if (
+          diagnostic.severity !== vscode.DiagnosticSeverity.Error &&
+          diagnostic.severity !== vscode.DiagnosticSeverity.Warning
+        )
+          continue
         items.push({
           path: relative,
           line: diagnostic.range.start.line + 1,
           column: diagnostic.range.start.character + 1,
-          severity: diagnostic.severity === vscode.DiagnosticSeverity.Error ? 'error' : 'warning',
+          severity:
+            diagnostic.severity === vscode.DiagnosticSeverity.Error ? 'error' : 'warning',
           message: diagnostic.message,
           code: codeOf(diagnostic.code),
           source: diagnostic.source
@@ -109,10 +132,16 @@ export class VsCodeChecks implements ChecksPort {
       if (onScreen.has(key)) continue
       try {
         const document = await vscode.workspace.openTextDocument(uri)
-        await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true, preview: false })
+        await vscode.window.showTextDocument(document, {
+          viewColumn: vscode.ViewColumn.Beside,
+          preserveFocus: true,
+          preview: false
+        })
         opened.push(key)
       } catch (error) {
-        this.options.log?.(`could not open ${uri.fsPath} for analysis: ${(error as Error).message}`)
+        this.options.log?.(
+          `could not open ${uri.fsPath} for analysis: ${(error as Error).message}`
+        )
       }
     }
     return opened
@@ -124,7 +153,10 @@ export class VsCodeChecks implements ChecksPort {
     const ours = new Set(opened)
     const tabs = vscode.window.tabGroups.all
       .flatMap((group) => group.tabs)
-      .filter((tab) => tab.input instanceof vscode.TabInputText && ours.has(tab.input.uri.toString()))
+      .filter(
+        (tab) =>
+          tab.input instanceof vscode.TabInputText && ours.has(tab.input.uri.toString())
+      )
     try {
       await vscode.window.tabGroups.close(tabs, true)
     } catch (error) {
@@ -132,7 +164,11 @@ export class VsCodeChecks implements ChecksPort {
     }
   }
 
-  private settle(uris: readonly vscode.Uri[], maxMs: number, signal: AbortSignal): Promise<void> {
+  private settle(
+    uris: readonly vscode.Uri[],
+    maxMs: number,
+    signal: AbortSignal
+  ): Promise<void> {
     return new Promise((resolve) => {
       const watched = new Set(uris.map((uri) => uri.toString()))
       const started = Date.now()
@@ -148,7 +184,11 @@ export class VsCodeChecks implements ChecksPort {
       }
       const timer = setInterval(() => {
         const now = Date.now()
-        if (now - started >= maxMs || (now - started >= MIN_WAIT_MS && now - lastChange >= QUIET_MS)) finish()
+        if (
+          now - started >= maxMs ||
+          (now - started >= MIN_WAIT_MS && now - lastChange >= QUIET_MS)
+        )
+          finish()
       }, 100)
       signal.addEventListener('abort', finish, { once: true })
     })

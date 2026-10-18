@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { buildSettings, sanitizeChatUrl } from '../../src/settings-model'
 
-const from = (values: Record<string, unknown>) => <T>(key: string, fallback: T): T =>
-  (key in values ? values[key] : fallback) as T
+const from =
+  (values: Record<string, unknown>) =>
+  <T>(key: string, fallback: T): T =>
+    (key in values ? values[key] : fallback) as T
 
 describe('buildSettings', () => {
   it('has seamless defaults: everything automatic, committing and pushing, no verify command', () => {
@@ -49,8 +51,22 @@ describe('buildSettings', () => {
         conventions: '  Use pnpm.  '
       })
     )
-    expect(settings.run).toMatchObject({ autoApply: false, autoContinue: false, commit: false, push: false, commitPrefix: 'ai: ', maxSteps: 5, maxFailedSteps: 2, allowDirty: true, conventions: 'Use pnpm.' })
-    expect(settings.bridge).toMatchObject({ autoSubmit: false, replyTimeoutMs: 120_000, browserWaitMs: 5_000 })
+    expect(settings.run).toMatchObject({
+      autoApply: false,
+      autoContinue: false,
+      commit: false,
+      push: false,
+      commitPrefix: 'ai: ',
+      maxSteps: 5,
+      maxFailedSteps: 2,
+      allowDirty: true,
+      conventions: 'Use pnpm.'
+    })
+    expect(settings.bridge).toMatchObject({
+      autoSubmit: false,
+      replyTimeoutMs: 120_000,
+      browserWaitMs: 5_000
+    })
     expect(settings.verify).toEqual({ command: 'npm test', timeoutMs: 60_000 })
     expect(settings.diagnosticsWaitMs).toBe(2_000)
   })
@@ -81,17 +97,24 @@ describe('buildSettings', () => {
   })
 
   it('keeps the commit prefix on one line and bounded, and the conventions bounded', () => {
-    const settings = buildSettings(from({ 'git.commitPrefix': 'a\nb\r\nc: ', conventions: 'x'.repeat(10_000) }))
+    const settings = buildSettings(
+      from({ 'git.commitPrefix': 'a\nb\r\nc: ', conventions: 'x'.repeat(10_000) })
+    )
     expect(settings.run.commitPrefix).toBe('a b c: ')
     expect(settings.run.conventions).toHaveLength(4_000)
-    expect(buildSettings(from({ 'git.commitPrefix': 'p'.repeat(100) })).run.commitPrefix).toHaveLength(40)
+    expect(
+      buildSettings(from({ 'git.commitPrefix': 'p'.repeat(100) })).run.commitPrefix
+    ).toHaveLength(40)
   })
 })
 
 describe('sanitizeChatUrl', () => {
   it.each([
     ['https://chatgpt.com/', 'https://chatgpt.com/'],
-    ['https://chatgpt.com/g/g-p-123-my-project/project', 'https://chatgpt.com/g/g-p-123-my-project/project'],
+    [
+      'https://chatgpt.com/g/g-p-123-my-project/project',
+      'https://chatgpt.com/g/g-p-123-my-project/project'
+    ],
     ['  https://chat.openai.com/  ', 'https://chat.openai.com/'],
     ['https://user:secret@chatgpt.com/path', 'https://chatgpt.com/path']
   ])('accepts %s', (input, expected) => {

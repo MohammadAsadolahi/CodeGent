@@ -46,7 +46,11 @@ export const stripBlankEdges = (lines: readonly string[]) => {
 }
 
 /** Start indexes where `needle` appears as a contiguous window under the given line key. */
-const scanWindows = (content: readonly string[], needle: readonly string[], key: (s: string) => string): number[] => {
+const scanWindows = (
+  content: readonly string[],
+  needle: readonly string[],
+  key: (s: string) => string
+): number[] => {
   const size = needle.length
   if (size === 0 || size > content.length) return []
   const wanted = needle.map(key)
@@ -62,7 +66,10 @@ const scanWindows = (content: readonly string[], needle: readonly string[], key:
 }
 
 /** Windows that match when blank lines are ignored on both sides; returns [start, end) pairs. */
-const scanIgnoringBlanks = (content: readonly string[], needle: readonly string[]): Array<[number, number]> => {
+const scanIgnoringBlanks = (
+  content: readonly string[],
+  needle: readonly string[]
+): Array<[number, number]> => {
   const wanted = needle.filter((line) => !isBlank(line)).map(collapse)
   if (wanted.length === 0) return []
   const indexes: number[] = []
@@ -87,7 +94,9 @@ const scanIgnoringBlanks = (content: readonly string[], needle: readonly string[
  * Compares the indentation of aligned (file line, SEARCH line) pairs. Returns the single shift
  * that maps the SEARCH text onto the file, 'none' when they already agree, or 'mixed'.
  */
-const indentShift = (pairs: ReadonlyArray<readonly [string, string]>): IndentShift | 'none' | 'mixed' => {
+const indentShift = (
+  pairs: ReadonlyArray<readonly [string, string]>
+): IndentShift | 'none' | 'mixed' => {
   let shift: IndentShift | 'none' | undefined
   for (const [fileLine, searchLine] of pairs) {
     if (isBlank(fileLine) || isBlank(searchLine)) continue
@@ -95,8 +104,10 @@ const indentShift = (pairs: ReadonlyArray<readonly [string, string]>): IndentShi
     const searchIndent = leadingWhitespace(searchLine)
     let current: IndentShift | 'none'
     if (fileIndent === searchIndent) current = 'none'
-    else if (fileIndent.startsWith(searchIndent)) current = { add: fileIndent.slice(searchIndent.length) }
-    else if (searchIndent.startsWith(fileIndent)) current = { remove: searchIndent.slice(fileIndent.length) }
+    else if (fileIndent.startsWith(searchIndent))
+      current = { add: fileIndent.slice(searchIndent.length) }
+    else if (searchIndent.startsWith(fileIndent))
+      current = { remove: searchIndent.slice(fileIndent.length) }
     else return 'mixed'
     if (shift === undefined) shift = current
     else if (JSON.stringify(shift) !== JSON.stringify(current)) return 'mixed'
@@ -115,7 +126,10 @@ const withShift = (match: Match, result: IndentShift | 'none' | 'mixed'): Match 
  * anywhere decides: exactly one hit is the answer, several hits are *ambiguous* (never guessed),
  * none falls through to a looser comparison.
  */
-export const findBlock = (content: readonly string[], search: readonly string[]): FindResult => {
+export const findBlock = (
+  content: readonly string[],
+  search: readonly string[]
+): FindResult => {
   const stripped = stripBlankEdges(search)
   if (stripped.lines.length === 0) return { ok: false, reason: 'empty' }
 
@@ -125,7 +139,8 @@ export const findBlock = (content: readonly string[], search: readonly string[])
   for (const { tier, key } of WINDOW_TIERS) {
     for (const variant of variants) {
       const hits = scanWindows(content, variant.lines, key)
-      if (hits.length > 1) return { ok: false, reason: 'ambiguous', candidates: hits.map((hit) => hit + 1) }
+      if (hits.length > 1)
+        return { ok: false, reason: 'ambiguous', candidates: hits.map((hit) => hit + 1) }
       if (hits.length === 1) {
         const start = hits[0]!
         const base: Match = {
@@ -135,7 +150,8 @@ export const findBlock = (content: readonly string[], search: readonly string[])
           trimmedLead: variant.lead,
           trimmedTrail: variant.trail
         }
-        if (tier === 'exact' || tier === 'trailing-space') return { ok: true, match: base }
+        if (tier === 'exact' || tier === 'trailing-space')
+          return { ok: true, match: base }
         const pairs = variant.lines.map((line, j) => [content[start + j]!, line] as const)
         return { ok: true, match: withShift(base, indentShift(pairs)) }
       }
@@ -143,7 +159,12 @@ export const findBlock = (content: readonly string[], search: readonly string[])
   }
 
   const loose = scanIgnoringBlanks(content, stripped.lines)
-  if (loose.length > 1) return { ok: false, reason: 'ambiguous', candidates: loose.map(([start]) => start + 1) }
+  if (loose.length > 1)
+    return {
+      ok: false,
+      reason: 'ambiguous',
+      candidates: loose.map(([start]) => start + 1)
+    }
   if (loose.length === 1) {
     const [start, end] = loose[0]!
     const fileLines = content.slice(start, end).filter((line) => !isBlank(line))
@@ -152,26 +173,42 @@ export const findBlock = (content: readonly string[], search: readonly string[])
     return {
       ok: true,
       match: withShift(
-        { start, end, tier: 'ignore-blank-lines', trimmedLead: stripped.lead, trimmedTrail: stripped.trail },
+        {
+          start,
+          end,
+          tier: 'ignore-blank-lines',
+          trimmedLead: stripped.lead,
+          trimmedTrail: stripped.trail
+        },
         indentShift(pairs)
       )
     }
   }
 
   const closest = closestMatch(content, stripped.lines)
-  return closest ? { ok: false, reason: 'not-found', closest } : { ok: false, reason: 'not-found' }
+  return closest
+    ? { ok: false, reason: 'not-found', closest }
+    : { ok: false, reason: 'not-found' }
 }
 
 /** Replacement lines adjusted to the way the SEARCH text was matched. */
 export const adjustReplacement = (replace: readonly string[], match: Match): string[] => {
   let lines = [...replace]
-  for (let i = 0; i < match.trimmedLead && lines.length > 0 && isBlank(lines[0]!); i++) lines.shift()
-  for (let i = 0; i < match.trimmedTrail && lines.length > 0 && isBlank(lines.at(-1)!); i++) lines.pop()
+  for (let i = 0; i < match.trimmedLead && lines.length > 0 && isBlank(lines[0]!); i++)
+    lines.shift()
+  for (
+    let i = 0;
+    i < match.trimmedTrail && lines.length > 0 && isBlank(lines.at(-1)!);
+    i++
+  )
+    lines.pop()
   const { indent } = match
   if (indent && 'add' in indent) {
     lines = lines.map((line) => (isBlank(line) ? line : indent.add + line))
   } else if (indent && 'remove' in indent) {
-    lines = lines.map((line) => (line.startsWith(indent.remove) ? line.slice(indent.remove.length) : line))
+    lines = lines.map((line) =>
+      line.startsWith(indent.remove) ? line.slice(indent.remove.length) : line
+    )
   }
   return lines
 }
@@ -192,7 +229,11 @@ const similarity = (a: string, b: string): number => {
   for (let i = 1; i <= x.length; i++) {
     const row = [i]
     for (let j = 1; j <= y.length; j++) {
-      row[j] = Math.min(previous[j]! + 1, row[j - 1]! + 1, previous[j - 1]! + (x[i - 1] === y[j - 1] ? 0 : 1))
+      row[j] = Math.min(
+        previous[j]! + 1,
+        row[j - 1]! + 1,
+        previous[j - 1]! + (x[i - 1] === y[j - 1] ? 0 : 1)
+      )
     }
     previous = row
   }
@@ -200,7 +241,10 @@ const similarity = (a: string, b: string): number => {
 }
 
 /** The stretch of `content` that looks most like `search`, to help the author fix the SEARCH text. */
-export const closestMatch = (content: readonly string[], search: readonly string[]): ClosestMatch | undefined => {
+export const closestMatch = (
+  content: readonly string[],
+  search: readonly string[]
+): ClosestMatch | undefined => {
   const needle = search.slice(0, MAX_NEEDLE_LINES)
   if (needle.length === 0 || content.length === 0) return undefined
   const wanted = needle.map(collapse)
@@ -233,6 +277,8 @@ export const closestMatch = (content: readonly string[], search: readonly string
     startLine: best.start + 1,
     endLine: Math.max(best.start + 1, end),
     score: Math.round(best.score * 100) / 100,
-    snippet: content.slice(best.start, best.start + Math.min(search.length, SNIPPET_LINES)).map((line) => line)
+    snippet: content
+      .slice(best.start, best.start + Math.min(search.length, SNIPPET_LINES))
+      .map((line) => line)
   }
 }

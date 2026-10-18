@@ -4,7 +4,11 @@ import path from 'node:path'
 
 /** Runs git and returns its output without the trailing newline (leading spaces are kept: ` M file`). */
 export const git = (cwd: string, ...args: string[]): string =>
-  execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trimEnd()
+  execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe']
+  }).trimEnd()
 
 export const write = (cwd: string, file: string, content: string): void => {
   fs.mkdirSync(path.dirname(path.join(cwd, file)), { recursive: true })
@@ -42,7 +46,11 @@ export const attachRepo = (parent: string, name: string): GithubLikeRepo => {
  * A repository whose fetch URL looks like GitHub (`octo/project`) while pushes go to a local bare
  * repository, so the whole commit-and-push pipeline can run without a network.
  */
-export const githubLikeRepo = (parent: string, name: string, files: Record<string, string>): GithubLikeRepo => {
+export const githubLikeRepo = (
+  parent: string,
+  name: string,
+  files: Record<string, string>
+): GithubLikeRepo => {
   const dir = path.join(parent, name)
   const bare = path.join(parent, `${name}.git`)
   fs.mkdirSync(dir, { recursive: true })

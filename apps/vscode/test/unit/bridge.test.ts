@@ -4,7 +4,11 @@ import { Hub } from '@codegent/hub'
 import { ChatError } from '@codegent/engine'
 import { newId, type BrowserInfo, type JobRequest } from '@codegent/protocol'
 import { BridgeChat, type BridgeChatOptions } from '../../src/bridge/bridge-chat'
-import { HubConnection, type BridgeConnection, type HubEvent } from '../../src/bridge/hub-connection'
+import {
+  HubConnection,
+  type BridgeConnection,
+  type HubEvent
+} from '../../src/bridge/hub-connection'
 import { FakeBrowser, sleep, until } from '../support/fake-browser'
 
 const cleanups: Array<() => Promise<void> | void> = []
@@ -19,7 +23,10 @@ const startHub = async () => {
   return hub
 }
 
-const connectEditor = async (hub: Hub, overrides: Partial<ConstructorParameters<typeof HubConnection>[0]> = {}) => {
+const connectEditor = async (
+  hub: Hub,
+  overrides: Partial<ConstructorParameters<typeof HubConnection>[0]> = {}
+) => {
   const connection = new HubConnection({
     hubScriptPath: 'unused',
     version: 'test',
@@ -41,7 +48,10 @@ const chatOptions = (over: Partial<BridgeChatOptions> = {}): BridgeChatOptions =
   ...over
 })
 
-const request = (text = 'hello', over: Partial<Parameters<BridgeChat['send']>[0]> = {}) => ({
+const request = (
+  text = 'hello',
+  over: Partial<Parameters<BridgeChat['send']>[0]> = {}
+) => ({
   sessionId: newId(),
   text,
   newChat: true,
@@ -74,21 +84,36 @@ describe('HubConnection', () => {
     const events: HubEvent[] = []
     connection.onEvent((event) => events.push(event))
     const job: JobRequest = {
-      jobId: newId(), sessionId: newId(), editorId: connection.editorId, text: 'hi', newChat: true,
-      chatUrl: 'https://chatgpt.com/', autoSubmit: true, timeoutMs: 5_000
+      jobId: newId(),
+      sessionId: newId(),
+      editorId: connection.editorId,
+      text: 'hi',
+      newChat: true,
+      chatUrl: 'https://chatgpt.com/',
+      autoSubmit: true,
+      timeoutMs: 5_000
     }
     expect(connection.submit(job)).toBe(true)
     await until(() => browser.jobs.length === 1, 'the job to reach the browser')
     browser.reply(job, { kind: 'progress', stage: 'filled' })
     await until(() => events.length === 1, 'the event to arrive')
-    expect(events[0]).toMatchObject({ jobId: job.jobId, event: { kind: 'progress', stage: 'filled' } })
+    expect(events[0]).toMatchObject({
+      jobId: job.jobId,
+      event: { kind: 'progress', stage: 'filled' }
+    })
 
     connection.cancel({ jobId: job.jobId, sessionId: job.sessionId })
     await until(() => browser.cancels.length === 1, 'the cancel to reach the browser')
   })
 
   it('refuses to submit while offline', async () => {
-    const connection = new HubConnection({ hubScriptPath: 'x', version: 't', ensure: async () => { throw new Error('no hub') } })
+    const connection = new HubConnection({
+      hubScriptPath: 'x',
+      version: 't',
+      ensure: async () => {
+        throw new Error('no hub')
+      }
+    })
     expect(connection.submit({} as JobRequest)).toBe(false)
   })
 
@@ -107,7 +132,10 @@ describe('HubConnection', () => {
     const id = connection.editorId
 
     await hub.stop()
-    await until(() => connection.state === 'offline', 'the connection to notice the hub is gone')
+    await until(
+      () => connection.state === 'offline',
+      'the connection to notice the hub is gone'
+    )
     const second = new Hub({ port, idleExitMs: 0 })
     await second.start()
     cleanups.push(() => second.stop())
@@ -119,7 +147,9 @@ describe('HubConnection', () => {
     const hub = await startHub()
     const connection = await connectEditor(hub)
     const original = connection.editorId
-    const intruder = new WebSocket(`ws://127.0.0.1:${hub.port}/ws?role=editor&id=${original}&protocol=1`)
+    const intruder = new WebSocket(
+      `ws://127.0.0.1:${hub.port}/ws?role=editor&id=${original}&protocol=1`
+    )
     await new Promise((resolve) => intruder.once('open', resolve))
     cleanups.push(() => intruder.terminate())
     await until(() => connection.editorId !== original, 'a new editor id')
@@ -130,7 +160,11 @@ describe('HubConnection', () => {
     const hubs: Hub[] = []
     const launch = async () => {
       // Like the real process: `shutdown` from an editor makes the hub stop itself.
-      const hub: Hub = new Hub({ port: 0, idleExitMs: 0, onShutdownRequested: () => void hub.stop() })
+      const hub: Hub = new Hub({
+        port: 0,
+        idleExitMs: 0,
+        onShutdownRequested: () => void hub.stop()
+      })
       await hub.start()
       hubs.push(hub)
       cleanups.push(() => hub.stop())
@@ -151,7 +185,11 @@ describe('HubConnection', () => {
 
     await connection.restartHub()
 
-    await until(() => connection.state === 'connected' && hubs.length === 2, 'a fresh hub to be started and joined', 15_000)
+    await until(
+      () => connection.state === 'connected' && hubs.length === 2,
+      'a fresh hub to be started and joined',
+      15_000
+    )
     expect(hubs[0]!.running).toBe(false)
     expect(hubs[1]!.running).toBe(true)
   })
@@ -162,9 +200,15 @@ describe('BridgeChat', () => {
     const hub = await startHub()
     const connection = await connectEditor(hub)
     const browsers: FakeBrowser[] = []
-    for (let i = 0; i < browserCount; i++) browsers.push(await new FakeBrowser(hub.port).connect())
+    for (let i = 0; i < browserCount; i++)
+      browsers.push(await new FakeBrowser(hub.port).connect())
     await until(() => connection.browsers.length === browserCount, 'browsers to connect')
-    return { hub, connection, browsers, chat: new BridgeChat(connection, chatOptions(options)) }
+    return {
+      hub,
+      connection,
+      browsers,
+      chat: new BridgeChat(connection, chatOptions(options))
+    }
   }
 
   it('sends the message as a job and resolves with the completed reply, reporting progress', async () => {
@@ -173,29 +217,64 @@ describe('BridgeChat', () => {
       send({ kind: 'accepted', tabId: 1 })
       send({ kind: 'progress', stage: 'submitted' })
       send({ kind: 'progress', stage: 'generating' })
-      send({ kind: 'completed', markdown: 'the reply', conversationUrl: 'https://chatgpt.com/c/1', durationMs: 42 })
+      send({
+        kind: 'completed',
+        markdown: 'the reply',
+        conversationUrl: 'https://chatgpt.com/c/1',
+        durationMs: 42
+      })
     }
     const stages: string[] = []
-    const reply = await chat.send(request('Do the thing', { onProgress: (stage) => stages.push(stage) }))
+    const reply = await chat.send(
+      request('Do the thing', { onProgress: (stage) => stages.push(stage) })
+    )
 
-    expect(reply).toEqual({ markdown: 'the reply', conversationUrl: 'https://chatgpt.com/c/1', durationMs: 42 })
+    expect(reply).toEqual({
+      markdown: 'the reply',
+      conversationUrl: 'https://chatgpt.com/c/1',
+      durationMs: 42
+    })
     expect(stages).toEqual(['submitted', 'generating'])
     const job = browsers[0]!.jobs[0]!
-    expect(job).toMatchObject({ text: 'Do the thing', newChat: true, autoSubmit: true, chatUrl: 'https://chatgpt.com/', timeoutMs: 5_000 })
+    expect(job).toMatchObject({
+      text: 'Do the thing',
+      newChat: true,
+      autoSubmit: true,
+      chatUrl: 'https://chatgpt.com/',
+      timeoutMs: 5_000
+    })
     expect(job.browserId).toBe(browsers[0]!.id)
   })
 
   it('turns a failed job into a ChatError carrying the code', async () => {
     const { browsers, chat } = await setup()
-    browsers[0]!.onJob = (_job, send) => send({ kind: 'failed', code: 'rate-limited', message: 'slow down' })
-    await expect(chat.send(request())).rejects.toMatchObject({ name: 'ChatError', code: 'rate-limited', message: 'slow down' })
+    browsers[0]!.onJob = (_job, send) =>
+      send({ kind: 'failed', code: 'rate-limited', message: 'slow down' })
+    await expect(chat.send(request())).rejects.toMatchObject({
+      name: 'ChatError',
+      code: 'rate-limited',
+      message: 'slow down'
+    })
   })
 
   it('only listens to events of its own job', async () => {
     const { browsers, chat } = await setup()
     browsers[0]!.onJob = (job, send) => {
-      browsers[0]!.reply({ ...job, jobId: newId() }, { kind: 'completed', markdown: 'someone else', conversationUrl: 'https://chatgpt.com/c/x', durationMs: 1 })
-      send({ kind: 'completed', markdown: 'mine', conversationUrl: 'https://chatgpt.com/c/y', durationMs: 1 })
+      browsers[0]!.reply(
+        { ...job, jobId: newId() },
+        {
+          kind: 'completed',
+          markdown: 'someone else',
+          conversationUrl: 'https://chatgpt.com/c/x',
+          durationMs: 1
+        }
+      )
+      send({
+        kind: 'completed',
+        markdown: 'mine',
+        conversationUrl: 'https://chatgpt.com/c/y',
+        durationMs: 1
+      })
     }
     expect((await chat.send(request())).markdown).toBe('mine')
   })
@@ -207,12 +286,18 @@ describe('BridgeChat', () => {
     await until(() => browsers[0]!.jobs.length === 1, 'the job to reach the browser')
     controller.abort()
     await expect(pending).rejects.toMatchObject({ code: 'cancelled' })
-    await until(() => browsers[0]!.cancels.length === 1, 'the cancel to reach the browser')
+    await until(
+      () => browsers[0]!.cancels.length === 1,
+      'the cancel to reach the browser'
+    )
     expect(browsers[0]!.cancels[0]).toMatchObject({ jobId: browsers[0]!.jobs[0]!.jobId })
   })
 
   it('gives up with "timeout" if the browser never reports back', async () => {
-    const { browsers, chat } = await setup(1, { replyTimeoutMs: () => 1_000, graceMs: 100 })
+    const { browsers, chat } = await setup(1, {
+      replyTimeoutMs: () => 1_000,
+      graceMs: 100
+    })
     const started = Date.now()
     await expect(chat.send(request())).rejects.toMatchObject({ code: 'timeout' })
     expect(Date.now() - started).toBeGreaterThanOrEqual(1_000)
@@ -228,7 +313,13 @@ describe('BridgeChat', () => {
     const pending = chat.send(request('x', { onProgress: (stage) => stages.push(stage) }))
     await sleep(400)
     const browser = await new FakeBrowser(hub.port).connect()
-    browser.onJob = (_job, send) => send({ kind: 'completed', markdown: 'late browser', conversationUrl: 'https://chatgpt.com/c/1', durationMs: 1 })
+    browser.onJob = (_job, send) =>
+      send({
+        kind: 'completed',
+        markdown: 'late browser',
+        conversationUrl: 'https://chatgpt.com/c/1',
+        durationMs: 1
+      })
     expect((await pending).markdown).toBe('late browser')
     expect(stages).toContain('waiting-for-browser')
   })
@@ -240,10 +331,18 @@ describe('BridgeChat', () => {
     await expect(chat.send(request())).rejects.toMatchObject({ code: 'no-browser' })
 
     const offline: BridgeConnection = {
-      editorId: 'e', state: 'offline', browsers: [], submit: () => false, cancel: () => {},
-      onEvent: () => () => {}, onPeers: () => () => {}, onState: () => () => {}
+      editorId: 'e',
+      state: 'offline',
+      browsers: [],
+      submit: () => false,
+      cancel: () => {},
+      onEvent: () => () => {},
+      onPeers: () => () => {},
+      onState: () => () => {}
     }
-    await expect(new BridgeChat(offline, chatOptions({ browserWaitMs: () => 200 })).send(request())).rejects.toMatchObject({ code: 'bridge' })
+    await expect(
+      new BridgeChat(offline, chatOptions({ browserWaitMs: () => 200 })).send(request())
+    ).rejects.toMatchObject({ code: 'bridge' })
   })
 
   it('can be cancelled while waiting for a browser', async () => {
@@ -273,7 +372,13 @@ describe('BridgeChat', () => {
       preferredBrowserId: () => preferred
     })
     for (const browser of browsers) {
-      browser.onJob = (_job, send) => send({ kind: 'completed', markdown: browser.id, conversationUrl: 'https://chatgpt.com/c/1', durationMs: 1 })
+      browser.onJob = (_job, send) =>
+        send({
+          kind: 'completed',
+          markdown: browser.id,
+          conversationUrl: 'https://chatgpt.com/c/1',
+          durationMs: 1
+        })
     }
     const first = await chat.send(request())
     const second = await chat.send(request())
@@ -285,15 +390,33 @@ describe('BridgeChat', () => {
 
   it('fails with "ambiguous-browser" when the user picks nothing', async () => {
     const { chat } = await setup(2, { chooseBrowser: async () => undefined })
-    await expect(chat.send(request())).rejects.toMatchObject({ code: 'ambiguous-browser' })
+    await expect(chat.send(request())).rejects.toMatchObject({
+      code: 'ambiguous-browser'
+    })
   })
 
   it('reports a lost connection at submit time', async () => {
     const connection: BridgeConnection = {
-      editorId: 'e', state: 'connected',
-      browsers: [{ id: 'b', name: 'Chrome', userAgent: 'x', extensionVersion: '1', connectedAt: 0, chatgptTabs: 1 }],
-      submit: () => false, cancel: () => {}, onEvent: () => () => {}, onPeers: () => () => {}, onState: () => () => {}
+      editorId: 'e',
+      state: 'connected',
+      browsers: [
+        {
+          id: 'b',
+          name: 'Chrome',
+          userAgent: 'x',
+          extensionVersion: '1',
+          connectedAt: 0,
+          chatgptTabs: 1
+        }
+      ],
+      submit: () => false,
+      cancel: () => {},
+      onEvent: () => () => {},
+      onPeers: () => () => {},
+      onState: () => () => {}
     }
-    await expect(new BridgeChat(connection, chatOptions()).send(request())).rejects.toBeInstanceOf(ChatError)
+    await expect(
+      new BridgeChat(connection, chatOptions()).send(request())
+    ).rejects.toBeInstanceOf(ChatError)
   })
 })

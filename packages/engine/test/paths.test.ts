@@ -3,12 +3,14 @@ import { normalizeRepoPath } from '../src'
 
 const ok = (raw: string, root?: string) => {
   const result = normalizeRepoPath(raw, { workspaceRoot: root })
-  if (!result.ok) throw new Error(`expected ok for ${JSON.stringify(raw)}, got: ${result.reason}`)
+  if (!result.ok)
+    throw new Error(`expected ok for ${JSON.stringify(raw)}, got: ${result.reason}`)
   return result.path
 }
 const rejected = (raw: string, root?: string) => {
   const result = normalizeRepoPath(raw, { workspaceRoot: root })
-  if (result.ok) throw new Error(`expected rejection for ${JSON.stringify(raw)}, got: ${result.path}`)
+  if (result.ok)
+    throw new Error(`expected rejection for ${JSON.stringify(raw)}, got: ${result.path}`)
   return result.reason
 }
 
@@ -39,8 +41,12 @@ describe('normalizeRepoPath — accepted forms', () => {
 
   it('converts absolute paths inside the workspace into relative ones', () => {
     expect(ok('/home/me/project/src/a.ts', '/home/me/project')).toBe('src/a.ts')
-    expect(ok('C:\\Users\\me\\project\\src\\a.ts', 'C:\\Users\\me\\project')).toBe('src/a.ts')
-    expect(ok('c:/users/me/project/src/a.ts', 'C:\\Users\\Me\\Project\\')).toBe('src/a.ts')
+    expect(ok('C:\\Users\\me\\project\\src\\a.ts', 'C:\\Users\\me\\project')).toBe(
+      'src/a.ts'
+    )
+    expect(ok('c:/users/me/project/src/a.ts', 'C:\\Users\\Me\\Project\\')).toBe(
+      'src/a.ts'
+    )
   })
 })
 
