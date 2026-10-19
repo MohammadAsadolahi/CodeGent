@@ -13,13 +13,13 @@ Tell VS Code what you want built. ChatGPT reads your code on GitHub and answers 
 CodeGent applies them, checks them, and sends the result back to ChatGPT for the next step —
 again and again until the task is done. **No API keys. No copy and paste.**
 
-```
-You ──▶ VS Code ──▶ ChatGPT (your own browser tab)
-          ▲               │
-          │               ▼
-          └── CodeGent applies the changes, checks them,
-              commits, pushes, and tells ChatGPT what happened
-```
+<p align="center">
+  <img
+    src="docs/codegent-workflow.gif"
+    alt="CodeGent end-to-end agentic coding workflow"
+    width="100%"
+  />
+</p>
 
 **[⬇ Download the latest release](https://github.com/MohammadAsadolahi/CodeGent/releases/latest)** — the VS Code extension and the browser extension.
 
