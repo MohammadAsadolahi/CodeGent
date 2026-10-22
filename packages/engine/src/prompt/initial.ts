@@ -53,8 +53,11 @@ export const buildInitialPrompt = ({
       : []),
 
     [
+      '## Complete the task in one pass',
+      'Inspect all relevant files, tests and instructions before editing. Identify the full set of changes needed, check for conflicting guidance, and include related changes together in your reply. Do not send a plan, partial implementation, recap or request for another turn when you can complete the work now. Use the continue status only when real work remains or you need to act on CodeGent verification feedback; otherwise use done.',
+      '',
       '## How to reply',
-      '1. Start with one to three sentences saying what this step does.',
+      '1. Start with one to three sentences saying what this reply accomplishes.',
       '2. Give every file change in the format below.',
       `3. Finish with the status line.`,
       '',

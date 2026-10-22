@@ -1,5 +1,5 @@
 import type { EditError, EditOutcome } from '../edits/types'
-import { FORMAT_REMINDER, STATUS_LINES } from './instructions'
+import { FENCED_FORMAT_REPAIR, FORMAT_REMINDER, STATUS_LINES } from './instructions'
 import type { RepoContext } from './initial'
 
 export interface DiagnosticItem {
@@ -160,6 +160,9 @@ export const buildFollowUpPrompt = (report: StepReport): string => {
   const skipped = report.outcomes.filter((o) => o.status === 'skipped')
   const problems = report.problems ?? []
   const failures = failed.length + problems.length
+  const missingContentBlock = problems.some((problem) =>
+    /without a code block holding the content/i.test(problem)
+  )
 
   const count = (n: number) => `${n} change${n === 1 ? '' : 's'}`
   const headline =
@@ -215,13 +218,19 @@ export const buildFollowUpPrompt = (report: StepReport): string => {
   const verifyFailed = report.verify ? report.verify.exitCode !== 0 : false
   const next =
     failures > 0
-      ? 'Fix the files that were not applied first, then continue with the task.'
+      ? missingContentBlock
+        ? 'Resend only the missing file changes using fenced content blocks; do not repeat changes already applied.'
+        : 'Fix the files that were not applied first, then continue with the task.'
       : diagnosticsFailed || verifyFailed
         ? 'Fix the problems found by the checks, then continue with the task.'
         : 'Continue with the next step of the task. If everything is finished and the checks are clean, answer with a short summary and ' +
           STATUS_LINES.done +
           '.'
-  sections.push(['Next', next, FORMAT_REMINDER].join('\n'))
+  sections.push(
+    ['Next', next, missingContentBlock ? FENCED_FORMAT_REPAIR : FORMAT_REMINDER].join(
+      '\n'
+    )
+  )
 
   return sections.join('\n\n')
 }
@@ -230,13 +239,27 @@ export const buildFollowUpPrompt = (report: StepReport): string => {
 export const buildNoChangesPrompt = (): string =>
   [
     'CodeGent result — no changes found',
+    '',
     'Your last reply did not contain any file changes in the required format, so nothing was applied.',
-    'Please send the changes now. Use one heading per file — for example “### Updated file: `path/to/file.ext`” followed by a code block with SEARCH/REPLACE pairs (or “### Created file: …” with the full content) — and finish with a CODEGENT_STATUS line. If the task is already complete, answer with a short summary and ' +
+    '',
+    'Send the complete implementation now, not a plan or recap. Use one heading per file and fenced code blocks for all file content. For example:',
+    '',
+    '### Updated file: `path/to/file.ext`',
+    '',
+    '```text',
+    '<<<<<<< SEARCH',
+    'exact existing lines',
+    '=======',
+    'replacement lines',
+    '>>>>>>> REPLACE',
+    '```',
+    '',
+    'For a new file, put its complete content inside the fence. Finish with a CODEGENT_STATUS line. If the task is already complete, answer with a short summary and ' +
       STATUS_LINES.done +
       '; if you cannot continue, explain why and answer with ' +
       STATUS_LINES.blocked +
       '.'
-  ].join('\n\n')
+  ].join('\n')
 
 /** Sent when the reply was cut off (an unclosed code block). */
 export const buildTruncatedPrompt = (appliedPaths: readonly string[]): string =>

@@ -42,7 +42,7 @@ export const REPLY_FORMAT_EXAMPLE = [
 ].join('\n')
 
 export const FORMAT_RULES = `Format rules
-- A heading names the operation and the file. Put file content in a fenced code block, except SEARCH/REPLACE pairs may appear directly below an updated-file heading without a fence. Always write the path in backticks, relative to the repository root, with forward slashes.
+- A heading names the operation and the file. Always put file content in a fenced code block, including SEARCH/REPLACE pairs. Always write the path in backticks, relative to the repository root, with forward slashes.
 - Updated file: include one or more SEARCH/REPLACE pairs, applied from top to bottom. Between \`<<<<<<< SEARCH\` and \`=======\` copy the existing lines EXACTLY (same characters, same indentation, no "..." or other abbreviations). Between \`=======\` and \`>>>>>>> REPLACE\` write what replaces them. Include enough surrounding lines for the SEARCH text to match exactly one place in the file. To delete lines leave the REPLACE part empty. To insert code, repeat one neighbouring line in both parts.
 - Created file: the code block contains the complete content of the new file.
 - Deleted file: the heading alone, no code block.
@@ -60,3 +60,21 @@ export const STATUS_RULES = `Status line (the very last line of your reply, outs
 /** One-line reminder used in follow-up messages. */
 export const FORMAT_REMINDER =
   'Reply in the same format as before: one heading per file with SEARCH/REPLACE blocks (or full content for new files), then the CODEGENT_STATUS line.'
+
+/** A targeted correction for the common case where file headings were sent without fenced content. */
+export const FENCED_FORMAT_REPAIR = [
+  'Your last reply named file headings but did not put their contents in fenced code blocks, so CodeGent could not apply those changes.',
+  'Resend only the missing changes. For each Updated file, use this exact structure and keep the triple-backtick fence:',
+  '',
+  '### Updated file: `path/to/file.ext`',
+  '',
+  '```text',
+  '<<<<<<< SEARCH',
+  'exact existing lines from the file',
+  '=======',
+  'replacement lines',
+  '>>>>>>> REPLACE',
+  '```',
+  '',
+  'For Created or Replaced files, put the complete file content in a fenced code block instead. Do not repeat changes listed as applied, do not use placeholders such as “...” in SEARCH, and finish with the appropriate CODEGENT_STATUS line.'
+].join('\n')

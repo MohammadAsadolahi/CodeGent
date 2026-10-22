@@ -76,6 +76,12 @@ describe('buildInitialPrompt', () => {
     )
   })
 
+  it('steers the model to complete related work together instead of sending partial turns', () => {
+    expect(prompt).toContain('## Complete the task in one pass')
+    expect(prompt).toContain('Do not send a plan, partial implementation, recap')
+    expect(prompt).toContain('Use the continue status only when real work remains')
+  })
+
   it('includes the reply format, the example and the status rules', () => {
     expect(prompt).toContain(FORMAT_RULES)
     expect(prompt).toContain(REPLY_FORMAT_EXAMPLE)
@@ -205,6 +211,30 @@ describe('buildFollowUpPrompt', () => {
     )
     expect(text).toContain('Not applied')
     expect(text).toContain('never closed')
+  })
+
+  it('gives an exact fenced template when a file heading had no content block', () => {
+    const text = buildFollowUpPrompt(
+      report({
+        outcomes: [],
+        problems: [
+          '“src/a.ts”: “update file” heading without a code block holding the content'
+        ]
+      })
+    )
+    expect(text).toContain('Resend only the missing file changes')
+    expect(text).toContain('keep the triple-backtick fence')
+    expect(text).toContain('### Updated file: `path/to/file.ext`')
+    expect(text).toContain('<<<<<<< SEARCH\nexact existing lines from the file\n=======')
+    expect(text).toContain('do not repeat changes already applied')
+  })
+
+  it('gives a copyable fenced template when the reply contains no edits', () => {
+    const text = buildNoChangesPrompt()
+    expect(text).toContain('not a plan or recap')
+    expect(text).toContain('### Updated file: `path/to/file.ext`')
+    expect(text).toContain('```text\n<<<<<<< SEARCH')
+    expect(text).toContain('>>>>>>> REPLACE\n```')
   })
 
   it('shows skipped edits and matching notes', () => {
