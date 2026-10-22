@@ -1,4 +1,9 @@
-import { codeBlock, escapeHtml, redesignCodeBlock } from '../../test/fixtures/chatgpt-dom'
+import {
+  codeBlock,
+  editorCodeBlock,
+  escapeHtml,
+  redesignCodeBlock
+} from '../../test/fixtures/chatgpt-dom'
 
 const inline = (text: string): string =>
   escapeHtml(text)
@@ -6,7 +11,10 @@ const inline = (text: string): string =>
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
 
 /** A small markdown renderer that emits ChatGPT-like markup (code blocks with header + Copy). */
-/** `bare` draws code the way the redesigned page does (no `<pre>`), `pre` the way it used to. */
+/**
+ * `bare` draws code the way the redesigned page does (no `<pre>`), `pre` the way it used to. Python
+ * is drawn by a CodeMirror-style viewer (one element per line) in both.
+ */
 export const renderMarkdown = (
   markdown: string,
   codeStyle: 'pre' | 'bare' = 'pre'
@@ -35,9 +43,11 @@ export const renderMarkdown = (
       i++ // closing fence
       const language = fence[2] || 'plaintext'
       out.push(
-        codeStyle === 'bare'
-          ? redesignCodeBlock(language, body.join('\n'))
-          : codeBlock(language, body.join('\n'))
+        /^(?:python|py)$/i.test(language)
+          ? editorCodeBlock(language, body.join('\n'))
+          : codeStyle === 'bare'
+            ? redesignCodeBlock(language, body.join('\n'))
+            : codeBlock(language, body.join('\n'))
       )
       continue
     }

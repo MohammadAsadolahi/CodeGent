@@ -27,6 +27,10 @@
 - A file whose SEARCH/REPLACE pairs are written without a fence is read as one block, as inside a
   fence: when its last pair is broken nothing of that file is applied (before, the complete pairs
   were).
+- The copy of the browser extension in VS Code's storage is now replaced whenever the bundle's
+  content differs from it, not only when the version number changes. A local build keeps its
+  version, so the browser went on running the old page-reading code. After VS Code has started with
+  a new build, press reload (⟳) on the extension's card in `chrome://extensions` once.
 - _Show Log_ now has one line per reply with its size and shape (characters, file headings, code
   fences, SEARCH/REPLACE pairs) — never its contents — so a reply CodeGent could not use can be told
   from one it could.

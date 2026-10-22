@@ -115,6 +115,46 @@ describe('the whole chain, with the real browser extension', function () {
     assert.ok(sent[0]!.includes('Create redesign.txt'), sent[0])
   })
 
+  it('applies an edit that the page draws in a code viewer with one element per line (a python fence)', async function () {
+    this.timeout(120_000)
+    await mock.setLayout('redesign')
+    fs.writeFileSync(
+      path.join(repo.dir, 'greet.py'),
+      'def greet():\n    return "hi"\n\n\n# --- end ---\n'
+    )
+    git(repo.dir, 'add', 'greet.py')
+    git(repo.dir, 'commit', '-q', '-m', 'add greet.py')
+    await api.send({ type: 'refreshRepo' })
+    await mock.queueReply(
+      chatReply(
+        'Added the parameter.',
+        [
+          updatedFile(
+            'greet.py',
+            'def greet():\n    return "hi"\n\n\n# --- end ---',
+            'def greet(name):\n    return f"hello {name}"\n\n\n# --- end ---',
+            'python'
+          )
+        ],
+        'done'
+      )
+    )
+
+    await start('Let greet take a name')
+
+    assert.equal(run().outcome, 'done', JSON.stringify(run()))
+    assert.equal(
+      read('greet.py'),
+      'def greet(name):\n    return f"hello {name}"\n\n\n# --- end ---\n'
+    )
+    const { sent } = await mock.log()
+    assert.equal(sent.length, 1, 'no correction turn was needed')
+    assert.equal(
+      git(repo.dir, 'show', '--name-only', '--format=', 'HEAD').trim(),
+      'greet.py'
+    )
+  })
+
   it('continues in the same conversation, sending each result back', async function () {
     this.timeout(120_000)
     await mock.queueReply(

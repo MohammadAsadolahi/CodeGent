@@ -340,6 +340,59 @@ describe('undo', () => {
   })
 })
 
+describe('a commit holds only what the step changed', () => {
+  it('leaves the user’s modified, staged and untracked files out of the commit and the push', async () => {
+    const { dir, bare, repo, workspace } = newRepo({
+      'src/a.ts': 'export const a = 1\n',
+      'src/mine.ts': 'export const mine = 1\n',
+      'src/other.ts': 'export const other = 1\n'
+    })
+    // The user's own work in progress, in every state git knows.
+    fs.writeFileSync(path.join(dir, 'src/mine.ts'), 'export const mine = 2 // editing\n')
+    fs.writeFileSync(path.join(dir, 'staged.ts'), 'export const staged = 1\n')
+    git(dir, 'add', 'staged.ts')
+    fs.writeFileSync(path.join(dir, 'notes.txt'), 'untracked\n')
+
+    const changeSet = await planChanges(
+      parseReply(
+        '### Updated file: `src/a.ts`\n```\n<<<<<<< SEARCH\nexport const a = 1\n=======\nexport const a = 2\n>>>>>>> REPLACE\n```\n### Created file: `src/new.ts`\n```\nexport const n = 1\n```\n### Updated file: `src/mine.ts`\n```\n<<<<<<< SEARCH\nexport const mine = 2 // editing\n=======\nexport const mine = 3\n>>>>>>> REPLACE\n```'
+      ).edits,
+      workspace.view,
+      { workspaceRoot: dir }
+    )
+    // The file the user is editing is protected in the first place …
+    expect(
+      changeSet.outcomes.map((outcome) => `${outcome.path}:${outcome.status}`)
+    ).toEqual(['src/a.ts:applied', 'src/new.ts:applied', 'src/mine.ts:failed'])
+    await workspace.apply(changeSet.changes, meta)
+    const port = repo.gitPort()
+    await port.commit(
+      changeSet.changes.map((change) =>
+        change.kind === 'rename' ? change.to : change.path
+      ),
+      'codegent: step'
+    )
+    await port.push()
+
+    // … and what the user has is exactly as it was: not committed, not pushed, not unstaged.
+    expect(
+      git(bare, 'show', '--name-only', '--format=', 'main').split('\n').sort()
+    ).toEqual(['src/a.ts', 'src/new.ts'])
+    // (the helper trims the output, which drops the leading space of the first status line)
+    expect(
+      git(dir, 'status', '--porcelain')
+        .split('\n')
+        .map((line) => line.trim())
+        .sort()
+    ).toEqual(['?? notes.txt', 'A  staged.ts', 'M src/mine.ts'])
+    expect(read(dir, 'src/mine.ts')).toBe('export const mine = 2 // editing\n')
+    expect(git(bare, 'log', '--format=%s', 'main').split('\n')).toEqual([
+      'codegent: step',
+      'initial'
+    ])
+  })
+})
+
 describe('the whole pipeline on a real repository', () => {
   it('reply → parse → plan → write → commit → push, touching only what the reply named', async () => {
     const { dir, bare, repo, workspace } = newRepo({

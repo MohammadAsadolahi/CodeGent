@@ -40,16 +40,46 @@ describe('installBrowserExtension', () => {
       'icons/a.png',
       'manifest.json'
     ])
-    expect(fs.readFileSync(path.join(target, '.codegent-version'), 'utf8')).toBe('1.0.0')
+    expect(fs.readFileSync(path.join(target, '.codegent-version'), 'utf8')).toMatch(
+      /^1\.0\.0\+[0-9a-f]{12}$/
+    )
   })
 
-  it('leaves an up-to-date copy alone', async () => {
+  it('leaves an unchanged copy alone', async () => {
     const source = make({ 'manifest.json': '{}', 'background.js': 'v1' })
     const target = path.join(sandbox, 'stable2')
     await installBrowserExtension({ source, target, version: '1.0.0' })
-    fs.writeFileSync(path.join(source, 'background.js'), 'changed in the bundle')
+    fs.writeFileSync(path.join(target, 'background.js'), 'touched in the target')
     await installBrowserExtension({ source, target, version: '1.0.0' })
-    expect(fs.readFileSync(path.join(target, 'background.js'), 'utf8')).toBe('v1')
+    // Nothing differs between the bundle and what was installed, so nothing is copied again.
+    expect(fs.readFileSync(path.join(target, 'background.js'), 'utf8')).toBe(
+      'touched in the target'
+    )
+  })
+
+  it('replaces the copy when the bundle changed although the version did not (a local build)', async () => {
+    const source = make({ 'manifest.json': '{}', 'content.js': 'old page reading' })
+    const target = path.join(sandbox, 'stable2b')
+    await installBrowserExtension({ source, target, version: '1.0.0' })
+    fs.writeFileSync(path.join(source, 'content.js'), 'new page reading')
+    await installBrowserExtension({ source, target, version: '1.0.0' })
+    expect(fs.readFileSync(path.join(target, 'content.js'), 'utf8')).toBe(
+      'new page reading'
+    )
+  })
+
+  it('notices a file added in a sub-folder, but not the order the files are read in', async () => {
+    const source = make({ 'manifest.json': '{}', 'icons/a.png': 'a' })
+    const target = path.join(sandbox, 'stable2c')
+    await installBrowserExtension({ source, target, version: '1.0.0' })
+    const stamp = () => fs.readFileSync(path.join(target, '.codegent-version'), 'utf8')
+    const before = stamp()
+    await installBrowserExtension({ source, target, version: '1.0.0' })
+    expect(stamp()).toBe(before)
+    fs.writeFileSync(path.join(source, 'icons', 'b.png'), 'b')
+    await installBrowserExtension({ source, target, version: '1.0.0' })
+    expect(stamp()).not.toBe(before)
+    expect(fs.existsSync(path.join(target, 'icons', 'b.png'))).toBe(true)
   })
 
   it('updates in place on a new version, removing files that no longer exist', async () => {
@@ -64,7 +94,9 @@ describe('installBrowserExtension', () => {
 
     expect(fs.readFileSync(path.join(target, 'manifest.json'), 'utf8')).toBe('{"v":2}')
     expect(listing(target)).toEqual(['.codegent-version', 'manifest.json', 'new.js'])
-    expect(fs.readFileSync(path.join(target, '.codegent-version'), 'utf8')).toBe('1.1.0')
+    expect(fs.readFileSync(path.join(target, '.codegent-version'), 'utf8')).toMatch(
+      /^1\.1\.0\+[0-9a-f]{12}$/
+    )
   })
 
   it('repairs a copy that lost its manifest even if the version matches', async () => {

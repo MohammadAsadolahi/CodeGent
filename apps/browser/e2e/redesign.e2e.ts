@@ -171,4 +171,54 @@ describe('the redesigned ChatGPT page', () => {
     await chat.close()
     await popup.close()
   })
+
+  it('reads an edit that the page draws in a code viewer with one element per line (a python fence)', async () => {
+    const lines = [
+      '<<<<<<< SEARCH',
+      'def greet():',
+      '    return "hi"',
+      '',
+      '',
+      '# --- end ---',
+      '=======',
+      'def greet(name):',
+      '    return f"hello {name}"',
+      '',
+      '',
+      '# --- end ---',
+      '>>>>>>> REPLACE'
+    ]
+    world.mock.queueReply(
+      [
+        'I will add a greeting helper.',
+        '',
+        '### Updated file: `src/greeting.py`',
+        '',
+        '```python',
+        ...lines,
+        '```',
+        '',
+        'CODEGENT_STATUS: continue'
+      ].join('\n')
+    )
+
+    const result = completed(
+      await world.editor.run(world.editor.job({ text: 'Add a greeting.' }))
+    )
+
+    // The viewer has no <pre> and no newline characters; its lines come back exactly as shown.
+    expect(result.markdown).toBe(
+      [
+        'I will add a greeting helper.',
+        '',
+        '### Updated file: `src/greeting.py`',
+        '',
+        '```',
+        ...lines,
+        '```',
+        '',
+        'CODEGENT_STATUS: continue'
+      ].join('\n')
+    )
+  })
 })

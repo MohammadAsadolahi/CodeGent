@@ -44,6 +44,21 @@ export const redesignCodeBlock = (language: string, code: string): string =>
   `<button type="button" aria-label="Copy code">Copy code</button></div>` +
   `<div class="body"><code>${escapeHtml(code)}</code></div></div>`
 
+/**
+ * A code block drawn by a CodeMirror-based viewer (the way a language such as Python may be shown):
+ * a strip with the language label and a Copy button, then one element per line — no `<pre>`, no
+ * `<code>`, and no newline characters in the text.
+ */
+export const editorCodeBlock = (language: string, code: string): string =>
+  `<div class="code-block"><div class="header"><span>${language}</span>` +
+  `<button type="button" aria-label="Copy code">Copy code</button></div>` +
+  `<div class="cm-editor"><div class="cm-scroller"><div class="cm-content" role="textbox" contenteditable="false">` +
+  code
+    .split('\n')
+    .map((line) => `<div class="cm-line">${line === '' ? '<br>' : escapeHtml(line)}</div>`)
+    .join('') +
+  `</div></div></div></div>`
+
 export const markdownBody = (html: string): string =>
   `<div class="markdown prose dark:prose-invert w-full break-words">${html}</div>`
 
