@@ -250,7 +250,9 @@ const wholeFileRepair = (paths: readonly string[]): string =>
     `SEARCH/REPLACE failed twice for ${paths
       .slice(0, MAX_REPAIR_FILES)
       .map((path) => `\`${path}\``)
-      .join(', ')}${paths.length > MAX_REPAIR_FILES ? ' and others' : ''}. Do not use SEARCH/REPLACE for ${paths.length === 1 ? 'it' : 'them'} again. Read ${paths.length === 1 ? 'the file' : 'each file'} from GitHub and send its COMPLETE new content, written exactly like this:`,
+      .join(
+        ', '
+      )}${paths.length > MAX_REPAIR_FILES ? ' and others' : ''}. Do not use SEARCH/REPLACE for ${paths.length === 1 ? 'it' : 'them'} again. Read ${paths.length === 1 ? 'the file' : 'each file'} from GitHub and send its COMPLETE new content, written exactly like this:`,
     '',
     fileTemplate('replace', paths[0]),
     '',
@@ -327,7 +329,9 @@ export const buildFollowUpPrompt = (report: StepReport): string => {
     if (shapeProblems.length > 0)
       corrections.push(shapeRepair(shapeProblems, report.oneFileOnly === true))
     if (corrections.length === 0)
-      corrections.push('Fix the files that were not applied first, then continue with the task.')
+      corrections.push(
+        'Fix the files that were not applied first, then continue with the task.'
+      )
   }
   const next =
     failures > 0

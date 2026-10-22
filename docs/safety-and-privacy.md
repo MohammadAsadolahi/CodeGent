@@ -8,7 +8,8 @@
   `.git`, or are absolute elsewhere are rejected. Binary files are never edited. A `SEARCH` block
   that cannot be found — or is found in more than one place — is an error, never a guess: that file
   stays untouched and ChatGPT is told what was wrong. (Differences in indentation or trailing spaces
-  are tolerated, because chat models get those wrong.)
+  are tolerated, because chat models get those wrong.) A replacement that stands in for code — a line
+  like `// ... existing code ...` — is refused rather than written over the real code.
 - **Your own work is protected.** Files with uncommitted changes — and files with unsaved changes in
   an editor — are not edited. Commits contain only the files CodeGent changed; whatever else you have
   staged stays staged.

@@ -6,6 +6,7 @@ import {
 } from '@codegent/protocol'
 import {
   ChatError,
+  describeReplyShape,
   type ChatPort,
   type ChatReply,
   type ChatRequest
@@ -24,6 +25,8 @@ export interface BridgeChatOptions {
   now?: () => number
   /** Extra time allowed on top of the browser-side timeout; tests shorten it. */
   graceMs?: number
+  /** Receives one line per reply: its size and shape, never its contents. */
+  log?: (line: string) => void
 }
 
 const sleep = (ms: number, signal: AbortSignal): Promise<void> =>
@@ -80,6 +83,7 @@ export class BridgeChat implements ChatPort {
             request.onProgress?.(event.stage)
             return
           case 'completed':
+            this.logShape(event.markdown)
             return settle(() =>
               resolve({
                 markdown: event.markdown,
@@ -113,6 +117,17 @@ export class BridgeChat implements ChatPort {
         )
       }
     })
+  }
+
+  /**
+   * What a reply is made of, so that a reply CodeGent could not use can be told from one it could
+   * (headings without fences, say) when the log is read afterwards.
+   */
+  private logShape(markdown: string): void {
+    const shape = describeReplyShape(markdown)
+    this.options.log?.(
+      `Reply received: ${shape.chars} characters, ${shape.lines} lines; ${shape.headingLines} file headings, ${shape.fenceLines} code-fence lines, ${shape.markerLines} SEARCH/REPLACE pairs.`
+    )
   }
 
   /** Waits (up to the configured time) for the hub and a browser, then picks which browser to use. */

@@ -246,6 +246,25 @@ describe('BridgeChat', () => {
     expect(job.browserId).toBe(browsers[0]!.id)
   })
 
+  it('logs the size and shape of each reply, never its contents', async () => {
+    const lines: string[] = []
+    const { browsers, chat } = await setup(1, { log: (line) => lines.push(line) })
+    browsers[0]!.onJob = (_job, send) =>
+      send({
+        kind: 'completed',
+        markdown:
+          'secret words\n\n### Updated file: `src/a.ts`\n\n```ts\n<<<<<<< SEARCH\nx\n=======\ny\n>>>>>>> REPLACE\n```',
+        conversationUrl: 'https://chatgpt.com/c/1',
+        durationMs: 1
+      })
+    await chat.send(request())
+
+    expect(lines).toEqual([
+      'Reply received: 96 characters, 11 lines; 1 file headings, 2 code-fence lines, 1 SEARCH/REPLACE pairs.'
+    ])
+    expect(lines.join('')).not.toContain('secret')
+  })
+
   it('turns a failed job into a ChatError carrying the code', async () => {
     const { browsers, chat } = await setup()
     browsers[0]!.onJob = (_job, send) =>

@@ -446,9 +446,19 @@ describe('problems say what is wrong', () => {
     expect(parsed.problems).toEqual([
       {
         path: 'apps/backend/app/prompts/manual_tailor.py',
+        operation: 'update',
         message: expect.stringMatching(/not inside a fenced code block/),
         kind: 'unfenced-markers'
       }
+    ])
+  })
+
+  it('also sees the remains of the markers on the heading line itself', () => {
+    const parsed = parseReply(
+      'Updated file: src/a.ts <<<<<<< SEARCH before ======= after\n\nCODEGENT_STATUS: continue'
+    )
+    expect(parsed.problems).toMatchObject([
+      { path: 'src/a.ts', kind: 'unfenced-markers' }
     ])
   })
 
@@ -458,6 +468,7 @@ describe('problems say what is wrong', () => {
     ).toEqual([
       {
         path: 'a.ts',
+        operation: 'update',
         message: expect.stringMatching(/without a code block/),
         kind: 'heading-without-block'
       }
@@ -622,6 +633,40 @@ describe('things that must NOT become edits', () => {
     expect(parsed.edits).toEqual([{ kind: 'create', path: 'b.ts', content: 'content' }])
     expect(parsed.problems).toHaveLength(1)
     expect(parsed.problems[0]!.message).toMatch(/never closed/)
+  })
+
+  it('treats the unfenced pairs of one file as one block: a broken last pair means nothing of that file is applied', () => {
+    const reply = [
+      '### Updated file: `a.ts`',
+      hunk('one', '1'),
+      '',
+      hunk('two', '2'),
+      '',
+      '<<<<<<< SEARCH',
+      'three',
+      '=======',
+      '3',
+      '',
+      '### Updated file: `b.ts`',
+      hunk('x', 'y')
+    ].join('\n')
+    const parsed = parseReply(reply)
+    expect(parsed.edits).toEqual([
+      { kind: 'update', path: 'b.ts', hunks: [{ search: ['x'], replace: ['y'] }] }
+    ])
+    expect(parsed.problems).toMatchObject([{ path: 'a.ts', kind: 'unclosed-markers' }])
+  })
+
+  it('joins complete unfenced pairs of one file into a single edit', () => {
+    const reply = `### Updated file: \`a.ts\`\n${hunk('one', '1')}\n\n${hunk('two', '2')}\nCODEGENT_STATUS: done`
+    expect(only(reply)).toEqual({
+      kind: 'update',
+      path: 'a.ts',
+      hunks: [
+        { search: ['one'], replace: ['1'] },
+        { search: ['two'], replace: ['2'] }
+      ]
+    })
   })
 
   it('drops blocks with text outside the markers, malformed or unterminated markers', () => {

@@ -1,4 +1,5 @@
 import { adjustReplacement, findBlock } from './match'
+import { findPlaceholder } from './placeholders'
 import type { ClosestMatch, EditError, Hunk, MatchTier } from './types'
 
 export interface HunkOutcome {
@@ -89,6 +90,20 @@ export const applyHunks = (content: string, hunks: readonly Hunk[]): ApplyResult
   hunks.forEach((hunk, offset) => {
     const index = offset + 1
     const view = lines.map((line) => line.text)
+
+    const placeholder = findPlaceholder(hunk.replace, hunk.search)
+    if (placeholder !== undefined) {
+      outcomes.push({
+        index,
+        ok: false,
+        error: {
+          code: 'conflict',
+          hunk: index,
+          message: `The REPLACE text of hunk ${index} contains a placeholder line (“${placeholder.trim()}”) instead of the real code, which would delete what it stands for. Write out every line of the replacement.`
+        }
+      })
+      return
+    }
 
     // An empty SEARCH is only meaningful for an empty file: it provides the whole content.
     if (hunk.search.every((line) => line.trim() === '')) {

@@ -264,7 +264,8 @@ export class App implements vscode.Disposable {
             preferredBrowserId: () =>
               this.context.workspaceState.get<string>(BROWSER_KEY),
             rememberBrowser: (id) =>
-              void this.context.workspaceState.update(BROWSER_KEY, id)
+              void this.context.workspaceState.update(BROWSER_KEY, id),
+            log: (line) => this.log.info(line)
           }),
           workspace,
           git: repo.gitPort(),

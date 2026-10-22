@@ -4,7 +4,8 @@ import {
   planChanges,
   type EditOutcome,
   type FileChange,
-  type ParsedReply
+  type ParsedReply,
+  type ParseProblem
 } from '../edits'
 import { GitError } from '../git'
 import {
@@ -96,6 +97,34 @@ const withoutRecapProblems = (parsed: ParsedReply): ParsedReply => {
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
+/** SEARCH text that does not match its file: the failure a complete file avoids altogether. */
+const WHOLE_FILE_CODES: ReadonlySet<string> = new Set([
+  'not-found',
+  'ambiguous',
+  'empty-search'
+])
+/** Tangled SEARCH/REPLACE markers, which a complete file avoids as well. */
+const WHOLE_FILE_KINDS: ReadonlySet<string | undefined> = new Set([
+  'unclosed-markers',
+  'malformed-markers',
+  'stray-text',
+  'empty-block'
+])
+/** Problems where the content of a file never reached CodeGent. */
+const SHAPE_KINDS: ReadonlySet<string | undefined> = new Set([
+  'heading-without-block',
+  'unfenced-markers',
+  'orphan-block',
+  'cut-off'
+])
+/** A complete file is only asked for when it is small enough to be written out reliably. */
+const WHOLE_FILE_MAX_CHARS = 24_000
+/** Replies in a row that may fail for one file (or in one way) before the run gives up on it. */
+const MAX_ATTEMPTS = 3
+
+const clip = (text: string, max: number): string =>
+  text.length <= max ? text : `${text.slice(0, max - 1)}…`
+
 const explainChatError = (error: ChatError): string => {
   switch (error.code) {
     case 'no-browser':
@@ -158,6 +187,10 @@ export class AgentRun {
   private work: StepWork | null = null
   private conversationStarted = false
   private failedStepsInARow = 0
+  /** Consecutive replies in which a file could not be applied; '' stands for no particular file. */
+  private readonly failureStreaks = new Map<string, number>()
+  /** Consecutive replies whose file contents did not reach CodeGent at all. */
+  private shapeFailureStreak = 0
   private formatRetriesLeft: number
   private running = false
   private repo: RepoContext | undefined
@@ -478,16 +511,18 @@ export class AgentRun {
       (work.diagnostics?.errors ?? 0) > 0 ||
       (work.verify !== undefined && work.verify.exitCode !== 0)
     this.failedStepsInARow = failures > 0 ? this.failedStepsInARow + 1 : 0
+    const attempt = await this.trackFailures(outcomes, parsed.problems)
 
     if (parsed.status === 'blocked')
       throw new FinishSignal('blocked', parsed.summary || 'ChatGPT cannot continue.')
     if (parsed.status === 'done' && failures === 0 && !checksFailed) {
       throw new FinishSignal('done', parsed.summary || 'The task is complete.')
     }
+    if (attempt.exhausted) throw new FinishSignal('stuck', attempt.exhausted)
     if (this.failedStepsInARow >= this.settings.maxFailedSteps) {
       throw new FinishSignal(
         'stuck',
-        `${this.failedStepsInARow} steps in a row had changes that could not be applied.`
+        `${this.failedStepsInARow} steps in a row had changes that could not be applied.${attempt.reason ? ` Last problem: ${attempt.reason}` : ''}`
       )
     }
     this.throwIfOutOfSteps()
@@ -497,6 +532,9 @@ export class AgentRun {
       repo: this.repo!,
       outcomes,
       problems: record.reply?.problems,
+      problemDetails: parsed.problems,
+      wholeFile: attempt.wholeFile,
+      oneFileOnly: attempt.oneFileOnly,
       diagnostics: work.diagnostics,
       verify: work.verify,
       publish
@@ -587,6 +625,92 @@ export class AgentRun {
         'needs-attention',
         `The push to GitHub failed — ${errorText(error).split('\n')[0]}. ${hint}`
       )
+    }
+  }
+
+  /**
+   * Remembers which files keep failing, and how, so that every repeat is asked for differently — a
+   * complete file instead of SEARCH/REPLACE, one file at a time instead of all of them — and the
+   * run stops instead of asking a third time in the same way. A reply that fails is never answered
+   * with the same request twice.
+   */
+  private async trackFailures(
+    outcomes: readonly EditOutcome[],
+    problems: readonly ParseProblem[]
+  ): Promise<{
+    wholeFile: string[]
+    oneFileOnly: boolean
+    exhausted?: string
+    reason?: string
+  }> {
+    const failedNow = new Map<string, { shape: boolean; replaceable: boolean }>()
+    const note = (path: string, shape: boolean, replaceable: boolean) => {
+      const known = failedNow.get(path)
+      failedNow.set(path, {
+        shape: (known?.shape ?? false) || shape,
+        replaceable: (known?.replaceable ?? false) || replaceable
+      })
+    }
+    for (const outcome of outcomes) {
+      if (outcome.status === 'failed') {
+        note(
+          outcome.path,
+          false,
+          outcome.errors.some((error) => WHOLE_FILE_CODES.has(error.code))
+        )
+      } else this.failureStreaks.delete(outcome.path)
+    }
+    for (const problem of problems) {
+      note(
+        problem.path ?? '',
+        SHAPE_KINDS.has(problem.kind),
+        WHOLE_FILE_KINDS.has(problem.kind)
+      )
+    }
+
+    if (failedNow.size === 0) {
+      this.failureStreaks.clear()
+      this.shapeFailureStreak = 0
+      return { wholeFile: [], oneFileOnly: false }
+    }
+    for (const path of failedNow.keys())
+      this.failureStreaks.set(path, (this.failureStreaks.get(path) ?? 0) + 1)
+    const shapeFailed = [...failedNow.values()].some((how) => how.shape)
+    this.shapeFailureStreak = shapeFailed ? this.shapeFailureStreak + 1 : 0
+
+    const firstFailure = outcomes.find((outcome) => outcome.status === 'failed')
+    const reason = clip(
+      (firstFailure?.detail ?? problems[0]?.message ?? '').replace(/\s+/g, ' ').trim(),
+      200
+    )
+    const stuckOn = [...failedNow.keys()].find(
+      (path) => (this.failureStreaks.get(path) ?? 0) >= MAX_ATTEMPTS
+    )
+    const stop = (what: string) =>
+      `${what} in ${MAX_ATTEMPTS} replies in a row, so the run stopped instead of asking again. Last problem: ${reason}`
+    const exhausted =
+      this.shapeFailureStreak >= MAX_ATTEMPTS
+        ? stop(
+            "ChatGPT's file contents could not be read (they did not arrive inside code blocks)"
+          )
+        : stuckOn === undefined
+          ? undefined
+          : stuckOn === ''
+            ? stop("ChatGPT's replies could not be used")
+            : stop(`ChatGPT could not get \`${stuckOn}\` applied`)
+
+    const wholeFile: string[] = []
+    for (const [path, how] of failedNow) {
+      if (path === '' || how.shape || !how.replaceable) continue
+      if ((this.failureStreaks.get(path) ?? 0) < 2) continue
+      const text = await this.deps.workspace.view.read(path).catch(() => null)
+      if (text !== null && text.length <= WHOLE_FILE_MAX_CHARS) wholeFile.push(path)
+    }
+    return {
+      wholeFile,
+      oneFileOnly: this.shapeFailureStreak >= 2,
+      exhausted,
+      reason
     }
   }
 

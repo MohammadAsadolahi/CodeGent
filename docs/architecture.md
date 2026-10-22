@@ -36,6 +36,11 @@ with fakes (every transition and failure), and the same loop runs against real a
 - **Policies.** A step cap, a repeated-failure cap ("stuck"), one automatic format reminder, `done` is
   not accepted while diagnostics or the verify command report errors, Stop works at any point (a reply
   that arrives after Stop is dropped), and a declined review is reported back to ChatGPT.
+- **A failure is never answered with the same request twice.** The loop counts consecutive failed
+  replies per file (and for replies whose file contents did not arrive at all). The first correction
+  names the exact mistake and shows the shape to answer in; the second changes the request — one
+  file at a time for an unreadable reply, the complete file instead of SEARCH/REPLACE when SEARCH text
+  keeps not matching a small file; the third ends the run ("stuck") with the last problem.
 - **Pauses are resumable.** If a push fails after files were applied and committed, _Resume_ continues
   at the push — nothing is applied or committed twice. Chat errors (rate limit, sign-in, no browser,
   timeout) resume by sending the identical message again.
@@ -62,9 +67,12 @@ whole new file
 CODEGENT_STATUS: continue
 ````
 
-The parser is tolerant of harmless variations (bold or backticked headings, any fence length, CRLF) and
-strict where it matters: only a heading's first block defines content, loose code samples are never
-edits, and unterminated or cut-off blocks are reported as problems, not guessed. The matcher tries
+The parser is tolerant of harmless variations (bold or backticked headings, any fence length, CRLF,
+SEARCH/REPLACE pairs without a fence, headings written inside the code block, a bare file name above
+a fenced SEARCH/REPLACE block) and strict where it matters: only a heading's first block defines
+content, loose code samples are never edits (a bare file name is only used for a block that has
+SEARCH/REPLACE markers), and unterminated or cut-off blocks are reported as problems, not guessed.
+Every problem carries a kind, so the correction sent back can name the exact mistake. The matcher tries
 exact → trailing-space-insensitive → indentation-insensitive (re-indenting the replacement) → collapsed
 spaces → blank-line-insensitive; **ambiguity is an error**. Changes are _planned_ in memory on an
 overlay (create, update, replace, delete, rename in order), then written together:
@@ -72,7 +80,9 @@ overlay (create, update, replace, delete, rename in order), then written togethe
 - each file is all-or-nothing, files are independent, failures are reported per file;
 - paths are sandboxed (no `..`, no `.git`, no absolute paths elsewhere, no forbidden characters);
 - binary, git-ignored and dirty files (uncommitted changes or unsaved editor buffers) are not edited;
-- a whole-file replacement that shrinks a large file drastically is refused.
+- a whole-file replacement that shrinks a large file drastically is refused, as is any replacement
+  (SEARCH/REPLACE or whole file) that contains a placeholder line such as `// ... existing code ...`
+  that the file did not already have.
 
 The prompt's own format example is parsed in a test, so the prompt and the parser cannot drift apart.
 

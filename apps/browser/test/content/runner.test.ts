@@ -94,6 +94,43 @@ const staleReply = (kind: ChatLayout): string =>
   })[kind]
 
 describe.each(['legacy', 'redesign', 'bare'] as const)(
+  'edits in a code viewer the converter cannot read (%s page)',
+  (kind) => {
+    beforeEach(() => {
+      layout = kind
+    })
+    const lines = [
+      '<<<<<<< SEARCH',
+      'def a():',
+      '    return 1',
+      '=======',
+      'def a():',
+      '    return 2',
+      '>>>>>>> REPLACE'
+    ]
+    // Every line is an element of its own: read as paragraphs, the indentation would be lost.
+    const viewer = `<div class="viewer">${lines
+      .map(
+        (line) =>
+          `<div style="white-space: pre">${line.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`
+      )
+      .join('')}</div>`
+    const reply = `<h3>Updated file: <code>src/a.py</code></h3>${viewer}`
+
+    it('still hands over the lines exactly as shown, inside a code fence', async () => {
+      const { events } = await run(makeJob(), { reply })
+      const done = terminal(events)
+      expect(done.kind).toBe('completed')
+      if (done.kind === 'completed') {
+        expect(done.markdown).toBe(
+          ['Updated file: src/a.py', '```', ...lines, '```'].join('\n')
+        )
+      }
+    })
+  }
+)
+
+describe.each(['legacy', 'redesign', 'bare'] as const)(
   'a successful run (%s page)',
   (kind) => {
     beforeEach(() => {

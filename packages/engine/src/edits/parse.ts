@@ -369,7 +369,7 @@ export const parseReply = (markdown: string): ParsedReply => {
     )
       return
     const unreadable = lines
-      .slice(open.line + 1, endLine)
+      .slice(open.line, endLine)
       .some((line) => MARKER_REMNANTS.test(line))
     problems.push({
       path: open.header.paths[0],
@@ -531,19 +531,31 @@ export const parseReply = (markdown: string): ParsedReply => {
     }
 
     if (CONFLICT_START.test(line)) {
-      const body = [line]
+      // The pairs of one file (separated by nothing but blank lines) are one block, exactly as
+      // inside a fence: a file whose last pair is broken is not applied half.
+      const body: string[] = []
       let j = i
       let closed = false
-      for (; j + 1 < lines.length; j++) {
-        const next = lines[j + 1]!
-        if (CONFLICT_END.test(next)) {
+      for (;;) {
+        closed = false
+        body.push(lines[j]!)
+        for (; j + 1 < lines.length; j++) {
+          const next = lines[j + 1]!
+          if (CONFLICT_END.test(next)) {
+            body.push(next)
+            j++
+            closed = true
+            break
+          }
+          if (STATUS_RE.test(next) || announcesContent(lines, j + 1)) break
           body.push(next)
-          j++
-          closed = true
-          break
         }
-        if (STATUS_RE.test(next) || announcesContent(lines, j + 1)) break
-        body.push(next)
+        if (!closed) break
+        let following = j + 1
+        while (following < lines.length && lines[following]!.trim() === '') following++
+        if (following >= lines.length || !CONFLICT_START.test(lines[following]!)) break
+        body.push(...lines.slice(j + 1, following))
+        j = following
       }
       handleBlock(body, false)
       i = j

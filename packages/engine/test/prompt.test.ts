@@ -9,6 +9,7 @@ import {
   REPLY_FORMAT_EXAMPLE,
   type DiagnosticItem,
   type EditOutcome,
+  type ParseProblem,
   type RepoContext,
   type StepReport
 } from '../src'
@@ -88,6 +89,18 @@ describe('buildInitialPrompt', () => {
     expect(prompt).toContain('Status line')
     for (const status of ['continue', 'done', 'blocked'])
       expect(prompt).toContain(`CODEGENT_STATUS: ${status}`)
+  })
+
+  it('asks for plain-text fences, the code block form the real page is known to give back exactly', () => {
+    expect(prompt).toContain('Open every code block with ```text')
+    expect(REPLY_FORMAT_EXAMPLE).not.toMatch(/```(?!text$)\w/m)
+    expect(REPLY_FORMAT_EXAMPLE.match(/^```text$/gm)).toHaveLength(2)
+  })
+
+  it('makes the model check the shape of every file before it sends', () => {
+    expect(prompt).toContain('Before you send, check every file')
+    expect(prompt).toContain('ONE fenced code block')
+    expect(prompt).toContain('arrives scrambled')
   })
 
   it('wraps the example in a longer fence so its own code blocks do not end it', () => {
@@ -213,20 +226,152 @@ describe('buildFollowUpPrompt', () => {
     expect(text).toContain('never closed')
   })
 
-  it('gives an exact fenced template when a file heading had no content block', () => {
-    const text = buildFollowUpPrompt(
-      report({
-        outcomes: [],
-        problems: [
-          '“src/a.ts”: “update file” heading without a code block holding the content'
-        ]
+  describe('when the content of a file did not reach CodeGent', () => {
+    const missing = (path: string, over: Partial<ParseProblem> = {}): ParseProblem => ({
+      path,
+      operation: 'update',
+      message: '“update file” heading without a code block holding the content',
+      kind: 'heading-without-block',
+      ...over
+    })
+    const withProblems = (
+      problemDetails: ParseProblem[],
+      over: Partial<StepReport> = {}
+    ) =>
+      buildFollowUpPrompt(
+        report({
+          problems: problemDetails.map((p) => `“${p.path}”: ${p.message}`),
+          problemDetails,
+          ...over
+        })
+      )
+
+    it('names each file and gives its exact fenced shape, filled in with the path', () => {
+      const text = withProblems([missing('src/a.ts'), missing('src/b.ts')])
+      expect(text).toContain(
+        'CodeGent could not read the file contents of your last reply'
+      )
+      expect(text).toContain(
+        '- `src/a.ts`: the heading arrived but no code block came after it'
+      )
+      expect(text).toContain(
+        '- `src/b.ts`: the heading arrived but no code block came after it'
+      )
+      expect(text).toContain(
+        [
+          '### Updated file: `src/a.ts`',
+          '',
+          '```text',
+          '<<<<<<< SEARCH',
+          'exact lines copied from the current file',
+          '=======',
+          'the new lines',
+          '>>>>>>> REPLACE',
+          '```'
+        ].join('\n')
+      )
+      expect(text).toContain('### Updated file: `src/b.ts`')
+      expect(text).toContain('ONE fenced code block')
+      expect(text).toContain('Do not repeat files that were already applied')
+      // The generic reminder would only repeat what the template already shows.
+      expect(text).not.toContain('Reply in the same format as before')
+    })
+
+    it('says when the SEARCH/REPLACE text was visible but not inside a fence', () => {
+      const text = withProblems([
+        missing('src/a.ts', {
+          kind: 'unfenced-markers',
+          message:
+            '“update file” heading followed by SEARCH/REPLACE text that is not inside a fenced code block'
+        })
+      ])
+      expect(text).toContain('written outside a fenced code block')
+      expect(text).toContain('received it scrambled')
+    })
+
+    it('shows the shape for a new file when the heading asked for one', () => {
+      const text = withProblems([
+        missing('src/new.ts', {
+          operation: 'create',
+          message: '“create file” heading without a code block holding the content'
+        })
+      ])
+      expect(text).toContain(
+        '### Created file: `src/new.ts`\n\n```text\nthe complete content of the file\n```'
+      )
+      expect(text).not.toContain('<<<<<<< SEARCH')
+    })
+
+    it('asks for one file only the second time, and says so', () => {
+      const text = withProblems([missing('src/a.ts'), missing('src/b.ts')], {
+        oneFileOnly: true
       })
-    )
-    expect(text).toContain('Resend only the missing file changes')
-    expect(text).toContain('keep the triple-backtick fence')
-    expect(text).toContain('### Updated file: `path/to/file.ext`')
-    expect(text).toContain('<<<<<<< SEARCH\nexact existing lines from the file\n=======')
-    expect(text).toContain('do not repeat changes already applied')
+      expect(text).toContain(
+        'This is the second time. Send ONLY `src/a.ts` in your next reply'
+      )
+      expect(text).toContain('### Updated file: `src/a.ts`')
+      expect(text).not.toContain('### Updated file: `src/b.ts`')
+    })
+
+    it('keeps the shape short for many files and says how many are left', () => {
+      const text = withProblems(
+        Array.from({ length: 6 }, (_, i) => missing(`src/f${i}.ts`))
+      )
+      expect(text).toContain('### Updated file: `src/f2.ts`')
+      expect(text).not.toContain('### Updated file: `src/f3.ts`')
+      expect(text).toContain('(and the 3 other files afterwards)')
+    })
+
+    it('still reads reports that only carry the problem texts', () => {
+      const text = buildFollowUpPrompt(
+        report({
+          problems: [
+            '“src/a.ts”: “update file” heading without a code block holding the content'
+          ]
+        })
+      )
+      expect(text).toContain('### Updated file: `src/a.ts`')
+      expect(text).toContain('ONE fenced code block')
+    })
+
+    it('handles a block with no heading above it, where no file name is known', () => {
+      const text = withProblems([
+        {
+          message: 'a SEARCH/REPLACE block was not preceded by a file heading',
+          kind: 'orphan-block'
+        }
+      ])
+      expect(text).toContain('had no file heading above it')
+      expect(text).toContain('### Updated file: `path/to/file.ext`')
+    })
+  })
+
+  describe('when a file keeps failing', () => {
+    it('asks for the complete file instead of more SEARCH/REPLACE', () => {
+      const text = buildFollowUpPrompt(
+        report({ outcomes: [notFound('src/d.ts')], wholeFile: ['src/d.ts'] })
+      )
+      expect(text).toContain('SEARCH/REPLACE failed twice for `src/d.ts`')
+      expect(text).toContain(
+        '### Replaced file: `src/d.ts`\n\n```text\nthe complete content of the file\n```'
+      )
+      expect(text).toContain('Do not use SEARCH/REPLACE for it again')
+      expect(text).not.toContain('Fix the files that were not applied first')
+    })
+
+    it('can combine that with a correction of the reply shape', () => {
+      const text = buildFollowUpPrompt(
+        report({
+          outcomes: [notFound('src/d.ts')],
+          wholeFile: ['src/d.ts'],
+          problems: [
+            '“src/e.ts”: “update file” heading without a code block holding the content'
+          ]
+        })
+      )
+      expect(text).toContain('### Replaced file: `src/d.ts`')
+      expect(text).toContain('### Updated file: `src/e.ts`')
+    })
   })
 
   it('gives a copyable fenced template when the reply contains no edits', () => {

@@ -1,6 +1,7 @@
 export * from './types'
 export { normalizeRepoPath, type PathOptions, type PathResult } from './paths'
 export { describeReplyShape, parseReply, type ReplyShape } from './parse'
+export { findPlaceholder, isPlaceholderLine } from './placeholders'
 export {
   adjustReplacement,
   closestMatch,

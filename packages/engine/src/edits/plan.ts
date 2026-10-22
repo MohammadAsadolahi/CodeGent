@@ -1,5 +1,6 @@
 import { applyHunks, conformContent } from './apply'
 import { normalizeRepoPath } from './paths'
+import { findPlaceholder } from './placeholders'
 import type { ChangeSet, EditError, EditOutcome, FileChange, FileEdit } from './types'
 
 /** Thrown by a {@link WorkspaceView} when a file is not text. */
@@ -159,6 +160,15 @@ export const planChanges = async (
     const after = conformContent(content, before)
     if (after === before)
       return skipped(edit, path, 'no change (the file already has this content)')
+    const placeholder = findPlaceholder(after.split(/\r?\n/), before.split(/\r?\n/))
+    if (placeholder !== undefined) {
+      return failure(edit, path, [
+        {
+          code: 'conflict',
+          message: `The replacement for \`${path}\` contains a placeholder line (“${placeholder.trim()}”) instead of the real code. Whole-file replacements must contain every line of the file.`
+        }
+      ])
+    }
     if (
       before.length >= SHRINK_GUARD_MIN_CHARS &&
       after.length < before.length * SHRINK_GUARD_RATIO

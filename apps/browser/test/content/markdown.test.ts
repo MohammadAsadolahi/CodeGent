@@ -3,6 +3,7 @@ import { elementToMarkdown, messagesToMarkdown } from '../../src/content/markdow
 import {
   assistantMessage,
   codeBlock,
+  escapeHtml,
   redesignCodeBlock,
   setBody
 } from '../fixtures/chatgpt-dom'
@@ -226,5 +227,52 @@ describe('code blocks without a <pre> (the redesigned page)', () => {
     expect(md(reply)).toBe(
       '### Created file: `docs/probe.md`\n\n```\nhello from the probe\nsecond line\n```\n\nCODEGENT_STATUS: done'
     )
+  })
+})
+
+describe('a code viewer built on CodeMirror, as the page draws it without <pre> or <code>', () => {
+  const lines = [
+    '<<<<<<< SEARCH',
+    'def a():',
+    '    return 1',
+    '',
+    '',
+    '# --- end ---',
+    '=======',
+    'def a():',
+    '    return 2',
+    '',
+    '',
+    '# --- end ---',
+    '>>>>>>> REPLACE'
+  ]
+  const viewer = (rows: readonly string[]) =>
+    '<div class="code-block"><div class="strip"><span>python</span>' +
+    '<button type="button" aria-label="Copy code">Copy code</button></div>' +
+    '<div class="cm-editor"><div class="cm-scroller">' +
+    '<div class="cm-gutters"><div class="cm-gutter"><div class="cm-gutterElement">1</div><div class="cm-gutterElement">2</div></div></div>' +
+    '<div class="cm-content" role="textbox" contenteditable="true">' +
+    rows
+      .map(
+        (row) =>
+          `<div class="cm-line">${row === '' ? '<br>' : `<span class="tok">${escapeHtml(row)}</span>`}</div>`
+      )
+      .join('') +
+    '</div></div></div></div>'
+
+  it('is read as one code block with every line exactly as shown', () => {
+    expect(md('<h3>Updated file: <code>tests/a.py</code></h3>' + viewer(lines))).toBe(
+      ['### Updated file: `tests/a.py`', '', '```', ...lines, '```'].join('\n')
+    )
+  })
+
+  it('leaves out the language strip and the line numbers', () => {
+    const out = md(viewer(['x = 1']))
+    expect(out).toBe('```\nx = 1\n```')
+    expect(out).not.toMatch(/python|Copy|^1$/m)
+  })
+
+  it('uses a fence longer than any backtick run inside the code', () => {
+    expect(md(viewer(['```', 'x', '```']))).toBe('````\n```\nx\n```\n````')
   })
 })

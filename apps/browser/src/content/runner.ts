@@ -2,7 +2,7 @@ import type { JobEvent, JobRequest } from '@codegent/protocol'
 import { AbortedError, sleep, truncate, waitFor } from './dom-utils'
 import { describePage } from './describe'
 import { fillComposer, type FillOptions } from './fill'
-import { messagesToMarkdown } from './markdown'
+import { messagesToMarkdown, replyBodies } from './markdown'
 import {
   freshReplyElements,
   ReplyError,
@@ -23,6 +23,7 @@ import {
   messageId,
   turnKey
 } from './selectors'
+import { recoverEditBlocks } from './recover'
 import { submissionConfirmed, submitPrompt } from './submit'
 
 /** Delays that are fixed in production; tests shorten them. */
@@ -229,7 +230,10 @@ export const runJob = async (job: JobRequest, deps: RunnerDeps): Promise<void> =
     const messages = reply.messages.length
       ? reply.messages
       : freshReplyElements(doc, snapshot, job.text)
-    const markdown = messagesToMarkdown(messages)
+    const markdown = recoverEditBlocks(
+      messagesToMarkdown(messages),
+      messages.flatMap(replyBodies)
+    )
     if (markdown === '') {
       throw new ReplyError(
         'page-error',

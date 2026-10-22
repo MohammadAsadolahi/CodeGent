@@ -423,16 +423,177 @@ describe('replies without usable changes', () => {
     expect(h.chat.texts[1]).toContain('never closed')
   })
 
-  it('stops after the same unappliable reply repeats instead of spending more correction turns', async () => {
-    const broken = '### Updated file: `a.ts`\n\nCODEGENT_STATUS: continue'
-    const h = harness([broken, broken, broken])
-    const snapshot = await run(h, { maxFailedSteps: 3 }).start()
+  it('applies a reply whose headings were written inside the code block, without another turn', async () => {
+    const block = [
+      'Updated file: src/a.ts',
+      '<<<<<<< SEARCH',
+      'const a = 1',
+      '=======',
+      'const a = 2',
+      '>>>>>>> REPLACE',
+      '',
+      'Created file: src/b.ts',
+      'export const b = 1'
+    ].join('\n')
+    const h = harness(
+      [`Two files.\n\n\`\`\`text\n${block}\n\`\`\`\n\nCODEGENT_STATUS: done`],
+      { 'src/a.ts': 'const a = 1\n' }
+    )
+    const snapshot = await run(h).start()
+    expect(finalState(snapshot)).toMatchObject({ outcome: 'done' })
+    expect(h.chat.sent).toHaveLength(1)
+    expect(h.workspace.files.get('src/a.ts')).toBe('const a = 2\n')
+    expect(h.workspace.files.get('src/b.ts')).toBe('export const b = 1\n')
+    expect(h.git.commits[0]!.paths.sort()).toEqual(['src/a.ts', 'src/b.ts'])
+  })
 
+  it('applies a reply that names the file on a line of its own above the block', async () => {
+    const h = harness(
+      [
+        '`src/a.ts`\n\n```ts\n<<<<<<< SEARCH\nconst a = 1\n=======\nconst a = 2\n>>>>>>> REPLACE\n```\n\nCODEGENT_STATUS: done'
+      ],
+      { 'src/a.ts': 'const a = 1\n' }
+    )
+    const snapshot = await run(h).start()
+    expect(finalState(snapshot)).toMatchObject({ outcome: 'done' })
+    expect(h.chat.sent).toHaveLength(1)
+    expect(h.workspace.files.get('src/a.ts')).toBe('const a = 2\n')
+  })
+})
+
+describe('never asking the same thing twice', () => {
+  /** Headings with nothing under them: the file contents did not arrive. */
+  const noContent = (...paths: string[]) =>
+    reply(
+      'Here are the changes.',
+      paths.map((path) => `### Updated file: \`${path}\``),
+      'continue'
+    )
+
+  it('corrects an unreadable reply with the exact shape, then asks for one file, then stops', async () => {
+    const h = harness([
+      noContent('a.ts', 'b.ts'),
+      noContent('a.ts', 'b.ts'),
+      noContent('a.ts', 'b.ts')
+    ])
+    const snapshot = await run(h, { maxFailedSteps: 10 }).start()
+
+    expect(h.chat.sent).toHaveLength(3)
+    expect(h.chat.texts[1]).toContain('### Updated file: `a.ts`')
+    expect(h.chat.texts[1]).toContain('### Updated file: `b.ts`')
+    expect(h.chat.texts[1]).not.toContain('This is the second time')
+    expect(h.chat.texts[2]).toContain('This is the second time. Send ONLY `a.ts`')
+    expect(h.chat.texts[2]).not.toContain('### Updated file: `b.ts`')
     expect(finalState(snapshot)).toMatchObject({
       outcome: 'stuck',
-      message: expect.stringMatching(/same changes failed to apply twice/)
+      message: expect.stringMatching(/could not be read.*in 3 replies in a row/)
     })
-    expect(h.chat.sent).toHaveLength(2)
+  })
+
+  it('lets the second, one-file attempt succeed and carries on with the rest', async () => {
+    const h = harness([
+      noContent('a.ts', 'b.ts'),
+      noContent('a.ts', 'b.ts'),
+      reply('Only a.', [createReply('a.ts', 'a')], 'continue'),
+      reply('Now b.', [createReply('b.ts', 'b')], 'done')
+    ])
+    const snapshot = await run(h).start()
+    expect(finalState(snapshot)).toMatchObject({ outcome: 'done' })
+    expect(h.workspace.files.get('a.ts')).toBe('a\n')
+    expect(h.workspace.files.get('b.ts')).toBe('b\n')
+    expect(h.chat.sent).toHaveLength(4)
+  })
+
+  it('asks for the complete file when SEARCH text fails twice for a small file, and finishes with it', async () => {
+    const bad = () => reply('Try.', [updateReply('a.ts', 'missing', 'x')], 'continue')
+    const h = harness(
+      [
+        bad(),
+        bad(),
+        reply(
+          'Whole file.',
+          ['### Replaced file: `a.ts`\n\n```ts\nconst a = 2\n```'],
+          'done'
+        )
+      ],
+      { 'a.ts': 'const a = 1\n' }
+    )
+    const snapshot = await run(h, { maxFailedSteps: 5 }).start()
+
+    expect(h.chat.texts[1]).not.toContain('SEARCH/REPLACE failed twice')
+    expect(h.chat.texts[1]).toContain('Fix the files that were not applied first')
+    expect(h.chat.texts[2]).toContain('SEARCH/REPLACE failed twice for `a.ts`')
+    expect(h.chat.texts[2]).toContain('### Replaced file: `a.ts`')
+    expect(finalState(snapshot)).toMatchObject({ outcome: 'done' })
+    expect(h.workspace.files.get('a.ts')).toBe('const a = 2\n')
+  })
+
+  it('does not ask for a huge file to be written out whole', async () => {
+    const big = `${'const line = 1\n'.repeat(3_000)}`
+    const bad = () => reply('Try.', [updateReply('big.ts', 'missing', 'x')], 'continue')
+    const h = harness([bad(), bad(), bad()], { 'big.ts': big })
+    await run(h, { maxFailedSteps: 5 }).start()
+    expect(h.chat.texts[2]).not.toContain('SEARCH/REPLACE failed twice')
+    expect(h.chat.texts[2]).toContain('Fix the files that were not applied first')
+  })
+
+  it('does not ask for a whole file when the file is not the problem (uncommitted changes)', async () => {
+    const edit = () => reply('Try.', [updateReply('a.ts', 'a', 'b')], 'continue')
+    const h = harness([edit(), edit(), edit()], { 'a.ts': 'a\n' })
+    h.workspace.dirty.add('a.ts')
+    await run(h, { maxFailedSteps: 5 }).start()
+    expect(h.chat.texts[2]).not.toContain('SEARCH/REPLACE failed twice')
+  })
+
+  it('stops on a file that failed three replies in a row, even with a generous failure budget', async () => {
+    const bad = () => reply('Try.', [updateReply('a.ts', 'missing', 'x')], 'continue')
+    const h = harness([bad(), bad(), bad(), bad()], { 'a.ts': 'a\n' })
+    const snapshot = await run(h, { maxFailedSteps: 10 }).start()
+    expect(h.chat.sent).toHaveLength(3)
+    expect(finalState(snapshot)).toMatchObject({
+      outcome: 'stuck',
+      message: expect.stringMatching(
+        /could not get `a\.ts` applied in 3 replies in a row/
+      )
+    })
+  })
+
+  it('counts each file on its own: other files succeeding or failing does not reset or add up', async () => {
+    const h = harness(
+      [
+        reply(
+          '1',
+          [updateReply('a.ts', 'missing', 'x'), updateReply('b.ts', 'b', 'bb')],
+          'continue'
+        ),
+        reply(
+          '2',
+          [updateReply('a.ts', 'missing', 'x'), updateReply('c.ts', 'c', 'cc')],
+          'continue'
+        ),
+        reply('3', [updateReply('a.ts', 'a', 'aa')], 'done')
+      ],
+      { 'a.ts': 'a\n', 'b.ts': 'b\n', 'c.ts': 'c\n' }
+    )
+    const snapshot = await run(h, { maxFailedSteps: 5 }).start()
+    expect(finalState(snapshot)).toMatchObject({ outcome: 'done' })
+    expect(h.chat.texts[2]).toContain('SEARCH/REPLACE failed twice for `a.ts`')
+    expect(h.chat.texts[2]).not.toContain('`b.ts`, ')
+  })
+
+  it('names the last problem when the failure budget runs out', async () => {
+    const bad = (path: string) =>
+      reply('Try.', [updateReply(path, 'missing', 'x')], 'continue')
+    const h = harness([bad('a.ts'), bad('b.ts'), bad('c.ts')], {
+      'a.ts': 'a\n',
+      'b.ts': 'b\n',
+      'c.ts': 'c\n'
+    })
+    const snapshot = await run(h, { maxFailedSteps: 3 }).start()
+    expect(finalState(snapshot)).toMatchObject({
+      outcome: 'stuck',
+      message: expect.stringMatching(/3 steps in a row.*Last problem: SEARCH text/)
+    })
   })
 })
 

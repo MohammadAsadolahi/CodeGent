@@ -16,7 +16,7 @@ export const REPLY_FORMAT_EXAMPLE = [
   '',
   '### Updated file: `src/greeting.js`',
   '',
-  '```js',
+  '```text',
   '<<<<<<< SEARCH',
   'export function greet() {',
   '  return "Hello"',
@@ -30,7 +30,7 @@ export const REPLY_FORMAT_EXAMPLE = [
   '',
   '### Created file: `src/names.js`',
   '',
-  '```js',
+  '```text',
   'export const names = ["Ada", "Linus"]',
   '```',
   '',
@@ -43,6 +43,7 @@ export const REPLY_FORMAT_EXAMPLE = [
 
 export const FORMAT_RULES = `Format rules
 - A heading names the operation and the file. Always put file content in a fenced code block, including SEARCH/REPLACE pairs. Always write the path in backticks, relative to the repository root, with forward slashes.
+- Open every code block with \`\`\`text (the word text, not the language of the file): the chat page then shows it as plain text, which CodeGent reads exactly.
 - Updated file: include one or more SEARCH/REPLACE pairs, applied from top to bottom. Between \`<<<<<<< SEARCH\` and \`=======\` copy the existing lines EXACTLY (same characters, same indentation, no "..." or other abbreviations). Between \`=======\` and \`>>>>>>> REPLACE\` write what replaces them. Include enough surrounding lines for the SEARCH text to match exactly one place in the file. To delete lines leave the REPLACE part empty. To insert code, repeat one neighbouring line in both parts.
 - Created file: the code block contains the complete content of the new file.
 - Deleted file: the heading alone, no code block.
@@ -50,6 +51,7 @@ export const FORMAT_RULES = `Format rules
 - To change several places in one file, use several SEARCH/REPLACE pairs in the same code block, never several blocks that repeat the file.
 - Do not put anything else that looks like code to apply outside this format; illustrative snippets are fine as long as they are not under one of these headings.
 - If a code block you write contains triple backticks, wrap that block in four backticks.
+- Before you send, check every file: a heading line, then ONE fenced code block (a line of three backticks before the content and one after it), and in every SEARCH/REPLACE pair all three marker lines. Text that is not inside a code block is reformatted by the chat page and arrives scrambled, so CodeGent cannot apply it.
 - Make only the changes the task needs; keep the project's existing style.`
 
 export const STATUS_RULES = `Status line (the very last line of your reply, outside any code block)

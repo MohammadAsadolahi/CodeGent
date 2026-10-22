@@ -206,7 +206,15 @@ const isBlockCode = (code: Element): boolean => {
   return !beside
 }
 
+/**
+ * A code viewer built on CodeMirror: no <code>, no <pre>, one element per line. Read as ordinary
+ * markup it would turn every line into a paragraph, losing the indentation.
+ */
+const EDITOR = '.cm-editor, .cm-content'
+
 const holdsBlockCode = (el: Element): boolean =>
+  el.matches(EDITOR) ||
+  el.querySelector(EDITOR) !== null ||
   Array.from(el.querySelectorAll('code')).some(isBlockCode)
 
 const CODE_LABEL = /^[\w+#.\- ]{1,32}$/
@@ -240,6 +248,17 @@ function renderCodeElement(code: Element): string {
   if (text.endsWith('\n')) text = text.slice(0, -1)
   const fence = '`'.repeat(Math.max(3, longestBacktickRun(text) + 1))
   return `${fence}${language}\n${text}\n${fence}`
+}
+
+function renderEditor(editor: Element): string {
+  const content = editor.matches('.cm-content')
+    ? editor
+    : (editor.querySelector('.cm-content') ?? editor)
+  const code = Array.from(content.querySelectorAll('.cm-line'), (line) =>
+    (line.textContent ?? '').replace(/​/g, '')
+  ).join('\n')
+  const fence = '`'.repeat(Math.max(3, longestBacktickRun(code) + 1))
+  return `${fence}\n${code}\n${fence}`
 }
 
 function renderPre(pre: Element): string {
@@ -340,6 +359,9 @@ function renderBlocks(parent: Node): string[] {
     } else if (el.localName === 'code' && isBlockCode(el)) {
       flush()
       blocks.push(renderCodeElement(el))
+    } else if (el.matches(EDITOR)) {
+      flush()
+      blocks.push(renderEditor(el))
     } else if (BLOCK_TAGS.has(el.localName)) {
       flush()
       blocks.push(...renderBlockElement(el))
@@ -379,7 +401,7 @@ const withoutChrome = (element: Element): Element => {
  * marks as markdown (`.markdown`, or the element the page copies from — `data-markdown-copy`),
  * else the message with its chrome removed.
  */
-const replyBodies = (element: Element): Element[] => {
+export const replyBodies = (element: Element): Element[] => {
   const messages = element.matches(ASSISTANT_MESSAGE)
     ? [element]
     : Array.from(element.querySelectorAll(ASSISTANT_MESSAGE))
