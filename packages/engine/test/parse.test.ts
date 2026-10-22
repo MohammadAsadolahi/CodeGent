@@ -93,6 +93,24 @@ describe('the canonical format', () => {
       hunks: [{ search: ['remove me'], replace: [] }]
     })
   })
+
+  it('accepts SEARCH/REPLACE pairs directly below a file heading without a code fence', () => {
+    const parsed = parseReply(
+      `### Updated file: \`a.ts\`\n${hunk('before', 'after')}\nCODEGENT_STATUS: continue`
+    )
+    expect(parsed).toMatchObject({
+      edits: [
+        {
+          kind: 'update',
+          path: 'a.ts',
+          hunks: [{ search: ['before'], replace: ['after'] }]
+        }
+      ],
+      status: 'continue',
+      problems: [],
+      truncated: false
+    })
+  })
 })
 
 describe('tolerated variations', () => {
@@ -306,6 +324,25 @@ describe('things that must NOT become edits', () => {
     const noHeading = parseReply(fence(hunk('x', 'y')))
     expect(noHeading.edits).toEqual([])
     expect(noHeading.problems[0]!.message).toMatch(/not preceded by a file heading/)
+  })
+
+  it('reports an unterminated unfenced marker pair without consuming the next file heading', () => {
+    const parsed = parseReply(
+      [
+        '### Updated file: `a.ts`',
+        '<<<<<<< SEARCH',
+        'before',
+        '=======',
+        'after',
+        '### Created file: `b.ts`',
+        '```ts',
+        'content',
+        '```'
+      ].join('\n')
+    )
+    expect(parsed.edits).toEqual([{ kind: 'create', path: 'b.ts', content: 'content' }])
+    expect(parsed.problems).toHaveLength(1)
+    expect(parsed.problems[0]!.message).toMatch(/never closed/)
   })
 
   it('drops blocks with text outside the markers, malformed or unterminated markers', () => {

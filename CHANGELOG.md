@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- A complete SEARCH/REPLACE pair directly under a file heading is now accepted even when ChatGPT
+  omits the surrounding Markdown code fence, avoiding a needless correction turn.
 - Fixed: with ChatGPT's page as redesigned in October 2026 a run typed and sent the prompt but never
   recognised the finished reply, so it ended with _did not finish replying in time_ after the full
   timeout. The page no longer has test ids or an author attribute on messages, draws one container for

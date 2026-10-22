@@ -42,8 +42,8 @@ export const REPLY_FORMAT_EXAMPLE = [
 ].join('\n')
 
 export const FORMAT_RULES = `Format rules
-- A heading names the operation and the file, then a code block holds the content. Always write the path in backticks, relative to the repository root, with forward slashes.
-- Updated file: the code block contains one or more SEARCH/REPLACE pairs, applied from top to bottom. Between \`<<<<<<< SEARCH\` and \`=======\` copy the existing lines EXACTLY (same characters, same indentation, no "..." or other abbreviations). Between \`=======\` and \`>>>>>>> REPLACE\` write what replaces them. Include enough surrounding lines for the SEARCH text to match exactly one place in the file. To delete lines leave the REPLACE part empty. To insert code, repeat one neighbouring line in both parts.
+- A heading names the operation and the file. Put file content in a fenced code block, except SEARCH/REPLACE pairs may appear directly below an updated-file heading without a fence. Always write the path in backticks, relative to the repository root, with forward slashes.
+- Updated file: include one or more SEARCH/REPLACE pairs, applied from top to bottom. Between \`<<<<<<< SEARCH\` and \`=======\` copy the existing lines EXACTLY (same characters, same indentation, no "..." or other abbreviations). Between \`=======\` and \`>>>>>>> REPLACE\` write what replaces them. Include enough surrounding lines for the SEARCH text to match exactly one place in the file. To delete lines leave the REPLACE part empty. To insert code, repeat one neighbouring line in both parts.
 - Created file: the code block contains the complete content of the new file.
 - Deleted file: the heading alone, no code block.
 - Renamed file: the heading alone (a SEARCH/REPLACE block may follow it to edit the file after the move).

@@ -339,6 +339,27 @@ export const parseReply = (markdown: string): ParsedReply => {
       continue
     }
 
+    if (CONFLICT_START.test(line)) {
+      const body = [line]
+      let j = i
+      let closed = false
+      for (; j + 1 < lines.length; j++) {
+        const next = lines[j + 1]!
+        if (CONFLICT_END.test(next)) {
+          body.push(next)
+          j++
+          closed = true
+          break
+        }
+        if (STATUS_RE.test(next) || parseHeader(next)) break
+        body.push(next)
+      }
+      handleBlock(body, false)
+      i = j
+      if (!closed && j === lines.length - 1) truncated = true
+      continue
+    }
+
     const statusMatch = STATUS_RE.exec(line)
     if (statusMatch?.groups) {
       status = statusMatch.groups.value!.toLowerCase() as ReplyStatus

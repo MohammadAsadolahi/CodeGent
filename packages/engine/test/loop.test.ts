@@ -283,6 +283,31 @@ describe('recovering from problems', () => {
 })
 
 describe('replies without usable changes', () => {
+  it('applies unfenced SEARCH/REPLACE hunks in the original turn', async () => {
+    const h = harness(
+      [
+        [
+          'Updated the file.',
+          '',
+          '### Updated file: `a.ts`',
+          '<<<<<<< SEARCH',
+          'before',
+          '=======',
+          'after',
+          '>>>>>>> REPLACE',
+          '',
+          'CODEGENT_STATUS: done'
+        ].join('\n')
+      ],
+      { 'a.ts': 'before\n' }
+    )
+    const snapshot = await run(h).start()
+    expect(finalState(snapshot)).toMatchObject({ outcome: 'done' })
+    expect(h.chat.sent).toHaveLength(1)
+    expect(h.workspace.files.get('a.ts')).toBe('after\n')
+    expect(h.git.commits[0]!.paths).toEqual(['a.ts'])
+  })
+
   it('reminds ChatGPT of the format once, then continues normally', async () => {
     const h = harness([
       'Sure! I think we should add a greeting. Let me know if you want it.',
