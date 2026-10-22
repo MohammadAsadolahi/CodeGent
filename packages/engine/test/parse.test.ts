@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseReply, type FileEdit } from '../src'
+import { describeReplyShape, parseReply, type FileEdit } from '../src'
 
 const fence = (body: string, lang = 'ts', marker = '```') =>
   `${marker}${lang}\n${body}\n${marker}`
@@ -221,6 +221,285 @@ describe('tolerated variations', () => {
       { kind: 'replace', path: 'a.ts', content: 'whole file' }
     ])
     expect(parsed.warnings[0]).toMatch(/complete new file/)
+  })
+})
+
+describe('replies written in other shapes', () => {
+  it('reads headings that were written inside the code block (one fence for the whole answer)', () => {
+    const reply = [
+      'Two fixes.',
+      '',
+      fence(
+        [
+          'Updated file: apps/backend/app/prompts/manual_tailor.py',
+          hunk('one', 'uno'),
+          '',
+          hunk('two', 'dos'),
+          '',
+          'Updated file: apps/backend/tests/unit/test_manual_tailor.py',
+          hunk('def test_a():\n    pass', 'def test_a():\n    assert True')
+        ].join('\n'),
+        'text'
+      ),
+      '',
+      'CODEGENT_STATUS: continue'
+    ].join('\n')
+    const parsed = parseReply(reply)
+    expect(parsed.problems).toEqual([])
+    expect(parsed.status).toBe('continue')
+    expect(parsed.summary).toBe('Two fixes.')
+    expect(parsed.edits).toEqual([
+      {
+        kind: 'update',
+        path: 'apps/backend/app/prompts/manual_tailor.py',
+        hunks: [
+          { search: ['one'], replace: ['uno'] },
+          { search: ['two'], replace: ['dos'] }
+        ]
+      },
+      {
+        kind: 'update',
+        path: 'apps/backend/tests/unit/test_manual_tailor.py',
+        hunks: [
+          {
+            search: ['def test_a():', '    pass'],
+            replace: ['def test_a():', '    assert True']
+          }
+        ]
+      }
+    ])
+  })
+
+  it('does not report a missing block when the block repeats the heading of the file above it', () => {
+    const reply = `### Updated file: \`a.ts\`\n\n${fence(`Updated file: a.ts\n${hunk('x', 'y')}`)}`
+    expect(only(reply)).toEqual({
+      kind: 'update',
+      path: 'a.ts',
+      hunks: [{ search: ['x'], replace: ['y'] }]
+    })
+  })
+
+  it('reads a whole reply wrapped in one markdown fence, like the example in the prompt', () => {
+    const inner = [
+      'The greeting now takes a name.',
+      '',
+      '### Updated file: `src/greeting.js`',
+      '',
+      fence(hunk('hello()', 'hello(name)'), 'js'),
+      '',
+      '### Created file: `src/names.js`',
+      '',
+      fence('export const names = []', 'js'),
+      '',
+      '### Deleted file: `src/unused.js`',
+      '',
+      'CODEGENT_STATUS: done'
+    ].join('\n')
+    const parsed = parseReply(fence(inner, 'markdown', '````'))
+    expect(parsed.problems).toEqual([])
+    expect(parsed.status).toBe('done')
+    expect(parsed.edits.map((edit) => edit.kind)).toEqual(['update', 'create', 'delete'])
+  })
+
+  it('takes the complete content of a created file written inside a block, up to the next heading', () => {
+    const reply = fence(
+      [
+        'Created file: `src/a.ts`',
+        'export const a = 1',
+        '',
+        'export const b = 2',
+        '',
+        'Created file: `src/b.ts`',
+        'export const c = 3',
+        '',
+        'CODEGENT_STATUS: done'
+      ].join('\n'),
+      'text'
+    )
+    const parsed = parseReply(reply)
+    expect(parsed.problems).toEqual([])
+    expect(parsed.status).toBe('done')
+    expect(parsed.edits).toEqual([
+      {
+        kind: 'create',
+        path: 'src/a.ts',
+        content: 'export const a = 1\n\nexport const b = 2'
+      },
+      { kind: 'create', path: 'src/b.ts', content: 'export const c = 3' }
+    ])
+  })
+
+  it('keeps a bundle that was cut off: complete files are used, the last one is reported', () => {
+    const reply = `\`\`\`text\nUpdated file: a.ts\n${hunk('x', 'y')}\n\nUpdated file: b.ts\n<<<<<<< SEARCH\np\n=======\nq`
+    const parsed = parseReply(reply)
+    expect(parsed.truncated).toBe(true)
+    expect(parsed.edits).toEqual([
+      { kind: 'update', path: 'a.ts', hunks: [{ search: ['x'], replace: ['y'] }] }
+    ])
+    expect(parsed.problems).toHaveLength(1)
+    expect(parsed.problems[0]).toMatchObject({ path: 'b.ts', kind: 'unclosed-markers' })
+  })
+
+  it.each([
+    ['`src/a.ts`'],
+    ['**`src/a.ts`**'],
+    ['**File:** `src/a.ts`'],
+    ['File: src/a.ts'],
+    ['### src/a.ts'],
+    ['### `src/a.ts`:'],
+    ['- `src/a.ts`'],
+    ['src/a.ts']
+  ])('uses a bare file name above a fenced SEARCH/REPLACE block (%s)', (name) => {
+    expect(only(`${name}\n\n${fence(hunk('x', 'y'), 'python')}`)).toEqual({
+      kind: 'update',
+      path: 'src/a.ts',
+      hunks: [{ search: ['x'], replace: ['y'] }]
+    })
+  })
+
+  it('uses a bare file name above SEARCH/REPLACE text that has no fence', () => {
+    expect(only(`\`src/a.ts\`\n${hunk('x', 'y')}`)).toMatchObject({
+      kind: 'update',
+      path: 'src/a.ts'
+    })
+  })
+
+  it('never turns a code sample under a bare file name into an edit', () => {
+    const parsed = parseReply(
+      `Use it like this, from \`src/index.ts\`:\n\nsrc/index.ts\n\n${fence('import { a } from "./a"')}\n\nCODEGENT_STATUS: done`
+    )
+    expect(parsed.edits).toEqual([])
+    expect(parsed.problems).toEqual([])
+  })
+
+  it('does not take ordinary words or commands for file names', () => {
+    for (const line of ['Done.', 'e.g.:', '`npm run build`', 'Step 1.', 'Note:']) {
+      const parsed = parseReply(`${line}\n\n${fence(hunk('x', 'y'))}`)
+      expect(parsed.edits, line).toEqual([])
+      expect(parsed.problems[0]?.kind, line).toBe('orphan-block')
+    }
+  })
+
+  it('treats a code sample that merely mentions a heading as a sample', () => {
+    const parsed = parseReply(
+      fence('# the reply format uses\nUpdated file: a.ts\nand then a block', 'text')
+    )
+    expect(parsed.edits).toEqual([])
+    expect(parsed.problems).toEqual([])
+  })
+
+  it('leaves the content of a created file alone even if it ends like a status line', () => {
+    const parsed = parseReply(
+      `### Created file: \`docs/protocol.md\`\n${fence('Reply with:\n\nCODEGENT_STATUS: done', 'md')}\n\nCODEGENT_STATUS: continue`
+    )
+    expect(parsed.edits).toEqual([
+      {
+        kind: 'create',
+        path: 'docs/protocol.md',
+        content: 'Reply with:\n\nCODEGENT_STATUS: done'
+      }
+    ])
+    expect(parsed.status).toBe('continue')
+  })
+
+  it('does not cut an unfenced SEARCH/REPLACE pair at a line that only looks like a heading', () => {
+    const reply = [
+      '### Updated file: `CHANGELOG.md`',
+      '<<<<<<< SEARCH',
+      '- **Updated file** handling',
+      '=======',
+      '- **Updated file: `x.ts`** handling',
+      '>>>>>>> REPLACE'
+    ].join('\n')
+    expect(only(reply)).toMatchObject({
+      kind: 'update',
+      path: 'CHANGELOG.md',
+      hunks: [
+        {
+          search: ['- **Updated file** handling'],
+          replace: ['- **Updated file: `x.ts`** handling']
+        }
+      ]
+    })
+  })
+})
+
+describe('problems say what is wrong', () => {
+  // What the browser extension hands over when the SEARCH/REPLACE text was not in a code block:
+  // the chat page renders it as ordinary markdown (see the capture tests of the extension).
+  const rendered = [
+    'This fixes the layout notes.',
+    '',
+    'Updated file: apps/backend/app/prompts/manual_tailor.py <<<<<<< SEARCH',
+    '',
+    '- The page is A4. Keep the resume as it is. =======',
+    '- The page is A4. Leave space unused.',
+    '',
+    '> > > > > > > REPLACE',
+    '',
+    'CODEGENT_STATUS: continue'
+  ].join('\n')
+
+  it('names text that is visible but was not inside a fence', () => {
+    const parsed = parseReply(rendered)
+    expect(parsed.edits).toEqual([])
+    expect(parsed.problems).toEqual([
+      {
+        path: 'apps/backend/app/prompts/manual_tailor.py',
+        message: expect.stringMatching(/not inside a fenced code block/),
+        kind: 'unfenced-markers'
+      }
+    ])
+  })
+
+  it('names a heading that nothing follows', () => {
+    expect(
+      parseReply('### Updated file: `a.ts`\n\nCODEGENT_STATUS: continue').problems
+    ).toEqual([
+      {
+        path: 'a.ts',
+        message: expect.stringMatching(/without a code block/),
+        kind: 'heading-without-block'
+      }
+    ])
+  })
+
+  it.each([
+    ['unclosed-markers', fence('<<<<<<< SEARCH\nx\n=======\ny')],
+    [
+      'malformed-markers',
+      fence('<<<<<<< SEARCH\n<<<<<<< SEARCH\nx\n=======\ny\n>>>>>>> REPLACE')
+    ],
+    ['stray-text', fence(`some code\n${hunk('x', 'y')}`)]
+  ])('names a %s problem', (kind, block) => {
+    const parsed = parseReply(`### Updated file: \`a.ts\`\n${block}`)
+    expect(parsed.edits).toEqual([])
+    expect(parsed.problems[0]).toMatchObject({ path: 'a.ts', kind })
+  })
+
+  it('names markers with no heading, markers in a complete file and a cut-off block', () => {
+    expect(parseReply(fence(hunk('x', 'y'))).problems[0]?.kind).toBe('orphan-block')
+    expect(
+      parseReply(`### Created file: \`a.ts\`\n${fence(hunk('x', 'y'))}`).problems[0]?.kind
+    ).toBe('markers-in-complete-file')
+    expect(
+      parseReply('### Created file: `a.ts`\n```ts\nconst half =').problems[0]?.kind
+    ).toBe('cut-off')
+  })
+})
+
+describe('describeReplyShape', () => {
+  it('counts what a reply is made of, without keeping any of its content', () => {
+    const shape = describeReplyShape(
+      `Done.\n\n### Updated file: \`a.ts\`\n\n${fence(hunk('x', 'y'))}\n\nCODEGENT_STATUS: done`
+    )
+    expect(shape).toEqual({
+      chars: expect.any(Number),
+      lines: 13,
+      fenceLines: 2,
+      markerLines: 1,
+      headingLines: 1
+    })
   })
 })
 

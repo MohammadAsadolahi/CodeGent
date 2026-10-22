@@ -1,5 +1,5 @@
-import type { EditError, EditOutcome } from '../edits/types'
-import { FENCED_FORMAT_REPAIR, FORMAT_REMINDER, STATUS_LINES } from './instructions'
+import type { EditError, EditOutcome, ParseProblem } from '../edits/types'
+import { FENCE_RULE, fileTemplate, FORMAT_REMINDER, STATUS_LINES } from './instructions'
 import type { RepoContext } from './initial'
 
 export interface DiagnosticItem {
@@ -46,6 +46,15 @@ export interface StepReport {
   outcomes: EditOutcome[]
   /** Problems found while reading the reply itself (e.g. an unterminated SEARCH block). */
   problems?: string[]
+  /** The same problems with their kinds, so the correction can name the exact mistake. */
+  problemDetails?: ParseProblem[]
+  /**
+   * Files whose SEARCH/REPLACE edit failed again after a correction. SEARCH text that does not
+   * match is the commonest way a model keeps failing, so these are asked for as complete files.
+   */
+  wholeFile?: string[]
+  /** A correction of the reply format was already sent: ask for one file at a time. */
+  oneFileOnly?: boolean
   diagnostics?: DiagnosticsSummary
   verify?: VerifyResult
   publish?: PublishResult
@@ -153,6 +162,101 @@ const publishBlock = (publish: PublishResult): string => {
   }
 }
 
+/**
+ * Problems that are about the *shape* of the reply — the content never reached CodeGent — as
+ * opposed to content that arrived but could not be applied.
+ */
+const SHAPE_KINDS: ReadonlySet<string | undefined> = new Set([
+  'heading-without-block',
+  'unfenced-markers',
+  'orphan-block'
+])
+
+/** The structured problems of a report; reports built from text alone are read back from it. */
+const problemDetails = (report: StepReport): ParseProblem[] => {
+  if (report.problemDetails) return report.problemDetails
+  return (report.problems ?? []).map((text) => {
+    const named = /^“([^”]+)”: ([\s\S]*)$/.exec(text)
+    const message = named?.[2] ?? text
+    return {
+      path: named?.[1],
+      operation: /“create file”/.test(message)
+        ? 'create'
+        : /“replace file”/.test(message)
+          ? 'replace'
+          : 'update',
+      message,
+      kind: /without a code block holding the content/i.test(message)
+        ? 'heading-without-block'
+        : /not inside a fenced code block/i.test(message)
+          ? 'unfenced-markers'
+          : undefined
+    } satisfies ParseProblem
+  })
+}
+
+const MAX_REPAIR_FILES = 3
+
+const shapeProblemText = (problem: ParseProblem): string => {
+  const file = problem.path ? `\`${problem.path}\`: ` : ''
+  switch (problem.kind) {
+    case 'unfenced-markers':
+      return `- ${file}the SEARCH/REPLACE text was written outside a fenced code block. The chat page reformats such text, so CodeGent received it scrambled.`
+    case 'orphan-block':
+      return '- A SEARCH/REPLACE block had no file heading above it, so CodeGent could not tell which file it belongs to.'
+    default:
+      return `- ${file}the heading arrived but no code block came after it, so CodeGent has no content for this file.`
+  }
+}
+
+/**
+ * The correction for a reply whose file contents did not reach CodeGent: what was wrong with each
+ * file, and the exact shape to answer in, filled in with the file names. Never a general lecture.
+ */
+const shapeRepair = (problems: readonly ParseProblem[], oneFileOnly: boolean): string => {
+  const targets: ParseProblem[] = []
+  for (const problem of problems) {
+    if (!problem.path || targets.some((target) => target.path === problem.path)) continue
+    targets.push(problem)
+  }
+  const shown = targets.slice(0, oneFileOnly ? 1 : MAX_REPAIR_FILES)
+  const templates = (shown.length > 0 ? shown : [{} as ParseProblem]).map((problem) =>
+    fileTemplate(
+      problem.operation === 'create' || problem.operation === 'replace'
+        ? problem.operation
+        : 'update',
+      problem.path
+    )
+  )
+  const rest = targets.length - shown.length
+  return [
+    'CodeGent could not read the file contents of your last reply, so these were NOT changed:',
+    ...problems.slice(0, 6).map(shapeProblemText),
+    '',
+    oneFileOnly
+      ? `This is the second time. Send ONLY ${shown[0]?.path ? `\`${shown[0].path}\`` : 'the first file'} in your next reply${rest > 0 || targets.length > 1 ? ' (the other files afterwards, one reply each)' : ''}, written exactly like this:`
+      : `Resend ${shown.length > 1 ? 'these files' : 'it'}${rest > 0 ? ` (and the ${rest} other file${rest === 1 ? '' : 's'} afterwards)` : ''}, written exactly like this:`,
+    '',
+    templates.join('\n\n'),
+    '',
+    FENCE_RULE,
+    'Do not repeat files that were already applied. Finish with the CODEGENT_STATUS line.'
+  ].join('\n')
+}
+
+/** The correction for files whose SEARCH/REPLACE edits keep failing: send them whole instead. */
+const wholeFileRepair = (paths: readonly string[]): string =>
+  [
+    `SEARCH/REPLACE failed twice for ${paths
+      .slice(0, MAX_REPAIR_FILES)
+      .map((path) => `\`${path}\``)
+      .join(', ')}${paths.length > MAX_REPAIR_FILES ? ' and others' : ''}. Do not use SEARCH/REPLACE for ${paths.length === 1 ? 'it' : 'them'} again. Read ${paths.length === 1 ? 'the file' : 'each file'} from GitHub and send its COMPLETE new content, written exactly like this:`,
+    '',
+    fileTemplate('replace', paths[0]),
+    '',
+    FENCE_RULE
+  ].join('\n')
+
 /** The message sent back to ChatGPT after a step has been applied (or has failed to apply). */
 export const buildFollowUpPrompt = (report: StepReport): string => {
   const applied = report.outcomes.filter((o) => o.status === 'applied')
@@ -160,9 +264,10 @@ export const buildFollowUpPrompt = (report: StepReport): string => {
   const skipped = report.outcomes.filter((o) => o.status === 'skipped')
   const problems = report.problems ?? []
   const failures = failed.length + problems.length
-  const missingContentBlock = problems.some((problem) =>
-    /without a code block holding the content/i.test(problem)
+  const shapeProblems = problemDetails(report).filter((problem) =>
+    SHAPE_KINDS.has(problem.kind)
   )
+  const wholeFile = report.wholeFile ?? []
 
   const count = (n: number) => `${n} change${n === 1 ? '' : 's'}`
   const headline =
@@ -216,20 +321,26 @@ export const buildFollowUpPrompt = (report: StepReport): string => {
 
   const diagnosticsFailed = (report.diagnostics?.errors ?? 0) > 0
   const verifyFailed = report.verify ? report.verify.exitCode !== 0 : false
+  const corrections: string[] = []
+  if (failures > 0) {
+    if (wholeFile.length > 0) corrections.push(wholeFileRepair(wholeFile))
+    if (shapeProblems.length > 0)
+      corrections.push(shapeRepair(shapeProblems, report.oneFileOnly === true))
+    if (corrections.length === 0)
+      corrections.push('Fix the files that were not applied first, then continue with the task.')
+  }
   const next =
     failures > 0
-      ? missingContentBlock
-        ? 'Resend only the missing file changes using fenced content blocks; do not repeat changes already applied.'
-        : 'Fix the files that were not applied first, then continue with the task.'
+      ? corrections.join('\n\n')
       : diagnosticsFailed || verifyFailed
         ? 'Fix the problems found by the checks, then continue with the task.'
         : 'Continue with the next step of the task. If everything is finished and the checks are clean, answer with a short summary and ' +
           STATUS_LINES.done +
           '.'
   sections.push(
-    ['Next', next, missingContentBlock ? FENCED_FORMAT_REPAIR : FORMAT_REMINDER].join(
-      '\n'
-    )
+    ['Next', next, shapeProblems.length > 0 ? undefined : FORMAT_REMINDER]
+      .filter((line) => line !== undefined)
+      .join('\n')
   )
 
   return sections.join('\n\n')

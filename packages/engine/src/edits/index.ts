@@ -1,6 +1,6 @@
 export * from './types'
 export { normalizeRepoPath, type PathOptions, type PathResult } from './paths'
-export { parseReply } from './parse'
+export { describeReplyShape, parseReply, type ReplyShape } from './parse'
 export {
   adjustReplacement,
   closestMatch,

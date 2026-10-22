@@ -61,20 +61,34 @@ export const STATUS_RULES = `Status line (the very last line of your reply, outs
 export const FORMAT_REMINDER =
   'Reply in the same format as before: one heading per file with SEARCH/REPLACE blocks (or full content for new files), then the CODEGENT_STATUS line.'
 
-/** A targeted correction for the common case where file headings were sent without fenced content. */
-export const FENCED_FORMAT_REPAIR = [
-  'Your last reply named file headings but did not put their contents in fenced code blocks, so CodeGent could not apply those changes.',
-  'Resend only the missing changes. For each Updated file, use this exact structure and keep the triple-backtick fence:',
-  '',
-  '### Updated file: `path/to/file.ext`',
-  '',
-  '```text',
-  '<<<<<<< SEARCH',
-  'exact existing lines from the file',
-  '=======',
-  'replacement lines',
-  '>>>>>>> REPLACE',
-  '```',
-  '',
-  'For Created or Replaced files, put the complete file content in a fenced code block instead. Do not repeat changes listed as applied, do not use placeholders such as “...” in SEARCH, and finish with the appropriate CODEGENT_STATUS line.'
-].join('\n')
+/**
+ * A fill-in-the-blanks answer for one file, in exactly the shape CodeGent reads: the heading line
+ * and ONE fenced code block. Used in corrections, where the model has just got the shape wrong.
+ */
+export const fileTemplate = (
+  operation: 'update' | 'create' | 'replace',
+  path = 'path/to/file.ext'
+): string =>
+  operation === 'update'
+    ? [
+        `### Updated file: \`${path}\``,
+        '',
+        '```text',
+        '<<<<<<< SEARCH',
+        'exact lines copied from the current file',
+        '=======',
+        'the new lines',
+        '>>>>>>> REPLACE',
+        '```'
+      ].join('\n')
+    : [
+        `### ${operation === 'create' ? 'Created' : 'Replaced'} file: \`${path}\``,
+        '',
+        '```text',
+        'the complete content of the file',
+        '```'
+      ].join('\n')
+
+/** The rule behind every template: the heading is plain text, the content is inside one fence. */
+export const FENCE_RULE =
+  'The heading line is plain text; the content goes inside ONE fenced code block: a line with three backticks, the content, then a line with three backticks. Never write SEARCH/REPLACE text outside such a block — the chat page reformats it and CodeGent receives it scrambled.'

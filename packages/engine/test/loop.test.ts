@@ -422,6 +422,18 @@ describe('replies without usable changes', () => {
     expect(finalState(snapshot)).toMatchObject({ outcome: 'done' })
     expect(h.chat.texts[1]).toContain('never closed')
   })
+
+  it('stops after the same unappliable reply repeats instead of spending more correction turns', async () => {
+    const broken = '### Updated file: `a.ts`\n\nCODEGENT_STATUS: continue'
+    const h = harness([broken, broken, broken])
+    const snapshot = await run(h, { maxFailedSteps: 3 }).start()
+
+    expect(finalState(snapshot)).toMatchObject({
+      outcome: 'stuck',
+      message: expect.stringMatching(/same changes failed to apply twice/)
+    })
+    expect(h.chat.sent).toHaveLength(2)
+  })
 })
 
 describe('review mode (auto-apply off)', () => {

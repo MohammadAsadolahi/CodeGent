@@ -15,15 +15,38 @@ export type FileEdit =
   | { kind: 'delete'; path: string }
   | { kind: 'rename'; from: string; to: string; hunks: Hunk[] }
 
+/**
+ * What is wrong with a part of a reply, so that the correction sent back can name the exact
+ * mistake instead of repeating the whole format description.
+ */
+export type ProblemKind =
+  /**
+   * A file heading that no code block follows. When ChatGPT closes with `done` this is usually a
+   * recap of what it did, not an edit that went missing.
+   */
+  | 'heading-without-block'
+  /** SEARCH/REPLACE text sits under a heading but outside a fenced code block, so it is unreadable. */
+  | 'unfenced-markers'
+  /** SEARCH/REPLACE markers with no file heading above them. */
+  | 'orphan-block'
+  /** A SEARCH/REPLACE section that was never closed. */
+  | 'unclosed-markers'
+  | 'malformed-markers'
+  /** Text between the SEARCH/REPLACE pairs of a block. */
+  | 'stray-text'
+  /** A block under an update heading that holds no complete SEARCH/REPLACE pair. */
+  | 'empty-block'
+  /** SEARCH/REPLACE markers inside a block that must hold a complete file. */
+  | 'markers-in-complete-file'
+  | 'cut-off'
+
 export interface ParseProblem {
   /** The file the problem belongs to, when known. */
   path?: string
+  /** What the heading above the problem asked for ("update", "create" …), when there was one. */
+  operation?: 'update' | 'create' | 'replace' | 'rename' | 'delete'
   message: string
-  /**
-   * Set for a file heading that no code block follows. When ChatGPT closes with `done` this is
-   * usually a recap of what it did, not an edit that went missing.
-   */
-  kind?: 'heading-without-block'
+  kind?: ProblemKind
 }
 
 export interface ParsedReply {

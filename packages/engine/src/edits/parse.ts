@@ -1,4 +1,11 @@
-import type { FileEdit, Hunk, ParsedReply, ParseProblem, ReplyStatus } from './types'
+import type {
+  FileEdit,
+  Hunk,
+  ParsedReply,
+  ParseProblem,
+  ProblemKind,
+  ReplyStatus
+} from './types'
 
 /**
  * Parses ChatGPT's reply (markdown) into file edits.
@@ -8,6 +15,10 @@ import type { FileEdit, Hunk, ParsedReply, ParseProblem, ReplyStatus } from './t
  * parser accepts the harmless variations chat models produce, but it only ever creates an edit
  * from a block that is *attached to a file heading* — loose code samples are never mistaken for
  * file content, and only the first block after a heading can define it.
+ *
+ * Variations it understands besides the canonical form: SEARCH/REPLACE pairs written straight
+ * under the heading without a fence; headings written *inside* the code block; and a bare file
+ * name above a fenced SEARCH/REPLACE block (the way many coding tools format edits).
  */
 
 type Operation = 'update' | 'create' | 'delete' | 'rename' | 'replace'
@@ -36,6 +47,12 @@ const FENCE_RE = /^(?<indent>\s*)(?<marker>`{3,}|~{3,})(?<info>[^`]*)$/
 const CONFLICT_START = /^<{5,9}(?:[ \t].*)?$/
 const CONFLICT_MID = /^={5,9}[ \t]*$/
 const CONFLICT_END = /^>{5,9}(?:[ \t].*)?$/
+
+/**
+ * What is left of SEARCH/REPLACE markers after a chat page has rendered them as ordinary
+ * markdown: the start marker as text, the end marker as seven nested block quotes.
+ */
+const MARKER_REMNANTS = /<{5,9}[ \t]*SEARCH|(?:>[ \t]*){5,9}REPLACE\b/i
 
 const MAX_PATH_TEXT = 1_000
 
@@ -101,6 +118,30 @@ const parseHeader = (line: string): Header | null => {
   return { operation, paths }
 }
 
+/**
+ * A line that holds nothing but a file name — `src/a.ts`, **src/a.ts**, `File: src/a.ts`,
+ * `### src/a.ts:` — the way many coding tools announce an edit. Only a path-like token counts
+ * (a slash or a file extension, no spaces).
+ */
+const parseBareFileName = (line: string): string | null => {
+  let text = line.trim()
+  if (text === '' || text.length > 300) return null
+  text = text.replace(/^(?:#{1,6}\s+|[-*+]\s+|\d{1,2}[.)]\s+)/, '')
+  text = text.replace(
+    /^(?:\*\*|__)?\s*(?:file(?:name)?|path)\s*[:\-–—]\s*(?:\*\*|__)?\s*/i,
+    ''
+  )
+  text = text.replace(/[\s:]*(?:\*\*|__)?[\s:]*$/, '')
+  const wrapped =
+    /^(?:\*\*|__)?`([^`\n]+)`(?:\*\*|__)?$/.exec(text) ??
+    /^(?:\*\*|__)([^*_\n]+?)(?:\*\*|__)$/.exec(text)
+  const candidate = (wrapped ? wrapped[1]! : text).trim()
+  if (candidate === '' || /\s/.test(candidate)) return null
+  if (!/^[\w.@+~$%\-/\\]+$/.test(candidate)) return null
+  if (!/[/\\]/.test(candidate) && !/\.[A-Za-z0-9]{1,10}$/.test(candidate)) return null
+  return looksLikePath(candidate) ? candidate : null
+}
+
 interface HunkParse {
   hunks: Hunk[]
   hasMarkers: boolean
@@ -150,33 +191,33 @@ const parseHunks = (body: readonly string[]): HunkParse => {
 const acceptHunks = (
   parsed: HunkParse,
   path: string,
-  problems: ParseProblem[]
+  problems: ParseProblem[],
+  operation?: ParseProblem['operation']
 ): boolean => {
-  if (parsed.unterminated) {
-    problems.push({
-      path,
-      message:
-        'a SEARCH/REPLACE section was never closed; nothing from this block was used'
-    })
+  const reject = (kind: ProblemKind, message: string): false => {
+    problems.push({ path, operation, message, kind })
     return false
+  }
+  if (parsed.unterminated) {
+    return reject(
+      'unclosed-markers',
+      'a SEARCH/REPLACE section was never closed; nothing from this block was used'
+    )
   }
   if (parsed.malformed) {
-    problems.push({
-      path,
-      message: `malformed SEARCH/REPLACE block: ${parsed.malformed}`
-    })
-    return false
+    return reject(
+      'malformed-markers',
+      `malformed SEARCH/REPLACE block: ${parsed.malformed}`
+    )
   }
   if (parsed.stray.length > 0) {
-    problems.push({
-      path,
-      message: `text outside the SEARCH/REPLACE markers (“${parsed.stray[0]!.trim().slice(0, 60)}”); put every change inside a marker pair`
-    })
-    return false
+    return reject(
+      'stray-text',
+      `text outside the SEARCH/REPLACE markers (“${parsed.stray[0]!.trim().slice(0, 60)}”); put every change inside a marker pair`
+    )
   }
   if (parsed.hunks.length === 0) {
-    problems.push({ path, message: 'the block contains no complete SEARCH/REPLACE pair' })
-    return false
+    return reject('empty-block', 'the block contains no complete SEARCH/REPLACE pair')
   }
   return true
 }
@@ -200,6 +241,110 @@ interface Pending {
   consumed: boolean
   /** The edit this heading produced, so that later marker blocks can add hunks to it. */
   edit?: FileEdit
+  /** Index of the heading line, to look for unreadable SEARCH/REPLACE text when no block follows. */
+  line: number
+  /**
+   * The heading was inferred from a bare file name. That is only a guess, so only a block with
+   * SEARCH/REPLACE markers may use it (those still have to match the file exactly); any other
+   * block is an ordinary code sample.
+   */
+  inferred?: boolean
+}
+
+const nextNonBlank = (lines: readonly string[], from: number): number => {
+  let index = from
+  while (index < lines.length && lines[index]!.trim() === '') index++
+  return index
+}
+
+/**
+ * Whether a heading-like line really announces a file: what follows it (a fence, SEARCH/REPLACE
+ * markers, another heading or the end) is what a heading is followed by, so that a similar-looking
+ * line inside a hunk's text is left alone.
+ */
+const announcesContent = (lines: readonly string[], index: number): boolean => {
+  const header = parseHeader(lines[index]!)
+  if (!header) return false
+  if (header.operation === 'delete' || header.operation === 'rename') return true
+  const next = nextNonBlank(lines, index + 1)
+  if (next >= lines.length) return true
+  const line = lines[next]!
+  return (
+    FENCE_RE.test(line) ||
+    CONFLICT_START.test(line) ||
+    parseHeader(line) !== null ||
+    STATUS_RE.test(line)
+  )
+}
+
+const samePath = (a: Header, b: Header): boolean =>
+  a.paths[a.operation === 'rename' ? 1 : 0] === b.paths[b.operation === 'rename' ? 1 : 0]
+
+/** Longest run of backticks (or tildes) in `lines`, to wrap them in a fence they cannot close. */
+const wrapInFence = (lines: readonly string[]): string[] => {
+  const longest = Math.max(
+    0,
+    ...lines.flatMap((line) => [...line.matchAll(/`{3,}/g)].map((run) => run[0].length))
+  )
+  const fence = '`'.repeat(Math.max(3, longest + 1))
+  return [fence, ...lines, fence]
+}
+
+/**
+ * A code block that carries its own file headings (the model put the headings *inside* the fence,
+ * or wrapped the whole answer in one). Returns each file's section as ordinary reply text, so that
+ * the normal rules apply to it; or null when the block is an ordinary code sample.
+ */
+const splitBundle = (
+  body: readonly string[],
+  outer: Pending | null
+): { sections: Array<{ header: Header; text: string }>; status?: ReplyStatus } | null => {
+  const starts: Array<{ index: number; header: Header; announced: boolean }> = []
+  for (let index = 0; index < body.length; index++) {
+    const header = parseHeader(body[index]!)
+    if (!header) continue
+    const next = nextNonBlank(body, index + 1)
+    const content = next < body.length
+    const announced =
+      content && (CONFLICT_START.test(body[next]!) || FENCE_RE.test(body[next]!))
+    const ok =
+      header.operation === 'update'
+        ? announced
+        : header.operation === 'delete' || header.operation === 'rename'
+          ? true
+          : content
+    if (ok) starts.push({ index, header, announced })
+  }
+  const first = starts[0]
+  if (!first) return null
+  // Text before the first heading makes this a code sample that merely mentions one — unless the
+  // block is plainly a whole reply: an update heading directly followed by its SEARCH/REPLACE text.
+  const leading = body.slice(0, first.index).some((line) => line.trim() !== '')
+  if (leading && !starts.some((start) => start.announced)) return null
+  // A block under another file's heading is that file's content, even if it looks like a heading.
+  if (outer && !outer.consumed && !samePath(outer.header, first.header)) return null
+
+  let status: ReplyStatus | undefined
+  const sections = starts.map((start, position) => {
+    const end = starts[position + 1]?.index ?? body.length
+    const rest = body.slice(start.index + 1, end)
+    while (rest.length > 0 && rest[rest.length - 1]!.trim() === '') rest.pop()
+    const tail = rest[rest.length - 1]
+    const closing = tail === undefined ? null : STATUS_RE.exec(tail)
+    if (closing?.groups && position === starts.length - 1) {
+      status = closing.groups.value!.toLowerCase() as ReplyStatus
+      rest.pop()
+      while (rest.length > 0 && rest[rest.length - 1]!.trim() === '') rest.pop()
+    }
+    const firstContent = nextNonBlank(rest, 0)
+    const needsFence =
+      (start.header.operation === 'create' || start.header.operation === 'replace') &&
+      firstContent < rest.length &&
+      !FENCE_RE.test(rest[firstContent]!)
+    const section = needsFence ? wrapInFence(rest.slice(firstContent)) : rest
+    return { header: start.header, text: [body[start.index]!, ...section].join('\n') }
+  })
+  return { sections, status }
 }
 
 export const parseReply = (markdown: string): ParsedReply => {
@@ -212,21 +357,37 @@ export const parseReply = (markdown: string): ParsedReply => {
   let truncated = false
   let pending: Pending | null = null
 
-  const closePending = () => {
+  const closePending = (endLine: number) => {
     const open = pending as Pending | null
-    if (
-      open &&
-      !open.consumed &&
-      open.header.operation !== 'delete' &&
-      open.header.operation !== 'rename'
-    ) {
-      problems.push({
-        path: open.header.paths[0],
-        message: `“${open.header.operation} file” heading without a code block holding the content`,
-        kind: 'heading-without-block'
-      })
-    }
     pending = null
+    if (
+      !open ||
+      open.consumed ||
+      open.inferred ||
+      open.header.operation === 'delete' ||
+      open.header.operation === 'rename'
+    )
+      return
+    const unreadable = lines
+      .slice(open.line + 1, endLine)
+      .some((line) => MARKER_REMNANTS.test(line))
+    problems.push({
+      path: open.header.paths[0],
+      operation: open.header.operation,
+      message: unreadable
+        ? `“${open.header.operation} file” heading followed by SEARCH/REPLACE text that is not inside a fenced code block`
+        : `“${open.header.operation} file” heading without a code block holding the content`,
+      kind: unreadable ? 'unfenced-markers' : 'heading-without-block'
+    })
+  }
+
+  /** Merges the result of parsing a section of a reply that sits inside a code block. */
+  const absorb = (inner: ParsedReply) => {
+    edits.push(...inner.edits)
+    warnings.push(...inner.warnings)
+    problems.push(...inner.problems)
+    if (inner.truncated) truncated = true
+    if (inner.status) status = inner.status
   }
 
   const handleBlock = (body: string[], cutOff: boolean) => {
@@ -237,10 +398,30 @@ export const parseReply = (markdown: string): ParsedReply => {
     }
 
     const current = pending as Pending | null
+
+    const bundle = splitBundle(body, current)
+    if (bundle) {
+      bundle.sections.forEach((section, index) => {
+        const inner = parseReply(section.text)
+        if (cutOff && index === bundle.sections.length - 1) inner.truncated = true
+        absorb(inner)
+      })
+      if (bundle.status) status = bundle.status
+      if (
+        current &&
+        !current.consumed &&
+        samePath(current.header, bundle.sections[0]!.header)
+      )
+        current.consumed = true
+      return
+    }
+    const content = body
+
     if (!current) {
-      if (body.some((line) => CONFLICT_START.test(line))) {
+      if (content.some((line) => CONFLICT_START.test(line))) {
         problems.push({
-          message: 'a SEARCH/REPLACE block was not preceded by a file heading'
+          message: 'a SEARCH/REPLACE block was not preceded by a file heading',
+          kind: 'orphan-block'
         })
       }
       return // an ordinary code sample
@@ -249,24 +430,32 @@ export const parseReply = (markdown: string): ParsedReply => {
     const path = operation === 'rename' ? paths[1]! : paths[0]!
 
     if (cutOff) {
-      problems.push({
-        path,
-        message: 'the reply was cut off inside this code block; nothing from it was used'
-      })
+      if (!current.inferred) {
+        problems.push({
+          path,
+          operation,
+          message:
+            'the reply was cut off inside this code block; nothing from it was used',
+          kind: 'cut-off'
+        })
+      }
       current.consumed = true
       return
     }
-    const parsed = parseHunks(body)
+    const parsed = parseHunks(content)
 
     // Later blocks under the same heading can only *add hunks*; a marker-less block is commentary.
     if (current.consumed) {
       const target = current.edit as Extendable | undefined
       if (parsed.hasMarkers && (target?.kind === 'update' || target?.kind === 'rename')) {
-        if (acceptHunks(parsed, path, problems)) target.hunks.push(...parsed.hunks)
+        if (acceptHunks(parsed, path, problems, operation))
+          target.hunks.push(...parsed.hunks)
       }
       return
     }
     current.consumed = true
+
+    if (current.inferred && !parsed.hasMarkers) return // a code sample that follows a file name
 
     switch (operation) {
       case 'update': {
@@ -274,12 +463,12 @@ export const parseReply = (markdown: string): ParsedReply => {
           warnings.push(
             `“${path}”: no SEARCH/REPLACE markers, so the block was treated as the complete new file`
           )
-          const edit: FileEdit = { kind: 'replace', path, content: body.join('\n') }
+          const edit: FileEdit = { kind: 'replace', path, content: content.join('\n') }
           edits.push(edit)
           current.edit = edit
           return
         }
-        if (!acceptHunks(parsed, path, problems)) return
+        if (!acceptHunks(parsed, path, problems, operation)) return
         const edit: FileEdit = { kind: 'update', path, hunks: parsed.hunks }
         edits.push(edit)
         current.edit = edit
@@ -290,11 +479,13 @@ export const parseReply = (markdown: string): ParsedReply => {
         if (parsed.hasMarkers) {
           problems.push({
             path,
-            message: 'SEARCH/REPLACE markers are not valid in a complete-file block'
+            operation,
+            message: 'SEARCH/REPLACE markers are not valid in a complete-file block',
+            kind: 'markers-in-complete-file'
           })
           return
         }
-        const edit: FileEdit = { kind: operation, path, content: body.join('\n') }
+        const edit: FileEdit = { kind: operation, path, content: content.join('\n') }
         edits.push(edit)
         current.edit = edit
         return
@@ -302,10 +493,10 @@ export const parseReply = (markdown: string): ParsedReply => {
       case 'rename': {
         const rename = current.edit as Extendable | undefined
         if (parsed.hasMarkers) {
-          if (acceptHunks(parsed, path, problems) && rename?.kind === 'rename')
+          if (acceptHunks(parsed, path, problems, operation) && rename?.kind === 'rename')
             rename.hunks.push(...parsed.hunks)
         } else if (meaningful.length > 0) {
-          edits.push({ kind: 'replace', path, content: body.join('\n') })
+          edits.push({ kind: 'replace', path, content: content.join('\n') })
         }
         return
       }
@@ -351,7 +542,7 @@ export const parseReply = (markdown: string): ParsedReply => {
           closed = true
           break
         }
-        if (STATUS_RE.test(next) || parseHeader(next)) break
+        if (STATUS_RE.test(next) || announcesContent(lines, j + 1)) break
         body.push(next)
       }
       handleBlock(body, false)
@@ -368,10 +559,10 @@ export const parseReply = (markdown: string): ParsedReply => {
 
     const header = parseHeader(line)
     if (header) {
-      closePending()
+      closePending(i)
       if (header.operation === 'delete') {
         edits.push({ kind: 'delete', path: header.paths[0]! })
-        pending = { header, consumed: true }
+        pending = { header, consumed: true, line: i }
       } else if (header.operation === 'rename') {
         const edit: FileEdit = {
           kind: 'rename',
@@ -380,16 +571,34 @@ export const parseReply = (markdown: string): ParsedReply => {
           hunks: []
         }
         edits.push(edit)
-        pending = { header, consumed: false, edit }
+        pending = { header, consumed: false, edit, line: i }
       } else {
-        pending = { header, consumed: false }
+        pending = { header, consumed: false, line: i }
       }
       continue
     }
 
+    const bare = parseBareFileName(line)
+    if (bare) {
+      const next = nextNonBlank(lines, i + 1)
+      if (
+        next < lines.length &&
+        (FENCE_RE.test(lines[next]!) || CONFLICT_START.test(lines[next]!))
+      ) {
+        closePending(i)
+        pending = {
+          header: { operation: 'update', paths: [bare] },
+          consumed: false,
+          inferred: true,
+          line: i
+        }
+        continue
+      }
+    }
+
     prose.push(line)
   }
-  closePending()
+  closePending(lines.length)
 
   return {
     edits,
@@ -401,5 +610,28 @@ export const parseReply = (markdown: string): ParsedReply => {
     warnings,
     problems,
     truncated
+  }
+}
+
+/** Counts of what a reply is made of, for diagnosing a reply that could not be used (no content). */
+export interface ReplyShape {
+  chars: number
+  lines: number
+  /** Fence lines (an opening and a closing fence count as two). */
+  fenceLines: number
+  /** Lines that start a SEARCH/REPLACE pair, inside a fence or not. */
+  markerLines: number
+  /** Lines that read as a file heading. */
+  headingLines: number
+}
+
+export const describeReplyShape = (markdown: string): ReplyShape => {
+  const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
+  return {
+    chars: markdown.length,
+    lines: lines.length,
+    fenceLines: lines.filter((line) => FENCE_RE.test(line)).length,
+    markerLines: lines.filter((line) => CONFLICT_START.test(line)).length,
+    headingLines: lines.filter((line) => parseHeader(line) !== null).length
   }
 }
