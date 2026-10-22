@@ -1,9 +1,6 @@
 # CodeGent
 
 [![Latest release](https://img.shields.io/github/v/release/MohammadAsadolahi/CodeGent?include_prereleases&label=release)](https://github.com/MohammadAsadolahi/CodeGent/releases/latest)
-[![CI](https://github.com/MohammadAsadolahi/CodeGent/actions/workflows/ci.yml/badge.svg)](https://github.com/MohammadAsadolahi/CodeGent/actions/workflows/ci.yml)
-![VS Code 1.96+](https://img.shields.io/badge/VS%20Code-1.96%2B-007acc)
-![Chromium 116+](https://img.shields.io/badge/Chromium-116%2B-4285f4)
 ![No API keys, no telemetry](https://img.shields.io/badge/API%20keys%20%C2%B7%20telemetry-none-brightgreen)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](.github/CONTRIBUTING.md)
 
@@ -28,8 +25,8 @@ again and again until the task is done. **No API keys. No copy and paste.**
 
 ## Get started in 3 steps
 
-**You need:** VS Code 1.96+, a project that is a git repository on GitHub, a Chromium browser
-(Chrome, Edge or Brave), and a ChatGPT account (free is the target) with the GitHub connector turned on.
+**You need:** VS Code, a project that is a git repository on GitHub, a browser
+(Chrome, Edge or Brave, Firefox), and a free ChatGPT account with the GitHub connector turned on so ChatGPT can see the repository you want to develop.
 
 1. **Install the VS Code extension.** Download `codegent-0.1.0.vsix` from the
    [latest release](https://github.com/MohammadAsadolahi/CodeGent/releases/latest) (or build it with `npm run package`) and run
