@@ -182,7 +182,7 @@ const preflight = async (ctx) => {
     const how =
       status === 'missing'
         ? 'install it (Windows: winget install --id GitHub.cli)'
-        : 'sign in with: gh auth login'
+        : 'sign in with: gh auth login (and check that you are online)'
     if (!options.dryRun) {
       throw new ReleaseError(`publishing goes through the GitHub CLI (gh); ${how}`)
     }

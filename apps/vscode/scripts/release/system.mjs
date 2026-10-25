@@ -77,8 +77,10 @@ export const createGh = (repo, run = exec) => {
     /** 'ready', 'missing' (not installed) or 'signed-out'. */
     async status() {
       if ((await gh(['--version'])).code !== 0) return 'missing'
-      const auth = await gh(['auth', 'status', '--hostname', 'github.com'])
-      return auth.code === 0 ? 'ready' : 'signed-out'
+      // Asks GitHub who the active token belongs to, so an expired token counts as signed out
+      // (`gh auth status` also fails over a stale second account that is not in use).
+      const who = await gh(['api', 'user', '--jq', '.login'])
+      return who.code === 0 ? 'ready' : 'signed-out'
     },
 
     async releaseExists(tag) {

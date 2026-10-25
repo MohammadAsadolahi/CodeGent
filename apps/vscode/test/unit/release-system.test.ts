@@ -122,7 +122,7 @@ describe('the GitHub CLI', () => {
     expect(await createGh(REPO, run).status()).toBe('ready')
     expect(calls.map((call) => call.args)).toEqual([
       ['--version'],
-      ['auth', 'status', '--hostname', 'github.com']
+      ['api', 'user', '--jq', '.login']
     ])
   })
 
