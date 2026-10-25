@@ -19,7 +19,13 @@ const firstLines = (text, count = 6) => text.trim().split('\n').slice(0, count).
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
-/** Runs a program to its end. Never throws: the exit code is null when it could not start. */
+/**
+ * Runs a program to its end. Never throws: the exit code is null when it could not start.
+ * @param {string} command
+ * @param {string[]} [args]
+ * @param {{ cwd?: string, env?: Record<string, string>, input?: string }} [options]
+ * @returns {Promise<{ code: number | null, stdout: string, stderr: string }>}
+ */
 export const exec = (command, args = [], { cwd, env, input = '' } = {}) =>
   new Promise((resolve) => {
     let stdout = ''
@@ -186,7 +192,11 @@ const tailOf = (file, count = 40) =>
     .slice(-count)
     .join('\n')
 
-/** Runs `npm <args>` with all of its output in `logFile`. */
+/**
+ * Runs `npm <args>` with all of its output in `logFile`.
+ * @param {{ args: string[], cwd: string, env?: Record<string, string>, logFile: string }} input
+ * @returns {Promise<{ ok: boolean, seconds: number, tail: string }>}
+ */
 export const runCheck = ({ args, cwd, env, logFile }) =>
   new Promise((resolve) => {
     const started = Date.now()

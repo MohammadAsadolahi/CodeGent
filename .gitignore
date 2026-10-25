@@ -2,6 +2,8 @@ node_modules/
 dist/
 out/
 out-test/
+# made by `npm run release`: the release files, their notes and the log of every check
+/release/
 *.vsix
 *.zip
 coverage/

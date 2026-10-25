@@ -151,17 +151,9 @@ const preflight = async (ctx) => {
   }
   ctx.ahead = ahead
 
+  // The fetch above brought in every tag of origin, so this covers both places.
   if ((await git(['tag', '--list', ctx.tag])) !== '') {
-    throw new ReleaseError(`the tag ${ctx.tag} already exists`)
-  }
-  let remoteTag = ''
-  try {
-    remoteTag = await git(['ls-remote', '--tags', REMOTE, `refs/tags/${ctx.tag}`])
-  } catch (error) {
-    unreachable(`cannot look for ${ctx.tag} on ${REMOTE}`, error)
-  }
-  if (remoteTag !== '') {
-    throw new ReleaseError(`the tag ${ctx.tag} already exists on ${REMOTE}`)
+    throw new ReleaseError(`the tag ${ctx.tag} already exists (here or on ${REMOTE})`)
   }
 
   // The release before this one: for the notes' diff link, and to see which permissions are new.
@@ -543,7 +535,8 @@ const publish = async (ctx) => {
  * Runs a release. `system` is what createSystem returns (or a stand-in for it in tests).
  * Resolves with what was made; throws a ReleaseError when it had to stop.
  */
-export const runRelease = async (options, system) => {
+export const runRelease = async (given, system) => {
+  const options = { dryRun: false, yes: false, prerelease: false, ...given }
   const ctx = { options, system, root: system.root }
   try {
     await preflight(ctx)

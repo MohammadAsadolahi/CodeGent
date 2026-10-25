@@ -31,7 +31,8 @@
     "icons": "node apps/vscode/scripts/make-icons.mjs",
     "package": "npm run package -w apps/vscode",
     "test:live": "npm run test:live -w apps/vscode",
-    "test:package": "npm run test:package -w apps/vscode"
+    "test:package": "npm run test:package -w apps/vscode",
+    "release": "node apps/vscode/scripts/release.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

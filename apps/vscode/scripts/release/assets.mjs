@@ -103,6 +103,14 @@ export const undocumentedGrants = (previous, current, docs) => {
  * a release should be: wrong version, a different browser extension in each file, files the
  * manifest points to that are missing, a build made for the test ports, new permissions nobody
  * documented.
+ * @param {{
+ *   vsix: string,
+ *   zip: string,
+ *   version: string,
+ *   hubPorts?: number[],
+ *   previousManifest?: any,
+ *   docs?: string
+ * }} input
  */
 export const verifyRelease = async ({
   vsix,

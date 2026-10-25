@@ -521,12 +521,12 @@ describe('refusing to start', () => {
     },
     {
       name: 'a tag that exists here',
-      message: /the tag v0\.1\.1 already exists/,
+      message: /the tag v0\.1\.1 already exists \(here or on origin\)/,
       arrange: (project) => void project.git(['tag', 'v0.1.1'])
     },
     {
-      name: 'a tag that exists on origin',
-      message: /the tag v0\.1\.1 already exists on origin/,
+      name: 'a tag that exists only on origin',
+      message: /the tag v0\.1\.1 already exists \(here or on origin\)/,
       arrange: (project) => void project.originGit(['tag', 'v0.1.1', 'main'])
     },
     {

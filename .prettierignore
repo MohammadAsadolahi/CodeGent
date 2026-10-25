@@ -9,4 +9,5 @@ package-lock.json
 apps/browser/test/fixtures
 packages/engine/test/fixtures
 out-test
+/release
 roadmap.md

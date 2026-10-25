@@ -34,6 +34,10 @@ npm run test:integration # VS Code extension inside a real VS Code
 
 Do not run `npm run test:live` unless asked: it sends real messages to chatgpt.com.
 
+Do not run `npm run release` without `--dry-run` unless asked: it commits, pushes to `origin` and
+publishes a GitHub release. `npm run release -- patch --dry-run` is the safe rehearsal (see
+[docs/development.md](docs/development.md#releasing)); it needs a clean working tree on `main`.
+
 ## Rules
 
 - Match the surrounding code: TypeScript, no semicolons, single quotes, Prettier config in the repo.
