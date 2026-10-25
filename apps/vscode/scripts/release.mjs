@@ -181,12 +181,12 @@ const preflight = async (ctx) => {
   if (status !== 'ready') {
     const how =
       status === 'missing'
-        ? 'install it (Windows: winget install --id GitHub.cli)'
-        : 'sign in with: gh auth login (and check that you are online)'
+        ? 'install it with `winget install --id GitHub.cli` (Windows) or from https://cli.github.com'
+        : 'sign in with `gh auth login` (and check that you are online)'
     if (!options.dryRun) {
-      throw new ReleaseError(`publishing goes through the GitHub CLI (gh); ${how}`)
+      throw new ReleaseError(`publishing goes through the GitHub CLI (gh): ${how}`)
     }
-    log.warn(`the GitHub CLI is not ready (${how}); a real release would stop here`)
+    log.warn(`the GitHub CLI (gh) is not ready: ${how}. A real release would stop here`)
   } else if (await ctx.gh.releaseExists(ctx.tag)) {
     throw new ReleaseError(
       `GitHub already has a release for ${ctx.tag} (a draft left by an earlier run?); delete it first`
@@ -268,12 +268,22 @@ const runChecks = async (ctx) => {
       ctx.logsDir,
       `${String(index + 1).padStart(2, '0')}-${check.id}.log`
     )
-    const result = await system.runCheck({
-      args: check.args,
-      env: check.env,
-      cwd: ctx.work.path,
-      logFile: file
-    })
+    // The long suites print nothing for minutes; say that it is still going.
+    const started = Date.now()
+    const ticker = setInterval(() => {
+      system.log.info(`      … ${Math.round((Date.now() - started) / 1000)} s so far`)
+    }, 60_000)
+    let result
+    try {
+      result = await system.runCheck({
+        args: check.args,
+        env: check.env,
+        cwd: ctx.work.path,
+        logFile: file
+      })
+    } finally {
+      clearInterval(ticker)
+    }
     if (!result.ok) {
       system.log.info(`\n${indent(result.tail.split('\n'))}\n`)
       throw new ReleaseError(`"${check.title}" failed. Everything it printed: ${file}`)

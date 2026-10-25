@@ -51,9 +51,9 @@ never shows those as "Latest"). In order, it:
 1. **Looks before it leaps.** You are on `main` with a clean working tree and not behind `origin`; the
    version's tag and GitHub release do not exist yet; `gh` is installed and signed in.
 2. **Works in a clean copy** of the repository in a temporary folder, so nothing in your working tree
-   is touched until everything has passed (a dry run never touches it). The version moves there: every
-   `package.json`, the lockfile, `CITATION.cff`, the download names in the README, and `## Unreleased`
-   in the CHANGELOG becomes the new version's section.
+   is touched until everything has passed (a dry run only ever writes the git-ignored `release/`
+   folder). The version moves there: every `package.json`, the lockfile, `CITATION.cff`, the download
+   names in the README, and `## Unreleased` in the CHANGELOG becomes the new version's section.
 3. **Checks everything in that copy**: `npm ci`, formatting, build, type check, unit tests, the browser
    extension end to end in Chromium and the VS Code extension inside a real VS Code (both against the
    minified build that ships), then `npm run package` and the installed-package test. What each step

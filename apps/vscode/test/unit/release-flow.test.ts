@@ -302,7 +302,9 @@ describe('a dry run', () => {
     const { system, github, warnings } = harness(project)
     github.state = 'missing'
     await runRelease({ request: 'patch', dryRun: true }, system)
-    expect(warnings.join('\n')).toMatch(/GitHub CLI is not ready \(install it/)
+    expect(warnings.join('\n')).toMatch(
+      /GitHub CLI \(gh\) is not ready: install it with .*A real release would stop here/
+    )
   })
 
   it('replaces the files of an earlier dry run instead of mixing with them', async () => {
@@ -545,13 +547,13 @@ describe('refusing to start', () => {
     {
       name: 'a GitHub CLI that is not installed',
       message:
-        /publishing goes through the GitHub CLI \(gh\); install it \(Windows: winget install --id GitHub\.cli\)/,
+        /publishing goes through the GitHub CLI \(gh\): install it with `winget install --id GitHub\.cli` \(Windows\) or from https:\/\/cli\.github\.com/,
       arrange: (_, github) => void (github.state = 'missing')
     },
     {
       name: 'a GitHub CLI that is not signed in',
       message:
-        /publishing goes through the GitHub CLI \(gh\); sign in with: gh auth login/,
+        /publishing goes through the GitHub CLI \(gh\): sign in with `gh auth login`/,
       arrange: (_, github) => void (github.state = 'signed-out')
     },
     {
