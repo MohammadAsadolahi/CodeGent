@@ -138,7 +138,10 @@ export interface VsixOptions {
   extra?: Record<string, string | Buffer | null>
 }
 
-/** What `vsce package` would make: the extension, its README/CHANGELOG, the browser extension. */
+/**
+ * What `vsce package` makes (the layout was read off the published 0.1.0 package): the extension
+ * with its README and CHANGELOG stored in lower case, the media, the browser extension.
+ */
 export const makeVsix = async (options: VsixOptions): Promise<Buffer> => {
   const { version } = options
   const changelog =
@@ -155,9 +158,12 @@ export const makeVsix = async (options: VsixOptions): Promise<Buffer> => {
     ...options.browser
   }
   const files: Record<string, string | Buffer | null> = {
+    'extension.vsixmanifest': '<PackageManifest/>',
+    '[Content_Types].xml': '<Types/>',
     'extension/package.json': json({ name: 'codegent', version }),
-    'extension/README.md': '# CodeGent\n',
-    'extension/CHANGELOG.md': changelog,
+    'extension/readme.md': '# CodeGent\n',
+    'extension/changelog.md': changelog,
+    'extension/media/icon.png': Buffer.from([4, 5, 6]),
     'extension/out/extension.js': 'module.exports={}',
     'extension/out/hub.cjs': 'module.exports={}',
     'extension/out/webview/main.js': 'void 0',

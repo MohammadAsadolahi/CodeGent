@@ -124,7 +124,13 @@ export const verifyRelease = async ({
   const packaged = await filesOf(fs.readFileSync(vsix))
   const extension = await filesOf(fs.readFileSync(zip))
 
-  const packageJson = packaged.get('extension/package.json')
+  // vsce stores the README and CHANGELOG as extension/readme.md and extension/changelog.md.
+  const byLowerCase = new Map(
+    [...packaged].map(([name, data]) => [name.toLowerCase(), data])
+  )
+  const inPackage = (name) => byLowerCase.get(name.toLowerCase())
+
+  const packageJson = inPackage('extension/package.json')
   if (!packageJson) problems.push('the .vsix has no extension/package.json')
   else if (JSON.parse(packageJson.toString('utf8')).version !== version) {
     problems.push(`the .vsix is not version ${version}`)
@@ -134,12 +140,12 @@ export const verifyRelease = async ({
     'extension/out/hub.cjs',
     'extension/out/webview/main.js',
     'extension/out/webview/main.css',
-    'extension/README.md',
-    'extension/CHANGELOG.md'
+    'extension/readme.md',
+    'extension/changelog.md'
   ]) {
-    if (!packaged.has(name)) problems.push(`the .vsix is missing ${name}`)
+    if (!inPackage(name)) problems.push(`the .vsix is missing ${name}`)
   }
-  const changelog = packaged.get('extension/CHANGELOG.md')?.toString('utf8')
+  const changelog = inPackage('extension/changelog.md')?.toString('utf8')
   if (changelog !== undefined && !sectionFor(changelog, version)) {
     problems.push(`the CHANGELOG inside the .vsix has no entries for ${version}`)
   }

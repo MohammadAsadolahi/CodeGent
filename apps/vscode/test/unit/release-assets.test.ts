@@ -220,6 +220,27 @@ describe('the release files', () => {
       )
     })
 
+    it('fail when the README or the CHANGELOG did not make it into the .vsix', async () => {
+      const vsix = await writeVsix({
+        extra: { 'extension/readme.md': null, 'extension/changelog.md': null }
+      })
+      const rejected = verify(vsix, await writeZipOf(vsix))
+      await expect(rejected).rejects.toThrow(/missing extension\/readme\.md/)
+      await expect(rejected).rejects.toThrow(/missing extension\/changelog\.md/)
+    })
+
+    it('read the README and CHANGELOG whatever the case of their names', async () => {
+      const vsix = await writeVsix({
+        extra: {
+          'extension/readme.md': null,
+          'extension/changelog.md': null,
+          'extension/README.md': '# CodeGent\n',
+          'extension/CHANGELOG.md': '## 0.2.0\n\n- Entry.\n'
+        }
+      })
+      await expect(verify(vsix, await writeZipOf(vsix))).resolves.toBeUndefined()
+    })
+
     it('fail when sources, source maps or dependencies ship in the .vsix', async () => {
       const vsix = await writeVsix({
         extra: {
