@@ -66,6 +66,7 @@
     "@types/ws": "^8.18.2",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.2",
+    "jszip": "^3.10.2",
     "mocha": "^11.7.0",
     "preact": "^10.29.8"
   },

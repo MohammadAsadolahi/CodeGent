@@ -2,6 +2,7 @@
   "extends": "../../config/tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2022"],
+    "allowJs": true,
     "types": ["node", "vscode", "mocha"]
   },
   "include": ["src", "test", "scripts"],
