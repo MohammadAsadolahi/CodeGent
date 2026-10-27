@@ -146,8 +146,10 @@ describe('GitClient', () => {
   it('knows whether it is in a repository and where the root is', async () => {
     expect(await client.available()).toBe(true)
     expect(await client.isRepo()).toBe(true)
-    expect(path.normalize(await client.root()).toLowerCase()).toBe(
-      path.normalize(dir).toLowerCase().replace(/\\$/, '')
+    // Git for Windows may expand 8.3 short names (RUNNER~1) into long names.
+    // Resolve both paths to their canonical filesystem locations before comparing.
+    expect(fs.realpathSync.native(await client.root()).toLowerCase()).toBe(
+      fs.realpathSync.native(dir).toLowerCase()
     )
     expect(await new GitClient(os.tmpdir()).isRepo()).toBe(false)
   })
