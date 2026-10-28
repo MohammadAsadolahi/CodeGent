@@ -134,6 +134,13 @@ export interface UiReview {
   files: UiReviewFile[]
 }
 
+export interface UiHistoryStep {
+  n: number
+  summary: string
+  status: UiStep['replyStatus']
+  publish?: string
+}
+
 export interface UiHistoryItem {
   id: string
   task: string
@@ -142,6 +149,10 @@ export interface UiHistoryItem {
   message: string
   steps: number
   repo: string
+  /** Saved ChatGPT conversation, when one was returned. */
+  conversationUrl?: string
+  /** Compact, read-only summaries. Full replies and diffs are not stored. */
+  timeline?: UiHistoryStep[]
 }
 
 export interface UiState {

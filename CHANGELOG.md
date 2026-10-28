@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- New runs open separate ChatGPT tabs instead of navigating away from the last idle conversation.
+  Follow-up steps remain tied to their original sessions, even with other chats open.
+- History now keeps compact step summaries and ChatGPT links for finished runs. The panel can
+  expand the saved summaries and reopen the conversation. Interrupted runs also keep the link
+  when one was obtained; old history entries remain readable.
+
 - A reply that cannot be applied no longer costs a string of identical retries. Every correction now
   names what was wrong in the reply (a heading with no code block under it, SEARCH/REPLACE text that
   was not inside a code fence, a pair that was never closed …) and shows the exact shape to answer

@@ -269,15 +269,8 @@ export class JobRouter {
       }
     }
 
-    const lastTabId = await state.read((s) => s.lastTabByEditor[job.editorId])
-    if (lastTabId !== undefined) {
-      const inUse = await state.read((s) =>
-        Object.values(s.activeJobs).some((j) => j.tabId === lastTabId)
-      )
-      if (!inUse && (await this.chatTab(lastTabId))) {
-        return { action: 'navigate', tabId: lastTabId, url: job.chatUrl }
-      }
-    }
+    // A new run gets its own tab: never navigate away from another run's saved chat.
+    // Follow-ups still use their session's tab, or reopen the saved conversation URL.
     return { action: 'create', url: job.chatUrl }
   }
 
@@ -304,7 +297,6 @@ export class JobRouter {
             : s.sessions[job.sessionId]?.conversationUrl,
           updatedAt: this.now()
         }
-        s.lastTabByEditor[job.editorId] = tabId
         if (awaiting) s.pending[tabId] = job
       })
 

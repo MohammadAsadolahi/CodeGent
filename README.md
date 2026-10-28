@@ -47,6 +47,11 @@ The panel has a checklist that turns green as each part is ready.
 3. Watch each step appear. You can open every changed file, see the diff, **Undo** a step, or **Stop**
    at any time.
 
+Each new run opens its **own ChatGPT tab**, preserving earlier conversations. Follow-up steps
+stay in the same tab and chat. Expand **History** in CodeGent to view saved step summaries and
+reopen a past ChatGPT conversation. The most recent 30 runs are kept locally; **Clear history**
+removes those records. An interrupted run can be inspected but cannot automatically resume.
+
 Tip: set a **verify command** such as `npm test` ([settings](docs/settings.md)) so ChatGPT gets real
 test results after every step.
 

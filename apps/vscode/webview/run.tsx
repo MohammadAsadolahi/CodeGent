@@ -359,27 +359,54 @@ export const History = ({ items }: { items: UiHistoryItem[] }) => {
         <strong>History ({items.length})</strong>
       </summary>
       {items.map((item) => (
-        <div class="history-item" key={item.id}>
-          <span
-            class={
-              item.outcome === 'done' ? 'ok' : item.outcome === 'error' ? 'bad' : 'warn'
-            }
-          >
-            {item.outcome === 'done' ? (
-              <Check />
-            ) : item.outcome === 'error' ? (
-              <Cross />
-            ) : (
-              <Info />
-            )}
-          </span>
-          <div style="flex:1;min-width:0">
-            <div class="wrap">{item.task}</div>
-            <div class="muted wrap">
-              {item.repo} · {item.steps} step{item.steps === 1 ? '' : 's'} ·{' '}
-              {formatAgo(item.startedAt, now)} — {item.message}
+        <div class="history-entry" key={item.id}>
+          <div class="history-item">
+            <span
+              class={
+                item.outcome === 'done' ? 'ok' : item.outcome === 'error' ? 'bad' : 'warn'
+              }
+            >
+              {item.outcome === 'done' ? (
+                <Check />
+              ) : item.outcome === 'error' ? (
+                <Cross />
+              ) : (
+                <Info />
+              )}
+            </span>
+            <div style="flex:1;min-width:0">
+              <div class="wrap">{item.task}</div>
+              <div class="muted wrap" title={new Date(item.startedAt).toLocaleString()}>
+                {item.repo} · {item.steps} step{item.steps === 1 ? '' : 's'} ·{' '}
+                {formatAgo(item.startedAt, now)} — {item.message}
+              </div>
+              {item.conversationUrl && (
+                <div class="actions">
+                  <button
+                    class="small"
+                    onClick={() => post({ type: 'openUrl', url: item.conversationUrl! })}
+                  >
+                    <Folder /> Open chat
+                  </button>
+                </div>
+              )}
             </div>
           </div>
+          {item.timeline && item.timeline.length > 0 && (
+            <details class="history-detail">
+              <summary>Step summaries ({item.timeline.length})</summary>
+              <ol class="history-steps">
+                {item.timeline.map((step) => (
+                  <li key={step.n}>
+                    <strong>Step {step.n}</strong>
+                    {step.status && <span class="muted"> · {step.status}</span>}
+                    {step.summary && <div class="wrap">{step.summary}</div>}
+                    {step.publish && <div class="muted">{step.publish}</div>}
+                  </li>
+                ))}
+              </ol>
+            </details>
+          )}
         </div>
       ))}
       <div class="actions">

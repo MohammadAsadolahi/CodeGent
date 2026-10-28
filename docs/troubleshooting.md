@@ -33,6 +33,8 @@ storage folder.
 - Local windows only. In a remote window (SSH, Dev Containers, Codespaces) the extension runs on the
   remote machine, whose `127.0.0.1` is not your browser's, so the two cannot find each other.
 - A run cannot be resumed after VS Code is closed or reloaded; it is recorded as _interrupted_ in the
-  history (steps already applied stay in your tree and in git).
+  history (steps already applied stay in your tree and in git). If the conversation URL was
+  captured, **Open chat** in History will reopen it; this does not restart the agent.
+- Each new run opens another ChatGPT tab so older chats remain visible; close unused tabs yourself.
 - The ChatGPT page is not a stable API. The browser extension keeps all page-specific code in one
   module and has a self-test, but a ChatGPT redesign can break it until it is updated.

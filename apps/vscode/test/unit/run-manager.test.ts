@@ -188,7 +188,12 @@ describe('a run from start to finish', () => {
       task: 'Add a module',
       outcome: 'done',
       steps: 2,
-      repo: 'octo/project'
+      repo: 'octo/project',
+      conversationUrl: 'https://chatgpt.com/c/x',
+      timeline: [
+        { n: 1, summary: 'Add it.', status: 'continue', publish: 'Pushed 2222222' },
+        { n: 2, summary: 'All done.', status: 'done' }
+      ]
     })
     expect(t.history).toHaveLength(1)
     expect(t.notices.at(-1)).toMatchObject({
@@ -485,7 +490,9 @@ describe('a run that a closed window left behind', () => {
   })
 
   it('shows up in the history as interrupted, once, and the marker is cleared', () => {
-    const t = setup([], { lost: lost(2) })
+    const t = setup([], {
+      lost: { ...lost(2), conversationUrl: 'https://chatgpt.com/c/interrupted' }
+    })
     const { history } = t.manager.view()
     expect(history).toHaveLength(1)
     expect(history[0]).toMatchObject({
@@ -493,7 +500,8 @@ describe('a run that a closed window left behind', () => {
       task: 'Add dark mode',
       outcome: 'interrupted',
       steps: 2,
-      repo: 'octo/project'
+      repo: 'octo/project',
+      conversationUrl: 'https://chatgpt.com/c/interrupted'
     })
     expect(history[0]!.message).toMatch(/working tree and in git/)
     expect(t.history).toHaveLength(1) // saved
@@ -551,6 +559,18 @@ describe('remembering the run in progress', () => {
     await t.manager.start('task')
     expect(t.manager.view().run!.state).toBe('paused')
     expect(t.markers.at(-1)).toMatchObject({ task: 'task' })
+  })
+
+  it('saves a conversation link when a run pauses after a completed step', async () => {
+    const t = setup([reply('Work in progress.', [create('a.ts', 'x')], 'continue')], {
+      settings: { autoContinue: false }
+    })
+    await t.manager.start('task')
+    expect(t.manager.view().run!.state).toBe('paused')
+    expect(t.markers.at(-1)).toMatchObject({
+      task: 'task',
+      conversationUrl: 'https://chatgpt.com/c/x'
+    })
   })
 })
 

@@ -39,6 +39,7 @@ export interface ActiveRunMarker {
   startedAt: number
   repo: string
   steps: number
+  conversationUrl?: string
 }
 
 interface PendingReview {
@@ -60,7 +61,8 @@ const interrupted = (marker: ActiveRunMarker): UiHistoryItem => ({
       ? `VS Code was closed or reloaded while this task was running. The steps that were applied are in your working tree and in git. The ChatGPT conversation still exists; start a new task to continue.`
       : 'VS Code was closed or reloaded before ChatGPT had answered. Nothing was changed.',
   steps: marker.steps,
-  repo: marker.repo
+  repo: marker.repo,
+  conversationUrl: marker.conversationUrl
 })
 
 /**
@@ -306,7 +308,8 @@ export class RunManager {
       task: snapshot.task.slice(0, 300),
       startedAt: snapshot.startedAt ?? 0,
       repo: this.repoName,
-      steps: snapshot.steps.length
+      steps: snapshot.steps.length,
+      conversationUrl: snapshot.conversationUrl
     }
     const key = JSON.stringify(marker)
     if (key === this.lastMarker) return
@@ -323,7 +326,19 @@ export class RunManager {
       outcome: snapshot.state.outcome,
       message: snapshot.state.message.slice(0, 300),
       steps: snapshot.steps.length,
-      repo: this.repoName
+      repo: this.repoName,
+      conversationUrl: snapshot.conversationUrl,
+      timeline: snapshot.steps.map((step) => ({
+        n: step.step,
+        summary: (step.reply?.summary ?? '').slice(0, 500),
+        status: step.reply?.status ?? null,
+        publish:
+          step.publish?.state === 'pushed'
+            ? `Pushed ${step.publish.shortSha}`
+            : step.publish?.state === 'committed'
+              ? `Committed ${step.publish.shortSha}`
+              : undefined
+      }))
     }
     this.history = [item, ...this.history.filter((h) => h.id !== item.id)].slice(
       0,

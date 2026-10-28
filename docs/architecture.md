@@ -108,7 +108,9 @@ The prompt's own format example is parsed in a test, so the prompt and the parse
 
 - The **service worker** owns the hub WebSocket (discovery, backoff, watchdog, an ordered outbox
   persisted in `storage.session`), a **job router** (session → tab map and active jobs, persisted), and
-  opens or reuses ChatGPT tabs (falling back to a new window when the browser has none).
+  opens a separate ChatGPT tab for each new run (falling back to a new window when the browser has
+  none). Follow-up messages return to that run's tab or reopen its saved conversation if the tab
+  was closed. Earlier runs' tabs are never navigated away just to start a new run.
 - The **content script** is the only code that knows ChatGPT's page. It announces _ready_; the worker
   answers with the pending job (no URL-hash hand-off, so redirects and logins cannot lose a job). It
   fills the composer with three verified strategies, submits (button, then Enter), detects completion
@@ -138,7 +140,9 @@ The prompt's own format example is parsed in a test, so the prompt and the parse
   browser) → the engine; `RepoService` and `FsWorkspace` (read, all-or-nothing writes with rollback,
   symlink-escape check, checkpoints and undo); `VsCodeChecks` (diagnostics, verify command);
   `RunManager` (the panel's view of a run, review decisions, history, an _in-progress_ marker so a
-  closed window leaves an "interrupted" history entry).
+  closed window leaves an "interrupted" history entry). History keeps up to 30 compact local run
+  records, including step summaries and a ChatGPT conversation link when available; it does not
+  store full ChatGPT replies or make finished/interrupted runs resumable.
 - **Diagnostics need a visible editor.** Language servers (TypeScript, JSON, …) only analyse files that
   are shown, so the changed files are briefly revealed in a side editor group without taking focus and
   closed again; errors are reported as a delta against a baseline taken just before the step.

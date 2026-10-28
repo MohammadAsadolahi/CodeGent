@@ -177,13 +177,17 @@ describe('a job', () => {
     expect(world.context.pages().map((p) => p.url())).toContain(first.conversationUrl)
   })
 
-  it('starts a new chat in the idle tab instead of piling up tabs', async () => {
+  it('preserves an earlier conversation when opening a new chat tab', async () => {
     world.mock.queueReply('one')
     world.mock.queueReply('two')
-    completed(await world.editor.run(world.editor.job({ text: 'a' })))
+    const first = completed(await world.editor.run(world.editor.job({ text: 'a' })))
     const tabs = world.context.pages().length
-    completed(await world.editor.run(world.editor.job({ text: 'b' })))
-    expect(world.context.pages()).toHaveLength(tabs)
+    const second = completed(await world.editor.run(world.editor.job({ text: 'b' })))
+    expect(world.context.pages()).toHaveLength(tabs + 1)
+    expect(second.conversationUrl).not.toBe(first.conversationUrl)
+    expect(world.context.pages().map((page) => page.url())).toContain(
+      first.conversationUrl
+    )
   })
 })
 

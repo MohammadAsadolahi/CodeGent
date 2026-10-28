@@ -179,11 +179,11 @@ describe('new chats', () => {
     expect(eventsOf(h, second.jobId)[0]).toMatchObject({ kind: 'failed', code: 'busy' })
   })
 
-  it('reuses the editor’s previous idle tab for the next new chat, but not a busy one', async () => {
+  it('keeps earlier conversations in separate tabs when new sessions start', async () => {
     const first = job()
     await h.router.handleJob(first)
-    const tabId = [...h.browser.tabs_.keys()][0]!
-    await h.router.handleContentReady(tabId)
+    const firstTab = [...h.browser.tabs_.keys()][0]!
+    await h.router.handleContentReady(firstTab)
     await h.router.handleContentEvent({
       type: 'job-event',
       editorId: 'editor-1',
@@ -191,14 +191,25 @@ describe('new chats', () => {
       seq: 100,
       event: completed()
     })
+    h.browser.tabs_.set(firstTab, { id: firstTab, url: 'https://chatgpt.com/c/abc' })
 
     const second = job()
     await h.router.handleJob(second)
-    expect(h.browser.created).toHaveLength(1) // no new tab
-    expect(h.browser.updated.at(-1)).toMatchObject({ tabId, url: 'https://chatgpt.com/' })
+    expect(h.browser.created).toHaveLength(2)
+    expect(h.browser.updated).toEqual([])
+    expect(h.browser.tabs_.get(firstTab)?.url).toBe('https://chatgpt.com/c/abc')
 
-    const third = job() // second is still running in that tab ⇒ needs its own tab
-    await h.router.handleJob(third)
+    // The first session still works even while the second tab is running a new job.
+    const follow = job({ sessionId: first.sessionId, newChat: false })
+    await h.router.handleJob(follow)
+    expect(h.browser.messages.at(-1)).toMatchObject({
+      tabId: firstTab,
+      message: { type: 'run-job', job: follow }
+    })
+    expect(eventsOf(h, follow.jobId)[0]).toMatchObject({
+      kind: 'accepted',
+      tabId: firstTab
+    })
     expect(h.browser.created).toHaveLength(2)
   })
 })

@@ -26,14 +26,12 @@ export interface ActiveJob {
 
 interface Snapshot {
   sessions: Record<string, SessionRecord>
-  lastTabByEditor: Record<string, number>
   activeJobs: Record<string, ActiveJob>
   pending: Record<string, JobRequest>
 }
 
 const EMPTY = (): Snapshot => ({
   sessions: {},
-  lastTabByEditor: {},
   activeJobs: {},
   pending: {}
 })

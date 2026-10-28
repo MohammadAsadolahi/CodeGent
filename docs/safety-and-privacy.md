@@ -36,6 +36,11 @@
   match, verify-command output), under your own ChatGPT account. ChatGPT reads your code through the
   GitHub connector according to OpenAI's and GitHub's terms. Do not put secrets in tasks, and be aware
   that a verify command's output is sent too.
+- The VS Code extension saves the 30 most recent run records in local VS Code global storage:
+  task titles, outcomes, short step summaries, repository names, and conversation links when
+  available. It does not save full ChatGPT replies or file diffs in history. **Clear history**
+  in the panel removes these records; closing VS Code does not. Each new run opens a separate
+  ChatGPT tab, and CodeGent does not close earlier conversations.
 - Credentials in a remote URL are never put into a prompt.
 - The browser extension asks for access to `chatgpt.com` (to type and read), `127.0.0.1` (the hub),
   and the `storage`, `alarms` (to keep its connection alive) and `scripting` (to attach to ChatGPT tabs
