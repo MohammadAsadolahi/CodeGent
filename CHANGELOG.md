@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Hardened Time Travel: undo now verifies that all affected files match the exact
+  restored checkpoint, refusing later edits even when Git could apply the reverse patch
+  to another part of the file. Restore and undo reject paths hidden by Git index flags.
+  Workspace changes invalidate stale Time Travel state, and an in-flight refresh can no
+  longer show or restore files from a previously opened folder. Time Travel also rejects
+  submodule pointer changes that Git apply would otherwise silently skip, and now has
+  regression coverage for binary files and a full VS Code restore/undo integration test.
+  Restore and undo are serialized with other Time Travel operations and prevent agent runs
+  from starting until the operation is complete. Undo permits unrelated staged edits,
+  and the UI now explains that restored code must be committed and pushed before ChatGPT
+  can read it on GitHub.
+
 - Added **Time Travel** to the VS Code panel: browse the latest 30 local Git commits, preview
   affected files, and restore any earlier ancestor without moving HEAD, staging, rewriting
   history, or pushing. A restore requires a clean working tree and saved editors; a guarded

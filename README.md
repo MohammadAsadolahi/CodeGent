@@ -60,10 +60,12 @@ and confirm a rollback in VS Code. CodeGent restores the working tree without mo
 rewriting commits, changing staged files, or pushing anything. **Undo Time Travel** reverses
 the restore while its affected files remain unchanged.
 
-For safety, restoration requires a clean working tree and no unsaved editors. The result is
-uncommitted code for you to review, test and optionally commit. The timeline is Git-based:
-steps run with **commit disabled** have only the existing per-step Undo, and ChatGPT
-conversation state is not rewound.
+For safety, restoration requires a clean working tree and no unsaved editors. Files
+hidden from Git by special index flags and changes to submodule pointers are not supported.
+The result is uncommitted code for you to review and test. Commit and push it before
+starting another CodeGent task so ChatGPT reads the restored version on GitHub. The timeline
+is Git-based: steps run with **commit disabled** have only the existing per-step Undo,
+which does not survive a VS Code reload. ChatGPT conversation state is not rewound.
 
 Tip: set a **verify command** such as `npm test` ([settings](docs/settings.md)) so ChatGPT gets real
 test results after every step.
@@ -72,7 +74,8 @@ test results after every step.
 
 - ChatGPT only sends text back. It cannot run anything on your computer.
 - Every edit is checked before it is written. Files you have changed yourself are left alone.
-- Everything is undoable, and the number of steps is capped.
+- Edits have guarded undo, and committed code can be restored through Time Travel.
+  The number of agent steps is capped.
 - No CodeGent server and no telemetry. Your code goes only to ChatGPT, through your own account, and to GitHub.
 
 Details: [Safety and privacy](docs/safety-and-privacy.md) — including a note that automating a web page

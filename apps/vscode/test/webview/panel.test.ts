@@ -629,6 +629,7 @@ describe('time travel', () => {
     await show(state({ timeTravel: { points, undoAvailable: true } }))
     expect(text()).toContain('Time Travel (1 past points)')
     expect(text()).toContain('Before refactor')
+    expect(text()).toContain('Commit and push the restored code')
     await click(button('Preview & restore'))
     expect(posted.at(-1)).toEqual({ type: 'restorePoint', sha: 'b'.repeat(40) })
     await click(button('Undo Time Travel'))
@@ -644,5 +645,14 @@ describe('time travel', () => {
     )
     expect(button('Preview & restore').disabled).toBe(true)
     expect(button('Undo Time Travel').disabled).toBe(false)
+
+    await show(
+      state({
+        run: run({ state: 'running', outcome: undefined, steps: [] }),
+        timeTravel: { points, undoAvailable: true }
+      })
+    )
+    expect(button('Preview & restore').disabled).toBe(true)
+    expect(button('Undo Time Travel').disabled).toBe(true)
   })
 })

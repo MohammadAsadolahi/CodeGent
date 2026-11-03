@@ -150,6 +150,13 @@ The prompt's own format example is parsed in a test, so the prompt and the parse
   originates from ChatGPT, so rendering is escaped and every message it sends is validated in the
   extension (paths go through the same sandbox as edits, only `https:` links open, diffs are looked up by
   name among the current changes).
+- **Time Travel** is separate from per-step in-memory Undo and summary-only run history.
+  `TimeTravel` reads the latest 30 first-parent commits in local Git history, previews a
+  previous commit's differences, and applies a guarded binary patch to working-tree files
+  only. It refuses dirty or unsaved files, hidden Git index flags and submodule pointer
+  changes, without changing HEAD, staging or pushing. Undo verifies that all affected
+  paths still match the restored commit before reversing the patch; its marker is saved
+  in VS Code workspace storage. The ChatGPT transcript is not rewound.
 - `verifyCommand` is machine-scoped, so a repository cannot set a command that CodeGent would run.
 
 ## Testing

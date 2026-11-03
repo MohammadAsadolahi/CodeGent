@@ -41,7 +41,11 @@ export const setSetting = async (key: string, value: unknown): Promise<void> => 
  * test). Returns the function that puts the original back.
  */
 export const replaceWindowFunction = (
-  name: 'showInformationMessage' | 'showQuickPick' | 'showInputBox',
+  name:
+    | 'showInformationMessage'
+    | 'showWarningMessage'
+    | 'showQuickPick'
+    | 'showInputBox',
   replacement: (...args: any[]) => unknown
 ): (() => void) => {
   const window = vscode.window as unknown as Record<string, unknown>

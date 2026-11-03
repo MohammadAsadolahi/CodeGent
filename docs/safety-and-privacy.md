@@ -5,7 +5,9 @@
 ## Safety
 
 - **Edits are checked before anything is written.** Paths that leave the repository, point into
-  `.git`, or are absolute elsewhere are rejected. Binary files are never edited. A `SEARCH` block
+  `.git`, or are absolute elsewhere are rejected. Binary files are never edited by
+  ChatGPT's SEARCH/REPLACE engine (Time Travel uses Git patches, which can restore tracked
+  binary files). A `SEARCH` block
   that cannot be found — or is found in more than one place — is an error, never a guess: that file
   stays untouched and ChatGPT is told what was wrong. (Differences in indentation or trailing spaces
   are tolerated, because chat models get those wrong.) A replacement that stands in for code — a line
@@ -13,8 +15,14 @@
 - **Your own work is protected.** Files with uncommitted changes — and files with unsaved changes in
   an editor — are not edited. Commits contain only the files CodeGent changed; whatever else you have
   staged stays staged.
-- **Everything is undoable.** Each step is checkpointed; _Undo this step_ restores the files (it will
-  not overwrite something you changed since).
+- **There are two safe rollback paths.** _Undo this step_ uses a temporary checkpoint
+  held in the current VS Code session; it refuses conflicts, and does not survive a reload.
+  _Time Travel_ uses the latest 30 local Git commits as durable restore points. It previews
+  the affected files, requires a clean worktree and saved editors, and applies changes
+  without rewriting HEAD, the index, or the remote. _Undo Time Travel_ requires every
+  affected file to remain exactly as restored; other files may be edited. Git-index paths
+  hidden with assume-unchanged or skip-worktree are rejected, as are submodule pointer
+  changes. Restoring does not rewind ChatGPT's conversation or automatically push code.
 - **ChatGPT never runs commands on your machine.** There is no such channel. The only commands that
   run are git operations CodeGent issues itself and the verify command _you_ configured (which can only
   be set in your user settings, so a repository cannot set one).
