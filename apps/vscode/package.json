@@ -122,6 +122,12 @@
         "icon": "$(discard)"
       },
       {
+        "command": "codegent.undoTimeTravel",
+        "title": "Undo Time Travel Restore",
+        "category": "CodeGent",
+        "icon": "$(history)"
+      },
+      {
         "command": "codegent.openBrowserExtensionFolder",
         "title": "Show Browser Extension Folder",
         "category": "CodeGent",

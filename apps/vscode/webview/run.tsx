@@ -1,4 +1,11 @@
-import type { UiEdit, UiHistoryItem, UiReview, UiRun, UiStep } from '../src/ui/protocol'
+import type {
+  UiEdit,
+  UiHistoryItem,
+  UiReview,
+  UiRun,
+  UiStep,
+  UiTimeTravel
+} from '../src/ui/protocol'
 import { Check, Cross, Diff, Dot, Folder, Info, Spinner, Stop, Undo, Warn } from './icons'
 import { formatAgo, formatDuration, post, useNow } from './store'
 
@@ -414,6 +421,71 @@ export const History = ({ items }: { items: UiHistoryItem[] }) => {
           Clear history
         </button>
       </div>
+    </details>
+  )
+}
+
+/** Git commits form a durable timeline even after the VS Code window is reloaded. */
+export const TimeTravelCard = ({
+  timeline,
+  locked,
+  dirty
+}: {
+  timeline?: UiTimeTravel
+  locked: boolean
+  dirty: boolean
+}) => {
+  if (!timeline || timeline.points.length === 0) return null
+  return (
+    <details class="card" aria-label="Time Travel">
+      <summary>
+        <strong>
+          Time Travel ({Math.max(0, timeline.points.length - 1)} past points)
+        </strong>
+      </summary>
+      <p class="muted">
+        Preview and restore an earlier local Git commit in your working tree. Branch,
+        commits and staging stay unchanged. Your ChatGPT conversation is not rewound.
+      </p>
+      {timeline.undoAvailable && (
+        <div class="actions">
+          <button
+            class="small"
+            disabled={locked}
+            onClick={() => post({ type: 'undoTimeTravel' })}
+          >
+            <Undo /> Undo Time Travel
+          </button>
+        </div>
+      )}
+      {dirty && (
+        <p class="muted">
+          Commit, stash or discard uncommitted changes before restoring a point.
+        </p>
+      )}
+      <ol class="history-steps">
+        {timeline.points.map((point) => (
+          <li key={point.sha} class="time-point">
+            <div style="flex:1;min-width:0">
+              <strong class="wrap">{point.title}</strong>
+              <div class="muted mono">
+                {point.shortSha} · {new Date(point.timestamp).toLocaleString()}
+                {point.current ? ' · HEAD' : ''}
+              </div>
+            </div>
+            {!point.current && (
+              <button
+                class="small"
+                disabled={locked || dirty}
+                title="Preview which files will change, then confirm in VS Code"
+                onClick={() => post({ type: 'restorePoint', sha: point.sha })}
+              >
+                Preview & restore
+              </button>
+            )}
+          </li>
+        ))}
+      </ol>
     </details>
   )
 }

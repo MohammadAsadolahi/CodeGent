@@ -18,6 +18,7 @@ import type { ToExtension, ToggleKey, UiNotice, UiState } from './ui/protocol'
 import { toUiConnection, toUiRepo } from './ui/view-model'
 import { FsWorkspace } from './workspace/fs-workspace'
 import { RepoService, type RepoOk, type RepoStatus } from './workspace/repo-service'
+import { TimeTravel, type RestoreMarker, type TimePoint } from './workspace/time-travel'
 
 /** What the integration tests (and only they) use to drive the extension without clicking. */
 export interface CodeGentApi {
@@ -37,6 +38,7 @@ export interface CodeGentApi {
 
 const HISTORY_KEY = 'codegent.history'
 const ACTIVE_KEY = 'codegent.activeRun'
+const RESTORE_KEY = 'codegent.lastTimeTravelRestore'
 const BROWSER_KEY = 'codegent.browserId'
 const consentKey = (repo: string) => `codegent.publish.${repo}`
 
@@ -52,6 +54,7 @@ export class App implements vscode.Disposable {
   private repoService: RepoService | undefined
   private workspace: FsWorkspace | undefined
   private repoStatus: RepoStatus | undefined
+  private timePoints: TimePoint[] = []
   private notice: UiNotice | null = null
   private noticeTimer: ReturnType<typeof setTimeout> | undefined
   private pushTimer: ReturnType<typeof setTimeout> | undefined
@@ -223,6 +226,13 @@ export class App implements vscode.Disposable {
               problem: 'no-repo',
               reason: 'Open a folder that is a git repository with a GitHub remote.'
             }
+        const status = this.repoStatus
+        this.timePoints = status?.ok
+          ? await new TimeTravel(status.root).points().catch((error: Error) => {
+              this.log.warn('Could not load Time Travel history: ' + error.message)
+              return []
+            })
+          : []
       } catch (error) {
         this.repoStatus = {
           ok: false,
@@ -377,6 +387,12 @@ export class App implements vscode.Disposable {
         autoSubmit: settings.bridge.autoSubmit
       },
       ...this.manager.view(),
+      timeTravel: {
+        points: this.timePoints,
+        undoAvailable:
+          this.context.workspaceState.get<RestoreMarker>(RESTORE_KEY)?.root ===
+          (this.repoStatus?.ok ? this.repoStatus.root : '')
+      },
       busy: this.manager.busy,
       notice: this.notice,
       setup: { browserExtensionPath: this.browserExtensionPath }
@@ -451,6 +467,10 @@ export class App implements vscode.Disposable {
           return this.manager.decide(message.decision)
         case 'undo':
           return await this.manager.undoStep(Number(message.step))
+        case 'restorePoint':
+          return await this.restorePoint(String(message.sha))
+        case 'undoTimeTravel':
+          return await this.undoTimeTravel()
         case 'dismissRun':
           return this.manager.dismiss()
         case 'clearHistory':
@@ -543,6 +563,95 @@ export class App implements vscode.Disposable {
     await this.refreshRepo()
   }
 
+  /** Time Travel never changes HEAD or the staging area; only the working tree is patched. */
+  private travel(root: string): TimeTravel {
+    return new TimeTravel(root, undefined, () =>
+      vscode.workspace.textDocuments.some((doc) => {
+        if (!doc.isDirty || doc.uri.scheme !== 'file') return false
+        const relative = path.relative(root, doc.uri.fsPath)
+        return (
+          relative !== '' &&
+          relative !== '..' &&
+          !relative.startsWith('..' + path.sep) &&
+          !path.isAbsolute(relative)
+        )
+      })
+    )
+  }
+
+  private async restorePoint(sha: string): Promise<void> {
+    const status = this.repoStatus
+    if (!status?.ok) throw new Error('Open a GitHub repository to use Time Travel.')
+    if (this.manager.active || this.manager.busy)
+      throw new Error('Stop the current CodeGent run before restoring files.')
+
+    const travel = this.travel(status.root)
+    const preview = await travel.preview(sha)
+    if (preview.files.length === 0) {
+      this.notify({ kind: 'info', text: 'This checkpoint already matches HEAD.' })
+      return
+    }
+    const label =
+      this.timePoints.find((point) => point.sha === sha)?.title ?? sha.slice(0, 7)
+    const visibleFiles = preview.files.slice(0, 12)
+    const detail = [
+      preview.summary || 'Changes to tracked files',
+      '',
+      ...visibleFiles,
+      ...(preview.files.length > visibleFiles.length
+        ? ['… and ' + (preview.files.length - visibleFiles.length) + ' more files']
+        : []),
+      '',
+      'Your branch, commits, staging area and GitHub remote will not change.',
+      'All uncommitted and unsaved work must be cleared before restoring.',
+      'Use Undo Time Travel to reverse this restore if the affected files remain unchanged.'
+    ].join('\n')
+    const choice = await vscode.window.showWarningMessage(
+      'Restore ' + preview.files.length + ' file(s) from "' + label + '"?',
+      { modal: true, detail },
+      'Restore files'
+    )
+    if (choice !== 'Restore files') return
+    if (this.manager.active || this.manager.busy)
+      throw new Error('A CodeGent run started during confirmation. Restore cancelled.')
+    const marker = await travel.restore(sha, preview.headSha)
+    await this.context.workspaceState.update(RESTORE_KEY, marker)
+    this.notify({
+      kind: 'info',
+      text:
+        'Restored ' +
+        preview.files.length +
+        ' files in your working tree. Review the diff before committing; Git history is unchanged.'
+    })
+    await this.refreshRepo()
+  }
+
+  private async undoTimeTravel(): Promise<void> {
+    if (this.manager.active || this.manager.busy)
+      throw new Error('Stop the current CodeGent run before undoing a restore.')
+    const status = this.repoStatus
+    const marker = this.context.workspaceState.get<RestoreMarker>(RESTORE_KEY)
+    if (!status?.ok || !marker || marker.root !== status.root)
+      throw new Error('There is no Time Travel restore to undo in this repository.')
+    const choice = await vscode.window.showWarningMessage(
+      'Undo the last Time Travel restore?',
+      {
+        modal: true,
+        detail:
+          'CodeGent will reverse only the restore patch. If those files were edited since the restore, the undo will be refused rather than overwrite your work.'
+      },
+      'Undo restore'
+    )
+    if (choice !== 'Undo restore') return
+    await this.travel(status.root).undo(marker)
+    await this.context.workspaceState.update(RESTORE_KEY, undefined)
+    this.notify({
+      kind: 'info',
+      text: 'Time Travel restore undone; working tree returned to the previous state.'
+    })
+    await this.refreshRepo()
+  }
+
   private async openDiff(file: string, step: number | undefined): Promise<void> {
     const changes =
       step === undefined ? this.manager.pendingChanges() : this.manager.stepChanges(step)
@@ -617,6 +726,9 @@ export class App implements vscode.Disposable {
       }),
       vscode.commands.registerCommand('codegent.stopRun', () => this.manager.stop()),
       vscode.commands.registerCommand('codegent.resumeRun', () => this.manager.resume()),
+      vscode.commands.registerCommand('codegent.undoTimeTravel', () =>
+        this.undoTimeTravel()
+      ),
       vscode.commands.registerCommand('codegent.undoStep', async () => {
         const run = this.manager.view().run
         const step = run?.steps.find((s) => s.canUndo)

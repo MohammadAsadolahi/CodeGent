@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added **Time Travel** to the VS Code panel: browse the latest 30 local Git commits, preview
+  affected files, and restore any earlier ancestor without moving HEAD, staging, rewriting
+  history, or pushing. A restore requires a clean working tree and saved editors; a guarded
+  **Undo Time Travel** reverses the patch without overwriting later edits.
+
 - New runs open separate ChatGPT tabs instead of navigating away from the last idle conversation.
   Follow-up steps remain tied to their original sessions, even with other chats open.
 - History now keeps compact step summaries and ChatGPT links for finished runs. The panel can

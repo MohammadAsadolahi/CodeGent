@@ -155,6 +155,17 @@ export interface UiHistoryItem {
   timeline?: UiHistoryStep[]
 }
 
+export interface UiTimeTravel {
+  points: Array<{
+    sha: string
+    shortSha: string
+    title: string
+    timestamp: number
+    current: boolean
+  }>
+  undoAvailable: boolean
+}
+
 export interface UiState {
   version: string
   connection: UiConnection
@@ -163,6 +174,7 @@ export interface UiState {
   run: UiRun | null
   review: UiReview | null
   history: UiHistoryItem[]
+  timeTravel?: UiTimeTravel
   /** A run is being started (checks are running). */
   busy: boolean
   notice: UiNotice | null
@@ -178,6 +190,8 @@ export type ToExtension =
   | { type: 'resume' }
   | { type: 'decide'; decision: 'apply' | 'skip' | 'stop' }
   | { type: 'undo'; step: number }
+  | { type: 'restorePoint'; sha: string }
+  | { type: 'undoTimeTravel' }
   | { type: 'dismissRun' }
   | { type: 'setToggle'; key: ToggleKey; value: boolean }
   | { type: 'refreshRepo' }
