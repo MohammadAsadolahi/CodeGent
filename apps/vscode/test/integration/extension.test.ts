@@ -4,7 +4,16 @@ import path from 'node:path'
 import * as vscode from 'vscode'
 import type { CodeGentApi } from '../../src/app'
 import { FakeBrowser, until } from '../support/fake-browser'
-import { configuration, getApi, hubPorts, setSetting } from './env'
+import {
+  configuration,
+  getApi,
+  hubPorts,
+  itFromSources,
+  replaceWindowFunction,
+  setSetting,
+  workRepo
+} from './env'
+import { git } from '../support/git-fixture'
 
 describe('the extension in VS Code', () => {
   let api: CodeGentApi
@@ -117,6 +126,49 @@ describe('the extension in VS Code', () => {
       await restartHub()
     }
     await assert.rejects(connectOwn(), /403/)
+  })
+
+  itFromSources('restores a historical checkpoint and undoes it through the extension API', async () => {
+    const fixture = workRepo()
+    fixture.reset()
+    const file = path.join(fixture.dir, 'src/greeting.txt')
+    const dialogs: string[] = []
+    const restoreDialog = replaceWindowFunction(
+      'showWarningMessage',
+      async (message: string, options?: { modal?: boolean }, ...buttons: string[]) => {
+        if (!options?.modal) return undefined
+        dialogs.push(message)
+        return buttons[0]
+      }
+    )
+    try {
+      fs.writeFileSync(file, 'changed by a committed agent step\n')
+      git(fixture.dir, 'add', '-A')
+      git(fixture.dir, 'commit', '-qm', 'CodeGent integration checkpoint')
+      const current = git(fixture.dir, 'rev-parse', 'HEAD')
+      await api.send({ type: 'refreshRepo' })
+      const points = api.state().timeTravel?.points ?? []
+      assert.equal(points[0]?.sha, current)
+      assert.equal(points[1]?.sha, fixture.base)
+
+      await api.send({ type: 'restorePoint', sha: fixture.base })
+      assert.equal(fs.readFileSync(file, 'utf8'), 'hello\nworld\n')
+      assert.equal(api.state().timeTravel?.undoAvailable, true)
+      assert.equal(api.state().repo.ok && api.state().repo.dirtyCount, 1)
+
+      await api.send({ type: 'undoTimeTravel' })
+      assert.equal(fs.readFileSync(file, 'utf8'), 'changed by a committed agent step\n')
+      assert.equal(git(fixture.dir, 'rev-parse', 'HEAD'), current)
+      assert.equal(git(fixture.dir, 'status', '--porcelain'), '')
+      assert.equal(api.state().timeTravel?.undoAvailable, false)
+      assert.equal(dialogs.length, 2)
+      assert.match(dialogs[0]!, /Restore/)
+      assert.match(dialogs[1]!, /Undo/)
+    } finally {
+      restoreDialog()
+      fixture.reset()
+      await api.send({ type: 'refreshRepo' })
+    }
   })
 
   it('keeps the toggles in sync with the VS Code settings', async () => {
