@@ -27,7 +27,15 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Temporarily format and report audit files
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          npm run format
+          node -e "const fs=require('fs');for(const file of [\"apps/vscode/src/app.ts\",\"apps/vscode/src/workspace/time-travel.ts\",\"apps/vscode/test/unit/time-travel.test.ts\",\"apps/vscode/test/webview/panel.test.ts\",\"apps/vscode/test/integration/env.ts\",\"apps/vscode/test/integration/extension.test.ts\",\"CHANGELOG.md\"])console.log('CODEGENT_AUDIT_FORMAT_JSON '+JSON.stringify({file,content:fs.readFileSync(file,'utf8')}))"
       - run: npm run format:check
       - run: npm run build
       - run: npm run typecheck
       - run: npm test
+      - name: Validate VS Code Time Travel integration (temporary)
+        if: matrix.os == 'ubuntu-latest'
+        run: xvfb-run -a npm run test:integration -w apps/vscode -- "restores a historical checkpoint" --suite=protocol
