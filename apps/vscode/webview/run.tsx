@@ -448,8 +448,8 @@ export const TimeTravelCard = ({
         commits and staging stay unchanged. Your ChatGPT conversation is not rewound.
       </p>
       <p class="muted">
-        A restore is local and uncommitted. Commit and push the restored code before
-        a new CodeGent task so ChatGPT sees it on GitHub.
+        A restore is local and uncommitted. Commit and push the restored code before a new
+        CodeGent task so ChatGPT sees it on GitHub.
       </p>
       {timeline.undoAvailable && (
         <div class="actions">
