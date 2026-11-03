@@ -606,3 +606,27 @@ describe('messages and history', () => {
     expect(text()).toContain('<img src=x')
   })
 })
+
+
+describe('time travel', () => {
+  it('shows historical checkpoints, previews a restore, and exposes safe undo', async () => {
+    await boot()
+    const points = [
+      { sha: 'a'.repeat(40), shortSha: 'aaaaaaa', title: 'Current', timestamp: 1000, current: true },
+      { sha: 'b'.repeat(40), shortSha: 'bbbbbbb', title: 'Before refactor', timestamp: 500, current: false }
+    ]
+    await show(state({ timeTravel: { points, undoAvailable: true } }))
+    expect(text()).toContain('Time Travel (1 past points)')
+    expect(text()).toContain('Before refactor')
+    await click(button('Preview & restore'))
+    expect(posted.at(-1)).toEqual({ type: 'restorePoint', sha: 'b'.repeat(40) })
+    await click(button('Undo Time Travel'))
+    expect(posted.at(-1)).toEqual({ type: 'undoTimeTravel' })
+
+    const repo = state().repo
+    if (!repo.ok) throw new Error('Expected a healthy repository')
+    await show(state({ repo: { ...repo, dirtyCount: 1 }, timeTravel: { points, undoAvailable: true } }))
+    expect(button('Preview & restore').disabled).toBe(true)
+    expect(button('Undo Time Travel').disabled).toBe(false)
+  })
+})

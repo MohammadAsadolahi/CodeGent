@@ -503,3 +503,15 @@ details > summary {
   text-align: center;
   color: var(--cg-muted);
 }
+
+
+/* ── time travel ───────────────────────────────────────────────────────────────────────────── */
+.time-point {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+.time-point + .time-point {
+  border-top: 1px solid var(--cg-line);
+}

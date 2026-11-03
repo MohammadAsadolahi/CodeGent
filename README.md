@@ -52,6 +52,19 @@ stay in the same tab and chat. Expand **History** in CodeGent to view saved step
 reopen a past ChatGPT conversation. The most recent 30 runs are kept locally; **Clear history**
 removes those records. An interrupted run can be inspected but cannot automatically resume.
 
+### Time Travel
+
+Open **Time Travel** in the CodeGent panel to browse the last 30 local Git commits on the
+current branch. Choose **Preview & restore** on an earlier point to see the affected files
+and confirm a rollback in VS Code. CodeGent restores the working tree without moving HEAD,
+rewriting commits, changing staged files, or pushing anything. **Undo Time Travel** reverses
+the restore while its affected files remain unchanged.
+
+For safety, restoration requires a clean working tree and no unsaved editors. The result is
+uncommitted code for you to review, test and optionally commit. The timeline is Git-based:
+steps run with **commit disabled** have only the existing per-step Undo, and ChatGPT
+conversation state is not rewound.
+
 Tip: set a **verify command** such as `npm test` ([settings](docs/settings.md)) so ChatGPT gets real
 test results after every step.
 

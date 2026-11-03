@@ -1,6 +1,6 @@
 import { render } from 'preact'
 import { Header, isReady, Notice, RepoCard, SetupGuide, TaskCard } from './components'
-import { History, ReviewCard, RunCard } from './run'
+import { History, ReviewCard, RunCard, TimeTravelCard } from './run'
 import { useUiState } from './store'
 import './styles.css'
 
@@ -15,6 +15,11 @@ const App = () => {
       {state.notice && <Notice notice={state.notice} />}
       <SetupGuide state={state} />
       <RepoCard repo={state.repo} />
+      <TimeTravelCard
+        timeline={state.timeTravel}
+        locked={running || state.busy}
+        dirty={state.repo.ok && state.repo.dirtyCount > 0}
+      />
       {state.review && <ReviewCard review={state.review} />}
       {state.run && <RunCard run={state.run} />}
       <TaskCard toggles={state.toggles} locked={running} busy={state.busy} />
