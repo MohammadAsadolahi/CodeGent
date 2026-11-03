@@ -56,6 +56,7 @@ export class App implements vscode.Disposable {
   private repoStatus: RepoStatus | undefined
   private timePoints: TimePoint[] = []
   private repoRevision = 0
+  private timeTravelBusy = false
   private notice: UiNotice | null = null
   private noticeTimer: ReturnType<typeof setTimeout> | undefined
   private pushTimer: ReturnType<typeof setTimeout> | undefined
@@ -415,7 +416,7 @@ export class App implements vscode.Disposable {
           restore?.root === this.repoStatus.root &&
           restore.headSha === this.repoStatus.sha
       },
-      busy: this.manager.busy,
+      busy: this.manager.busy || this.timeTravelBusy,
       notice: this.notice,
       setup: { browserExtensionPath: this.browserExtensionPath }
     }
@@ -480,14 +481,20 @@ export class App implements vscode.Disposable {
           this.pushState()
           return void this.refreshRepo()
         case 'start':
+          if (this.timeTravelBusy)
+            return this.notify({ kind: 'warning', text: 'Time Travel is in progress. Start the task after it finishes.' })
           return await this.manager.start(String(message.task ?? ''))
         case 'stop':
           return this.manager.stop()
         case 'resume':
+          if (this.timeTravelBusy)
+            return this.notify({ kind: 'warning', text: 'Time Travel is in progress. Resume after it finishes.' })
           return await this.manager.resume()
         case 'decide':
           return this.manager.decide(message.decision)
         case 'undo':
+          if (this.timeTravelBusy)
+            return this.notify({ kind: 'warning', text: 'Time Travel is in progress. Undo the step afterward.' })
           return await this.manager.undoStep(Number(message.step))
         case 'restorePoint':
           return await this.restorePoint(String(message.sha))
@@ -601,7 +608,22 @@ export class App implements vscode.Disposable {
     )
   }
 
+  /** Only one restore or undo may touch a repository at a time in this VS Code window. */
+  private async withTimeTravelLock(operation: () => Promise<void>): Promise<void> {
+    if (this.timeTravelBusy)
+      throw new Error('Another Time Travel operation is already in progress.')
+    this.timeTravelBusy = true
+    this.pushState()
+    try {
+      await operation()
+    } finally {
+      this.timeTravelBusy = false
+      this.pushState()
+    }
+  }
+
   private async restorePoint(sha: string): Promise<void> {
+    return this.withTimeTravelLock(async () => {
     const folder = this.folderPath()
     const status = this.repoStatus
     if (!status?.ok) throw new Error('Open a GitHub repository to use Time Travel.')
@@ -649,9 +671,11 @@ export class App implements vscode.Disposable {
         ' files in your working tree. Review the diff before committing; Git history is unchanged.'
     })
     await this.refreshRepo()
+    })
   }
 
   private async undoTimeTravel(): Promise<void> {
+    return this.withTimeTravelLock(async () => {
     const folder = this.folderPath()
     if (this.manager.active || this.manager.busy)
       throw new Error('Stop the current CodeGent run before undoing a restore.')
@@ -678,6 +702,7 @@ export class App implements vscode.Disposable {
       text: 'Time Travel restore undone; working tree returned to the previous state.'
     })
     await this.refreshRepo()
+    })
   }
 
   private async openDiff(file: string, step: number | undefined): Promise<void> {
@@ -750,14 +775,24 @@ export class App implements vscode.Disposable {
                 prompt: 'What should ChatGPT build or fix?',
                 ignoreFocusOut: true
               })
-        if (text) await this.manager.start(text)
+        if (text) {
+          if (this.timeTravelBusy)
+            this.notify({ kind: 'warning', text: 'Time Travel is in progress. Start the task after it finishes.' })
+          else await this.manager.start(text)
+        }
       }),
       vscode.commands.registerCommand('codegent.stopRun', () => this.manager.stop()),
-      vscode.commands.registerCommand('codegent.resumeRun', () => this.manager.resume()),
+      vscode.commands.registerCommand('codegent.resumeRun', () =>
+        this.timeTravelBusy
+          ? this.notify({ kind: 'warning', text: 'Time Travel is in progress. Resume after it finishes.' })
+          : this.manager.resume()
+      ),
       vscode.commands.registerCommand('codegent.undoTimeTravel', () =>
         this.undoTimeTravel()
       ),
       vscode.commands.registerCommand('codegent.undoStep', async () => {
+        if (this.timeTravelBusy)
+          return this.notify({ kind: 'warning', text: 'Time Travel is in progress. Undo the step afterward.' })
         const run = this.manager.view().run
         const step = run?.steps.find((s) => s.canUndo)
         if (step) await this.manager.undoStep(step.n)

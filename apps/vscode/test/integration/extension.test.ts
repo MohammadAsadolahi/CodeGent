@@ -133,11 +133,16 @@ describe('the extension in VS Code', () => {
     fixture.reset()
     const file = path.join(fixture.dir, 'src/greeting.txt')
     const dialogs: string[] = []
+    let confirmRestore: ((choice: string) => void) | undefined
     const restoreDialog = replaceWindowFunction(
       'showWarningMessage',
       async (message: string, options?: { modal?: boolean }, ...buttons: string[]) => {
         if (!options?.modal) return undefined
         dialogs.push(message)
+        if (message.startsWith('Restore '))
+          return await new Promise<string>((resolve) => {
+            confirmRestore = resolve
+          })
         return buttons[0]
       }
     )
@@ -151,7 +156,15 @@ describe('the extension in VS Code', () => {
       assert.equal(points[0]?.sha, current)
       assert.equal(points[1]?.sha, fixture.base)
 
-      await api.send({ type: 'restorePoint', sha: fixture.base })
+      const restoring = api.send({ type: 'restorePoint', sha: fixture.base })
+      await until(() => confirmRestore !== undefined, 'the restore dialog to open', 15_000)
+      assert.equal(api.state().busy, true)
+      await api.send({ type: 'start', task: 'This must not run during a restore' })
+      assert.match(api.state().notice?.text ?? '', /Time Travel is in progress/)
+      confirmRestore!('Restore files')
+      await restoring
+      confirmRestore = undefined
+      assert.equal(api.state().busy, false)
       assert.equal(fs.readFileSync(file, 'utf8'), 'hello\nworld\n')
       assert.equal(api.state().timeTravel?.undoAvailable, true)
       assert.equal(api.state().repo.ok && api.state().repo.dirtyCount, 1)
@@ -165,6 +178,7 @@ describe('the extension in VS Code', () => {
       assert.match(dialogs[0]!, /Restore/)
       assert.match(dialogs[1]!, /Undo/)
     } finally {
+      confirmRestore?.('Restore files')
       restoreDialog()
       fixture.reset()
       await api.send({ type: 'refreshRepo' })
