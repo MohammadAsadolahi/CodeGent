@@ -167,7 +167,10 @@ describe('the extension in VS Code', () => {
       assert.equal(api.state().busy, false)
       assert.equal(fs.readFileSync(file, 'utf8'), 'hello\nworld\n')
       assert.equal(api.state().timeTravel?.undoAvailable, true)
-      assert.equal(api.state().repo.ok && api.state().repo.dirtyCount, 1)
+      const restoredRepo = api.state().repo
+      assert.equal(restoredRepo.ok, true)
+      if (!restoredRepo.ok) throw new Error('Expected the repository to remain valid')
+      assert.equal(restoredRepo.dirtyCount, 1)
 
       await api.send({ type: 'undoTimeTravel' })
       assert.equal(fs.readFileSync(file, 'utf8'), 'changed by a committed agent step\n')
