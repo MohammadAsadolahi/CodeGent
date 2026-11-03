@@ -128,65 +128,72 @@ describe('the extension in VS Code', () => {
     await assert.rejects(connectOwn(), /403/)
   })
 
-  itFromSources('restores a historical checkpoint and undoes it through the extension API', async () => {
-    const fixture = workRepo()
-    fixture.reset()
-    const file = path.join(fixture.dir, 'src/greeting.txt')
-    const dialogs: string[] = []
-    let confirmRestore: ((choice: string) => void) | undefined
-    const restoreDialog = replaceWindowFunction(
-      'showWarningMessage',
-      async (message: string, options?: { modal?: boolean }, ...buttons: string[]) => {
-        if (!options?.modal) return undefined
-        dialogs.push(message)
-        if (message.startsWith('Restore '))
-          return await new Promise<string>((resolve) => {
-            confirmRestore = resolve
-          })
-        return buttons[0]
-      }
-    )
-    try {
-      fs.writeFileSync(file, 'changed by a committed agent step\n')
-      git(fixture.dir, 'add', '-A')
-      git(fixture.dir, 'commit', '-qm', 'CodeGent integration checkpoint')
-      const current = git(fixture.dir, 'rev-parse', 'HEAD')
-      await api.send({ type: 'refreshRepo' })
-      const points = api.state().timeTravel?.points ?? []
-      assert.equal(points[0]?.sha, current)
-      assert.equal(points[1]?.sha, fixture.base)
-
-      const restoring = api.send({ type: 'restorePoint', sha: fixture.base })
-      await until(() => confirmRestore !== undefined, 'the restore dialog to open', 15_000)
-      assert.equal(api.state().busy, true)
-      await api.send({ type: 'start', task: 'This must not run during a restore' })
-      assert.match(api.state().notice?.text ?? '', /Time Travel is in progress/)
-      confirmRestore!('Restore files')
-      await restoring
-      confirmRestore = undefined
-      assert.equal(api.state().busy, false)
-      assert.equal(fs.readFileSync(file, 'utf8'), 'hello\nworld\n')
-      assert.equal(api.state().timeTravel?.undoAvailable, true)
-      const restoredRepo = api.state().repo
-      assert.equal(restoredRepo.ok, true)
-      if (!restoredRepo.ok) throw new Error('Expected the repository to remain valid')
-      assert.equal(restoredRepo.dirtyCount, 1)
-
-      await api.send({ type: 'undoTimeTravel' })
-      assert.equal(fs.readFileSync(file, 'utf8'), 'changed by a committed agent step\n')
-      assert.equal(git(fixture.dir, 'rev-parse', 'HEAD'), current)
-      assert.equal(git(fixture.dir, 'status', '--porcelain'), '')
-      assert.equal(api.state().timeTravel?.undoAvailable, false)
-      assert.equal(dialogs.length, 2)
-      assert.match(dialogs[0]!, /Restore/)
-      assert.match(dialogs[1]!, /Undo/)
-    } finally {
-      confirmRestore?.('Restore files')
-      restoreDialog()
+  itFromSources(
+    'restores a historical checkpoint and undoes it through the extension API',
+    async () => {
+      const fixture = workRepo()
       fixture.reset()
-      await api.send({ type: 'refreshRepo' })
+      const file = path.join(fixture.dir, 'src/greeting.txt')
+      const dialogs: string[] = []
+      let confirmRestore: ((choice: string) => void) | undefined
+      const restoreDialog = replaceWindowFunction(
+        'showWarningMessage',
+        async (message: string, options?: { modal?: boolean }, ...buttons: string[]) => {
+          if (!options?.modal) return undefined
+          dialogs.push(message)
+          if (message.startsWith('Restore '))
+            return await new Promise<string>((resolve) => {
+              confirmRestore = resolve
+            })
+          return buttons[0]
+        }
+      )
+      try {
+        fs.writeFileSync(file, 'changed by a committed agent step\n')
+        git(fixture.dir, 'add', '-A')
+        git(fixture.dir, 'commit', '-qm', 'CodeGent integration checkpoint')
+        const current = git(fixture.dir, 'rev-parse', 'HEAD')
+        await api.send({ type: 'refreshRepo' })
+        const points = api.state().timeTravel?.points ?? []
+        assert.equal(points[0]?.sha, current)
+        assert.equal(points[1]?.sha, fixture.base)
+
+        const restoring = api.send({ type: 'restorePoint', sha: fixture.base })
+        await until(
+          () => confirmRestore !== undefined,
+          'the restore dialog to open',
+          15_000
+        )
+        assert.equal(api.state().busy, true)
+        await api.send({ type: 'start', task: 'This must not run during a restore' })
+        assert.match(api.state().notice?.text ?? '', /Time Travel is in progress/)
+        confirmRestore!('Restore files')
+        await restoring
+        confirmRestore = undefined
+        assert.equal(api.state().busy, false)
+        assert.equal(fs.readFileSync(file, 'utf8'), 'hello\nworld\n')
+        assert.equal(api.state().timeTravel?.undoAvailable, true)
+        const restoredRepo = api.state().repo
+        assert.equal(restoredRepo.ok, true)
+        if (!restoredRepo.ok) throw new Error('Expected the repository to remain valid')
+        assert.equal(restoredRepo.dirtyCount, 1)
+
+        await api.send({ type: 'undoTimeTravel' })
+        assert.equal(fs.readFileSync(file, 'utf8'), 'changed by a committed agent step\n')
+        assert.equal(git(fixture.dir, 'rev-parse', 'HEAD'), current)
+        assert.equal(git(fixture.dir, 'status', '--porcelain'), '')
+        assert.equal(api.state().timeTravel?.undoAvailable, false)
+        assert.equal(dialogs.length, 2)
+        assert.match(dialogs[0]!, /Restore/)
+        assert.match(dialogs[1]!, /Undo/)
+      } finally {
+        confirmRestore?.('Restore files')
+        restoreDialog()
+        fixture.reset()
+        await api.send({ type: 'refreshRepo' })
+      }
     }
-  })
+  )
 
   it('keeps the toggles in sync with the VS Code settings', async () => {
     try {

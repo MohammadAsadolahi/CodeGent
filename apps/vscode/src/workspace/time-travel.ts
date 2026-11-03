@@ -230,8 +230,7 @@ export class TimeTravel {
       if (!mode || !sha) throw new Error('Invalid Git tree entry.')
       expected.set(entry.slice(tab + 1), { mode, sha })
     }
-    const absolute = (relative: string) =>
-      path.join(this.root, ...relative.split('/'))
+    const absolute = (relative: string) => path.join(this.root, ...relative.split('/'))
     const statOf = async (relative: string) => {
       try {
         return await fs.lstat(absolute(relative))
@@ -324,7 +323,9 @@ export class TimeTravel {
       { cwd: this.root }
     )
     if (staged.code !== 0)
-      throw new Error('The index has staged changes to restored files; undo cannot safely proceed.')
+      throw new Error(
+        'The index has staged changes to restored files; undo cannot safely proceed.'
+      )
 
     await this.assertVisiblePaths(preview.files)
     // Reversing a patch is not a full-file equality test: if the user edits lines

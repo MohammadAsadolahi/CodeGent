@@ -109,7 +109,8 @@ describe('TimeTravel', () => {
 
   it('refuses undo when an affected file has new edits outside the patch context', async () => {
     const { dir } = makeRepo()
-    const before = ['old', ...Array.from({ length: 80 }, (_, n) => 'line ' + n)].join('\n') + '\n'
+    const before =
+      ['old', ...Array.from({ length: 80 }, (_, n) => 'line ' + n)].join('\n') + '\n'
     fs.writeFileSync(path.join(dir, 'renamed.txt'), before)
     git(dir, 'add', '-A')
     git(dir, 'commit', '-qm', 'Long file')
