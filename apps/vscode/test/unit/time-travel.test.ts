@@ -141,6 +141,38 @@ describe('TimeTravel', () => {
     expect(fs.readFileSync(path.join(dir, 'renamed.txt'), 'utf8')).toBe('old\n')
   })
 
+  it('refuses submodule pointer changes instead of reporting a successful no-op', async () => {
+    const { dir, head } = makeRepo()
+    git(dir, 'update-index', '--add', '--cacheinfo', '160000,' + head + ',vendor')
+    git(dir, 'commit', '-qm', 'Submodule pointer')
+    const travel = new TimeTravel(dir)
+    await expect(travel.preview(head)).rejects.toThrow(/submodule pointer/)
+    await expect(travel.restore(head, git(dir, 'rev-parse', 'HEAD'))).rejects.toThrow(
+      /submodule pointer/
+    )
+  })
+
+  it('restores binary file contents exactly and reverses them', async () => {
+    const { dir } = makeRepo()
+    const file = path.join(dir, 'resource.bin')
+    const previous = Buffer.from([0, 1, 2, 127, 255, 3, 4, 5])
+    const current = Buffer.from([0, 8, 8, 254, 3, 2, 1, 7])
+    fs.writeFileSync(file, previous)
+    git(dir, 'add', '-A')
+    git(dir, 'commit', '-qm', 'Binary baseline')
+    const target = git(dir, 'rev-parse', 'HEAD')
+    fs.writeFileSync(file, current)
+    git(dir, 'add', '-A')
+    git(dir, 'commit', '-qm', 'Binary update')
+    const head = git(dir, 'rev-parse', 'HEAD')
+    const travel = new TimeTravel(dir)
+
+    const marker = await travel.restore(target, head)
+    expect(fs.readFileSync(file)).toEqual(previous)
+    await travel.undo(marker)
+    expect(fs.readFileSync(file)).toEqual(current)
+  })
+
   it('validates identifiers and refuses to restore commits that are not ancestors', async () => {
     const { dir, first, head } = makeRepo()
     const travel = new TimeTravel(dir)

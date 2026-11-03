@@ -93,14 +93,37 @@ export class TimeTravel {
       '--',
       '.'
     ])
+    const files = names.split('\0').filter(Boolean)
+    await this.assertNoSubmodules(headSha, sha, files)
     const summary = (
       await this.git(['diff', '--shortstat', 'HEAD', sha, '--', '.'])
     ).trim()
-    return {
-      sha,
-      headSha,
-      files: names.split('\0').filter(Boolean),
-      summary
+    return { sha, headSha, files, summary }
+  }
+
+  /**
+   * A plain git apply reports success for gitlink changes without actually
+   * checking out a submodule. Fail explicitly rather than claim a false restore.
+   */
+  private async assertNoSubmodules(
+    headSha: string,
+    targetSha: string,
+    paths: readonly string[]
+  ): Promise<void> {
+    if (paths.length === 0) return
+    for (const sha of [headSha, targetSha]) {
+      const entries = await this.git(['ls-tree', '-r', '-z', sha, '--', ...paths])
+      const submodule = entries
+        .split('\0')
+        .find((entry) => entry.startsWith('160000 commit '))
+      if (submodule) {
+        const name = submodule.split('\t').slice(1).join('\t')
+        throw new Error(
+          'Time Travel cannot safely restore submodule pointer ' +
+            name +
+            '. Submodule checkouts require separate git operations.'
+        )
+      }
     }
   }
 

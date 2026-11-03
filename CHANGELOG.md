@@ -6,7 +6,9 @@
   restored checkpoint, refusing later edits even when Git could apply the reverse patch
   to another part of the file. Restore and undo reject paths hidden by Git index flags.
   Workspace changes invalidate stale Time Travel state, and an in-flight refresh can no
-  longer show or restore files from a previously opened folder.
+  longer show or restore files from a previously opened folder. Time Travel also rejects
+  submodule pointer changes that Git apply would otherwise silently skip, and now has
+  regression coverage for binary files and a full VS Code restore/undo integration test.
 
 - Added **Time Travel** to the VS Code panel: browse the latest 30 local Git commits, preview
   affected files, and restore any earlier ancestor without moving HEAD, staging, rewriting
