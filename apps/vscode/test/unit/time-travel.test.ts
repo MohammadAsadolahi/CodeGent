@@ -175,6 +175,39 @@ describe('TimeTravel', () => {
     expect(fs.readFileSync(file)).toEqual(current)
   })
 
+  it('round-trips a file-to-directory transition and refuses later nested edits', async () => {
+    const { dir } = makeRepo()
+    fs.writeFileSync(path.join(dir, 'switch'), 'file version\n')
+    git(dir, 'add', '-A')
+    git(dir, 'commit', '-qm', 'A plain file')
+    const target = git(dir, 'rev-parse', 'HEAD')
+
+    fs.rmSync(path.join(dir, 'switch'))
+    fs.mkdirSync(path.join(dir, 'switch'))
+    fs.writeFileSync(path.join(dir, 'switch', 'nested.txt'), 'nested version\n')
+    git(dir, 'add', '-A')
+    git(dir, 'commit', '-qm', 'A directory')
+    const head = git(dir, 'rev-parse', 'HEAD')
+    const travel = new TimeTravel(dir)
+
+    const marker = await travel.restore(target, head)
+    expect(fs.readFileSync(path.join(dir, 'switch'), 'utf8')).toBe('file version\n')
+    await travel.undo(marker)
+    expect(fs.readFileSync(path.join(dir, 'switch', 'nested.txt'), 'utf8')).toBe(
+      'nested version\n'
+    )
+    expect(git(dir, 'status', '--porcelain')).toBe('')
+
+    const again = await travel.restore(target, head)
+    fs.rmSync(path.join(dir, 'switch'))
+    fs.mkdirSync(path.join(dir, 'switch'))
+    fs.writeFileSync(path.join(dir, 'switch', 'user-note.txt'), 'keep me\n')
+    await expect(travel.undo(again)).rejects.toThrow(/changed since Time Travel/)
+    expect(fs.readFileSync(path.join(dir, 'switch', 'user-note.txt'), 'utf8')).toBe(
+      'keep me\n'
+    )
+  })
+
   it('validates identifiers and refuses to restore commits that are not ancestors', async () => {
     const { dir, first, head } = makeRepo()
     const travel = new TimeTravel(dir)
@@ -195,7 +228,7 @@ describe('TimeTravel', () => {
     const travel = new TimeTravel(dir)
     const marker = await travel.restore(first, head)
     fs.writeFileSync(path.join(dir, 'original.txt'), 'my new work\n')
-    await expect(travel.undo(marker)).rejects.toThrow(/git apply failed/)
+    await expect(travel.undo(marker)).rejects.toThrow(/changed since Time Travel/)
     expect(fs.readFileSync(path.join(dir, 'original.txt'), 'utf8')).toBe('my new work\n')
     expect(git(dir, 'rev-parse', 'HEAD')).toBe(head)
   })
