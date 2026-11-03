@@ -27,6 +27,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Capture final panel formatting (temporary)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          npm run format
+          node -e "const fs=require('fs');console.log('TIME_TRAVEL_UI_FORMAT '+JSON.stringify(fs.readFileSync('apps/vscode/webview/run.tsx','utf8')))"
       - run: npm run format:check
       - run: npm run build
       - run: npm run typecheck
