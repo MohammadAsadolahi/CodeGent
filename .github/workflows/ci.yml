@@ -27,6 +27,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Capture formatted files (temporary)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          npm run format
+          node -e "const fs=require('fs');for(const file of [\"apps/vscode/src/app.ts\",\"apps/vscode/src/workspace/time-travel.ts\",\"apps/vscode/test/unit/time-travel.test.ts\",\"apps/vscode/test/webview/panel.test.ts\",\"apps/vscode/webview/run.tsx\",\"apps/vscode/webview/styles.css\"])console.log('CODEGENT_FORMAT_JSON '+JSON.stringify({file,content:fs.readFileSync(file,'utf8')}))"
       - run: npm run format:check
       - run: npm run build
       - run: npm run typecheck
