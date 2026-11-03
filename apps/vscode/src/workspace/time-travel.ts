@@ -104,6 +104,25 @@ export class TimeTravel {
     }
   }
 
+  /**
+   * Git status and git diff can hide modified files marked assume-unchanged or
+   * skip-worktree. Never run a restore through one of those paths.
+   */
+  private async assertVisiblePaths(paths: readonly string[]): Promise<void> {
+    if (paths.length === 0) return
+    const listing = await this.git(['ls-files', '-v', '-z', '--', ...paths])
+    const hidden = listing
+      .split('\0')
+      .filter((entry) => entry.length > 2 && entry[0] !== 'H')
+      .map((entry) => entry.slice(2))
+    if (hidden.length > 0)
+      throw new Error(
+        'Git is hiding changes to ' +
+          hidden.slice(0, 3).join(', ') +
+          ' (assume-unchanged or skip-worktree). Clear those index flags before using Time Travel.'
+      )
+  }
+
   private async patchFile(
     headSha: string,
     targetSha: string
@@ -160,6 +179,7 @@ export class TimeTravel {
       throw new Error('HEAD changed since the preview. Refresh Time Travel first.')
     if (this.hasUnsavedEditors())
       throw new Error('Save or discard unsaved editor changes before restoring.')
+    await this.assertVisiblePaths(preview.files)
     if (
       (await this.git(['status', '--porcelain=v1', '-z', '--untracked-files=all']))
         .length > 0
@@ -173,9 +193,14 @@ export class TimeTravel {
 
   /** Reverses only the restore patch, refusing conflicts with later edits. */
   async undo(marker: RestoreMarker): Promise<void> {
-    if (marker.root !== this.root || !COMMIT_SHA.test(marker.targetSha))
+    if (
+      marker.root !== this.root ||
+      !COMMIT_SHA.test(marker.targetSha) ||
+      !COMMIT_SHA.test(marker.headSha)
+    )
       throw new Error('This restore belongs to a different repository.')
-    if ((await this.head()) !== marker.headSha)
+    const preview = await this.preview(marker.targetSha)
+    if (preview.headSha !== marker.headSha)
       throw new Error('HEAD changed since the restore; the undo is no longer safe.')
     if (this.hasUnsavedEditors())
       throw new Error(
@@ -186,6 +211,20 @@ export class TimeTravel {
     })
     if (staged.code !== 0)
       throw new Error('The index has staged changes; undo cannot safely proceed.')
+
+    await this.assertVisiblePaths(preview.files)
+    // Reversing a patch is not a full-file equality test: if the user edits lines
+    // outside its context, git apply --reverse can succeed but silently leave
+    // those later edits in place. Undo only when every affected file exactly
+    // matches the selected checkpoint (unrelated paths may remain dirty).
+    const match = await this.runner(
+      ['diff', '--no-ext-diff', '--quiet', marker.targetSha, '--', ...preview.files],
+      { cwd: this.root }
+    )
+    if (match.code !== 0)
+      throw new Error(
+        'Files affected by this restore have changed since Time Travel. Undo was cancelled without changing any files.'
+      )
     await this.applyPatch(marker.headSha, marker.targetSha, true)
   }
 }

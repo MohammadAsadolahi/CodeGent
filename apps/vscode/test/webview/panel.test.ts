@@ -644,5 +644,14 @@ describe('time travel', () => {
     )
     expect(button('Preview & restore').disabled).toBe(true)
     expect(button('Undo Time Travel').disabled).toBe(false)
+
+    await show(
+      state({
+        run: run({ state: 'running', outcome: undefined, steps: [] }),
+        timeTravel: { points, undoAvailable: true }
+      })
+    )
+    expect(button('Preview & restore').disabled).toBe(true)
+    expect(button('Undo Time Travel').disabled).toBe(true)
   })
 })

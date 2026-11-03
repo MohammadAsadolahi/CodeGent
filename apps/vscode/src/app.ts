@@ -55,6 +55,7 @@ export class App implements vscode.Disposable {
   private workspace: FsWorkspace | undefined
   private repoStatus: RepoStatus | undefined
   private timePoints: TimePoint[] = []
+  private repoRevision = 0
   private notice: UiNotice | null = null
   private noticeTimer: ReturnType<typeof setTimeout> | undefined
   private pushTimer: ReturnType<typeof setTimeout> | undefined
@@ -111,8 +112,14 @@ export class App implements vscode.Disposable {
         this.pushState()
       }),
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
+        // Hide the previous repository immediately, including its restore actions.
+        // A refresh already in flight must not publish results for the old folder.
+        this.repoRevision += 1
         this.repoService = undefined
         this.workspace = undefined
+        this.repoStatus = undefined
+        this.timePoints = []
+        this.pushState()
         void this.refreshRepo()
       }),
       vscode.window.onDidChangeWindowState((state) => {
@@ -216,32 +223,45 @@ export class App implements vscode.Disposable {
 
   async refreshRepo(): Promise<void> {
     if (this.refreshing) return this.refreshing
+    const revision = this.repoRevision
     this.refreshing = (async () => {
+      // Even without an open folder, yield before the finally block: otherwise
+      // a synchronously settled promise can remain stuck in this.refreshing.
+      await Promise.resolve()
       try {
         const repo = this.repo()
-        this.repoStatus = repo
+        const status: RepoStatus = repo
           ? await repo.status({ fetch: true })
           : {
               ok: false,
               problem: 'no-repo',
               reason: 'Open a folder that is a git repository with a GitHub remote.'
             }
-        const status = this.repoStatus
-        this.timePoints = status?.ok
+        const points = status.ok
           ? await new TimeTravel(status.root).points().catch((error: Error) => {
               this.log.warn('Could not load Time Travel history: ' + error.message)
               return []
             })
           : []
+        if (revision === this.repoRevision) {
+          this.repoStatus = status
+          this.timePoints = points
+        }
       } catch (error) {
-        this.repoStatus = {
-          ok: false,
-          problem: 'no-repo',
-          reason: (error as Error).message
+        if (revision === this.repoRevision) {
+          this.repoStatus = {
+            ok: false,
+            problem: 'no-repo',
+            reason: (error as Error).message
+          }
+          this.timePoints = []
         }
       } finally {
         this.refreshing = undefined
-        if (!this.disposed) this.pushState()
+        if (!this.disposed) {
+          this.pushState()
+          if (revision !== this.repoRevision) void this.refreshRepo()
+        }
       }
     })()
     return this.refreshing
@@ -368,6 +388,7 @@ export class App implements vscode.Disposable {
   buildState(): UiState {
     const settings = readSettings()
     const selected = this.context.workspaceState.get<string>(BROWSER_KEY)
+    const restore = this.context.workspaceState.get<RestoreMarker>(RESTORE_KEY)
     return {
       version: (this.context.extension.packageJSON as { version: string }).version,
       connection: toUiConnection(
@@ -390,8 +411,9 @@ export class App implements vscode.Disposable {
       timeTravel: {
         points: this.timePoints,
         undoAvailable:
-          this.context.workspaceState.get<RestoreMarker>(RESTORE_KEY)?.root ===
-          (this.repoStatus?.ok ? this.repoStatus.root : '')
+          this.repoStatus?.ok === true &&
+          restore?.root === this.repoStatus.root &&
+          restore.headSha === this.repoStatus.sha
       },
       busy: this.manager.busy,
       notice: this.notice,
@@ -580,6 +602,7 @@ export class App implements vscode.Disposable {
   }
 
   private async restorePoint(sha: string): Promise<void> {
+    const folder = this.folderPath()
     const status = this.repoStatus
     if (!status?.ok) throw new Error('Open a GitHub repository to use Time Travel.')
     if (this.manager.active || this.manager.busy)
@@ -612,6 +635,8 @@ export class App implements vscode.Disposable {
       'Restore files'
     )
     if (choice !== 'Restore files') return
+    if (folder !== this.folderPath())
+      throw new Error('The open workspace changed during confirmation. Restore cancelled.')
     if (this.manager.active || this.manager.busy)
       throw new Error('A CodeGent run started during confirmation. Restore cancelled.')
     const marker = await travel.restore(sha, preview.headSha)
@@ -627,6 +652,7 @@ export class App implements vscode.Disposable {
   }
 
   private async undoTimeTravel(): Promise<void> {
+    const folder = this.folderPath()
     if (this.manager.active || this.manager.busy)
       throw new Error('Stop the current CodeGent run before undoing a restore.')
     const status = this.repoStatus
@@ -643,6 +669,8 @@ export class App implements vscode.Disposable {
       'Undo restore'
     )
     if (choice !== 'Undo restore') return
+    if (folder !== this.folderPath())
+      throw new Error('The open workspace changed during confirmation. Undo cancelled.')
     await this.travel(status.root).undo(marker)
     await this.context.workspaceState.update(RESTORE_KEY, undefined)
     this.notify({

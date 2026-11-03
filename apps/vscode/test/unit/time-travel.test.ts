@@ -93,6 +93,54 @@ describe('TimeTravel', () => {
     expect(git(dir, 'rev-parse', 'HEAD')).toBe(head)
   })
 
+  it('refuses to restore files hidden from git status by assume-unchanged or skip-worktree', async () => {
+    for (const flag of ['--assume-unchanged', '--skip-worktree']) {
+      const { dir, first, head } = makeRepo()
+      const travel = new TimeTravel(dir)
+      git(dir, 'update-index', flag, 'renamed.txt')
+      fs.writeFileSync(path.join(dir, 'renamed.txt'), 'my hidden edits\n')
+      expect(git(dir, 'status', '--porcelain')).toBe('')
+      await expect(travel.restore(first, head)).rejects.toThrow(/hiding changes/)
+      expect(fs.readFileSync(path.join(dir, 'renamed.txt'), 'utf8')).toBe(
+        'my hidden edits\n'
+      )
+    }
+  })
+
+  it('refuses undo when an affected file has new edits outside the patch context', async () => {
+    const { dir } = makeRepo()
+    const before = ['old', ...Array.from({ length: 80 }, (_, n) => 'line ' + n)].join('\n') + '\n'
+    fs.writeFileSync(path.join(dir, 'renamed.txt'), before)
+    git(dir, 'add', '-A')
+    git(dir, 'commit', '-qm', 'Long file')
+    const target = git(dir, 'rev-parse', 'HEAD')
+    fs.writeFileSync(path.join(dir, 'renamed.txt'), before.replace('old\n', 'new\n'))
+    git(dir, 'add', '-A')
+    git(dir, 'commit', '-qm', 'One-line change')
+    const head = git(dir, 'rev-parse', 'HEAD')
+    const travel = new TimeTravel(dir)
+    const marker = await travel.restore(target, head)
+    fs.appendFileSync(path.join(dir, 'renamed.txt'), 'my later work\n')
+
+    // Git's reverse patch could match the unchanged first few lines, but an
+    // undo must not mix the restored version with new work in the same file.
+    await expect(travel.undo(marker)).rejects.toThrow(/changed since Time Travel/)
+    expect(fs.readFileSync(path.join(dir, 'renamed.txt'), 'utf8')).toContain(
+      'my later work\n'
+    )
+    expect(git(dir, 'rev-parse', 'HEAD')).toBe(head)
+  })
+
+  it('can undo when only unrelated user files changed', async () => {
+    const { dir, first, head } = makeRepo()
+    const travel = new TimeTravel(dir)
+    const marker = await travel.restore(first, head)
+    fs.writeFileSync(path.join(dir, 'my-notes.txt'), 'personal\n')
+    await travel.undo(marker)
+    expect(fs.readFileSync(path.join(dir, 'my-notes.txt'), 'utf8')).toBe('personal\n')
+    expect(fs.readFileSync(path.join(dir, 'renamed.txt'), 'utf8')).toBe('old\n')
+  })
+
   it('validates identifiers and refuses to restore commits that are not ancestors', async () => {
     const { dir, first, head } = makeRepo()
     const travel = new TimeTravel(dir)
