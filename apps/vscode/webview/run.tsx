@@ -425,7 +425,6 @@ export const History = ({ items }: { items: UiHistoryItem[] }) => {
   )
 }
 
-
 /** Git commits form a durable timeline even after the VS Code window is reloaded. */
 export const TimeTravelCard = ({
   timeline,
@@ -440,7 +439,9 @@ export const TimeTravelCard = ({
   return (
     <details class="card" aria-label="Time Travel">
       <summary>
-        <strong>Time Travel ({Math.max(0, timeline.points.length - 1)} past points)</strong>
+        <strong>
+          Time Travel ({Math.max(0, timeline.points.length - 1)} past points)
+        </strong>
       </summary>
       <p class="muted">
         Preview and restore an earlier local Git commit in your working tree. Branch,
@@ -448,7 +449,11 @@ export const TimeTravelCard = ({
       </p>
       {timeline.undoAvailable && (
         <div class="actions">
-          <button class="small" disabled={locked} onClick={() => post({ type: 'undoTimeTravel' })}>
+          <button
+            class="small"
+            disabled={locked}
+            onClick={() => post({ type: 'undoTimeTravel' })}
+          >
             <Undo /> Undo Time Travel
           </button>
         </div>

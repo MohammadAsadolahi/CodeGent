@@ -504,7 +504,6 @@ details > summary {
   color: var(--cg-muted);
 }
 
-
 /* ── time travel ───────────────────────────────────────────────────────────────────────────── */
 .time-point {
   display: flex;

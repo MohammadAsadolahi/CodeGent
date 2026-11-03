@@ -38,12 +38,25 @@ describe('TimeTravel', () => {
     const travel = new TimeTravel(dir)
     const points = await travel.points()
     expect(points).toHaveLength(2)
-    expect(points[0]).toMatchObject({ sha: head, current: true, title: 'Second checkpoint' })
-    expect(points[1]).toMatchObject({ sha: first, current: false, title: 'First checkpoint' })
+    expect(points[0]).toMatchObject({
+      sha: head,
+      current: true,
+      title: 'Second checkpoint'
+    })
+    expect(points[1]).toMatchObject({
+      sha: first,
+      current: false,
+      title: 'First checkpoint'
+    })
 
     const preview = await travel.preview(first)
     expect(preview.headSha).toBe(head)
-    expect(preview.files.sort()).toEqual(['new file.txt', 'original.txt', 'removed.txt', 'renamed.txt'])
+    expect(preview.files.sort()).toEqual([
+      'new file.txt',
+      'original.txt',
+      'removed.txt',
+      'renamed.txt'
+    ])
     const indexBefore = fs.readFileSync(path.join(dir, '.git', 'index'))
     const marker = await travel.restore(first, preview.headSha)
     expect(fs.readFileSync(path.join(dir, 'original.txt'), 'utf8')).toBe('old\n')
@@ -74,8 +87,9 @@ describe('TimeTravel', () => {
     git(dir, 'add', 'renamed.txt')
     await expect(travel.restore(first, head)).rejects.toThrow(/local changes/)
     git(dir, 'reset', '-q', '--hard', 'HEAD')
-    await expect(new TimeTravel(dir, undefined, () => true).restore(first, head))
-      .rejects.toThrow(/unsaved/)
+    await expect(
+      new TimeTravel(dir, undefined, () => true).restore(first, head)
+    ).rejects.toThrow(/unsaved/)
     expect(git(dir, 'rev-parse', 'HEAD')).toBe(head)
   })
 

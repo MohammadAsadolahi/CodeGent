@@ -104,7 +104,10 @@ export class TimeTravel {
     }
   }
 
-  private async patchFile(headSha: string, targetSha: string): Promise<{
+  private async patchFile(
+    headSha: string,
+    targetSha: string
+  ): Promise<{
     file: string
     cleanup: () => Promise<void>
   }> {
@@ -175,7 +178,9 @@ export class TimeTravel {
     if ((await this.head()) !== marker.headSha)
       throw new Error('HEAD changed since the restore; the undo is no longer safe.')
     if (this.hasUnsavedEditors())
-      throw new Error('Save or discard unsaved editor changes before undoing the restore.')
+      throw new Error(
+        'Save or discard unsaved editor changes before undoing the restore.'
+      )
     const staged = await this.runner(['diff', '--cached', '--quiet', 'HEAD'], {
       cwd: this.root
     })

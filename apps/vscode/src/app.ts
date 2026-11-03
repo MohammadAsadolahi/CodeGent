@@ -591,7 +591,8 @@ export class App implements vscode.Disposable {
       this.notify({ kind: 'info', text: 'This checkpoint already matches HEAD.' })
       return
     }
-    const label = this.timePoints.find((point) => point.sha === sha)?.title ?? sha.slice(0, 7)
+    const label =
+      this.timePoints.find((point) => point.sha === sha)?.title ?? sha.slice(0, 7)
     const visibleFiles = preview.files.slice(0, 12)
     const detail = [
       preview.summary || 'Changes to tracked files',
@@ -617,7 +618,10 @@ export class App implements vscode.Disposable {
     await this.context.workspaceState.update(RESTORE_KEY, marker)
     this.notify({
       kind: 'info',
-      text: 'Restored ' + preview.files.length + ' files in your working tree. Review the diff before committing; Git history is unchanged.'
+      text:
+        'Restored ' +
+        preview.files.length +
+        ' files in your working tree. Review the diff before committing; Git history is unchanged.'
     })
     await this.refreshRepo()
   }
@@ -641,7 +645,10 @@ export class App implements vscode.Disposable {
     if (choice !== 'Undo restore') return
     await this.travel(status.root).undo(marker)
     await this.context.workspaceState.update(RESTORE_KEY, undefined)
-    this.notify({ kind: 'info', text: 'Time Travel restore undone; working tree returned to the previous state.' })
+    this.notify({
+      kind: 'info',
+      text: 'Time Travel restore undone; working tree returned to the previous state.'
+    })
     await this.refreshRepo()
   }
 
