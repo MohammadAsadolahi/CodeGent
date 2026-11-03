@@ -482,19 +482,28 @@ export class App implements vscode.Disposable {
           return void this.refreshRepo()
         case 'start':
           if (this.timeTravelBusy)
-            return this.notify({ kind: 'warning', text: 'Time Travel is in progress. Start the task after it finishes.' })
+            return this.notify({
+              kind: 'warning',
+              text: 'Time Travel is in progress. Start the task after it finishes.'
+            })
           return await this.manager.start(String(message.task ?? ''))
         case 'stop':
           return this.manager.stop()
         case 'resume':
           if (this.timeTravelBusy)
-            return this.notify({ kind: 'warning', text: 'Time Travel is in progress. Resume after it finishes.' })
+            return this.notify({
+              kind: 'warning',
+              text: 'Time Travel is in progress. Resume after it finishes.'
+            })
           return await this.manager.resume()
         case 'decide':
           return this.manager.decide(message.decision)
         case 'undo':
           if (this.timeTravelBusy)
-            return this.notify({ kind: 'warning', text: 'Time Travel is in progress. Undo the step afterward.' })
+            return this.notify({
+              kind: 'warning',
+              text: 'Time Travel is in progress. Undo the step afterward.'
+            })
           return await this.manager.undoStep(Number(message.step))
         case 'restorePoint':
           return await this.restorePoint(String(message.sha))
@@ -624,85 +633,87 @@ export class App implements vscode.Disposable {
 
   private async restorePoint(sha: string): Promise<void> {
     return this.withTimeTravelLock(async () => {
-    const folder = this.folderPath()
-    const status = this.repoStatus
-    if (!status?.ok) throw new Error('Open a GitHub repository to use Time Travel.')
-    if (this.manager.active || this.manager.busy)
-      throw new Error('Stop the current CodeGent run before restoring files.')
+      const folder = this.folderPath()
+      const status = this.repoStatus
+      if (!status?.ok) throw new Error('Open a GitHub repository to use Time Travel.')
+      if (this.manager.active || this.manager.busy)
+        throw new Error('Stop the current CodeGent run before restoring files.')
 
-    const travel = this.travel(status.root)
-    const preview = await travel.preview(sha)
-    if (preview.files.length === 0) {
-      this.notify({ kind: 'info', text: 'This checkpoint already matches HEAD.' })
-      return
-    }
-    const label =
-      this.timePoints.find((point) => point.sha === sha)?.title ?? sha.slice(0, 7)
-    const visibleFiles = preview.files.slice(0, 12)
-    const detail = [
-      preview.summary || 'Changes to tracked files',
-      '',
-      ...visibleFiles,
-      ...(preview.files.length > visibleFiles.length
-        ? ['… and ' + (preview.files.length - visibleFiles.length) + ' more files']
-        : []),
-      '',
-      'Your branch, commits, staging area and GitHub remote will not change.',
-      'ChatGPT still reads GitHub. Commit and push the restored files before another CodeGent task.',
-      'All uncommitted and unsaved work must be cleared before restoring.',
-      'Use Undo Time Travel to reverse this restore if the affected files remain unchanged.'
-    ].join('\n')
-    const choice = await vscode.window.showWarningMessage(
-      'Restore ' + preview.files.length + ' file(s) from "' + label + '"?',
-      { modal: true, detail },
-      'Restore files'
-    )
-    if (choice !== 'Restore files') return
-    if (folder !== this.folderPath())
-      throw new Error('The open workspace changed during confirmation. Restore cancelled.')
-    if (this.manager.active || this.manager.busy)
-      throw new Error('A CodeGent run started during confirmation. Restore cancelled.')
-    const marker = await travel.restore(sha, preview.headSha)
-    await this.context.workspaceState.update(RESTORE_KEY, marker)
-    this.notify({
-      kind: 'info',
-      text:
-        'Restored ' +
-        preview.files.length +
-        ' files in your working tree. Review the diff, then commit and push before starting a new CodeGent task; Git history is unchanged.'
-    })
-    await this.refreshRepo()
+      const travel = this.travel(status.root)
+      const preview = await travel.preview(sha)
+      if (preview.files.length === 0) {
+        this.notify({ kind: 'info', text: 'This checkpoint already matches HEAD.' })
+        return
+      }
+      const label =
+        this.timePoints.find((point) => point.sha === sha)?.title ?? sha.slice(0, 7)
+      const visibleFiles = preview.files.slice(0, 12)
+      const detail = [
+        preview.summary || 'Changes to tracked files',
+        '',
+        ...visibleFiles,
+        ...(preview.files.length > visibleFiles.length
+          ? ['… and ' + (preview.files.length - visibleFiles.length) + ' more files']
+          : []),
+        '',
+        'Your branch, commits, staging area and GitHub remote will not change.',
+        'ChatGPT still reads GitHub. Commit and push the restored files before another CodeGent task.',
+        'All uncommitted and unsaved work must be cleared before restoring.',
+        'Use Undo Time Travel to reverse this restore if the affected files remain unchanged.'
+      ].join('\n')
+      const choice = await vscode.window.showWarningMessage(
+        'Restore ' + preview.files.length + ' file(s) from "' + label + '"?',
+        { modal: true, detail },
+        'Restore files'
+      )
+      if (choice !== 'Restore files') return
+      if (folder !== this.folderPath())
+        throw new Error(
+          'The open workspace changed during confirmation. Restore cancelled.'
+        )
+      if (this.manager.active || this.manager.busy)
+        throw new Error('A CodeGent run started during confirmation. Restore cancelled.')
+      const marker = await travel.restore(sha, preview.headSha)
+      await this.context.workspaceState.update(RESTORE_KEY, marker)
+      this.notify({
+        kind: 'info',
+        text:
+          'Restored ' +
+          preview.files.length +
+          ' files in your working tree. Review the diff, then commit and push before starting a new CodeGent task; Git history is unchanged.'
+      })
+      await this.refreshRepo()
     })
   }
 
   private async undoTimeTravel(): Promise<void> {
     return this.withTimeTravelLock(async () => {
-    const folder = this.folderPath()
-    if (this.manager.active || this.manager.busy)
-      throw new Error('Stop the current CodeGent run before undoing a restore.')
-    const status = this.repoStatus
-    const marker = this.context.workspaceState.get<RestoreMarker>(RESTORE_KEY)
-    if (!status?.ok || !marker || marker.root !== status.root)
-      throw new Error('There is no Time Travel restore to undo in this repository.')
-    const choice = await vscode.window.showWarningMessage(
-      'Undo the last Time Travel restore?',
-      {
-        modal: true,
-        detail:
-          'CodeGent will reverse only the restore patch. If those files were edited since the restore, the undo will be refused rather than overwrite your work.'
-      },
-      'Undo restore'
-    )
-    if (choice !== 'Undo restore') return
-    if (folder !== this.folderPath())
-      throw new Error('The open workspace changed during confirmation. Undo cancelled.')
-    await this.travel(status.root).undo(marker)
-    await this.context.workspaceState.update(RESTORE_KEY, undefined)
-    this.notify({
-      kind: 'info',
-      text: 'Time Travel restore undone; working tree returned to the previous state.'
-    })
-    await this.refreshRepo()
+      const folder = this.folderPath()
+      if (this.manager.active || this.manager.busy)
+        throw new Error('Stop the current CodeGent run before undoing a restore.')
+      const status = this.repoStatus
+      const marker = this.context.workspaceState.get<RestoreMarker>(RESTORE_KEY)
+      if (!status?.ok || !marker || marker.root !== status.root)
+        throw new Error('There is no Time Travel restore to undo in this repository.')
+      const choice = await vscode.window.showWarningMessage(
+        'Undo the last Time Travel restore?',
+        {
+          modal: true,
+          detail:
+            'CodeGent will reverse only the restore patch. If those files were edited since the restore, the undo will be refused rather than overwrite your work.'
+        },
+        'Undo restore'
+      )
+      if (choice !== 'Undo restore') return
+      if (folder !== this.folderPath())
+        throw new Error('The open workspace changed during confirmation. Undo cancelled.')
+      await this.travel(status.root).undo(marker)
+      await this.context.workspaceState.update(RESTORE_KEY, undefined)
+      this.notify({
+        kind: 'info',
+        text: 'Time Travel restore undone; working tree returned to the previous state.'
+      })
+      await this.refreshRepo()
     })
   }
 
@@ -778,14 +789,20 @@ export class App implements vscode.Disposable {
               })
         if (text) {
           if (this.timeTravelBusy)
-            this.notify({ kind: 'warning', text: 'Time Travel is in progress. Start the task after it finishes.' })
+            this.notify({
+              kind: 'warning',
+              text: 'Time Travel is in progress. Start the task after it finishes.'
+            })
           else await this.manager.start(text)
         }
       }),
       vscode.commands.registerCommand('codegent.stopRun', () => this.manager.stop()),
       vscode.commands.registerCommand('codegent.resumeRun', () =>
         this.timeTravelBusy
-          ? this.notify({ kind: 'warning', text: 'Time Travel is in progress. Resume after it finishes.' })
+          ? this.notify({
+              kind: 'warning',
+              text: 'Time Travel is in progress. Resume after it finishes.'
+            })
           : this.manager.resume()
       ),
       vscode.commands.registerCommand('codegent.undoTimeTravel', () =>
@@ -793,7 +810,10 @@ export class App implements vscode.Disposable {
       ),
       vscode.commands.registerCommand('codegent.undoStep', async () => {
         if (this.timeTravelBusy)
-          return this.notify({ kind: 'warning', text: 'Time Travel is in progress. Undo the step afterward.' })
+          return this.notify({
+            kind: 'warning',
+            text: 'Time Travel is in progress. Undo the step afterward.'
+          })
         const run = this.manager.view().run
         const step = run?.steps.find((s) => s.canUndo)
         if (step) await this.manager.undoStep(step.n)

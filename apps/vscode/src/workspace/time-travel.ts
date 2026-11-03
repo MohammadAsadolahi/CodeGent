@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
 import { execGit, type GitRunner } from '@codegent/engine'
@@ -214,6 +215,94 @@ export class TimeTravel {
     return { root: this.root, headSha: preview.headSha, targetSha: sha }
   }
 
+  /** Full file check including paths Git considers untracked after a historical restore. */
+  private async matchesCheckpoint(
+    targetSha: string,
+    paths: readonly string[]
+  ): Promise<boolean> {
+    const output = await this.git(['ls-tree', '-r', '-z', targetSha, '--', ...paths])
+    const expected = new Map<string, { mode: string; sha: string }>()
+    for (const entry of output.split('\0')) {
+      if (!entry) continue
+      const tab = entry.indexOf('\t')
+      if (tab < 0) throw new Error('Invalid Git tree entry.')
+      const [mode, , sha] = entry.slice(0, tab).split(' ')
+      if (!mode || !sha) throw new Error('Invalid Git tree entry.')
+      expected.set(entry.slice(tab + 1), { mode, sha })
+    }
+    const absolute = (relative: string) => path.join(this.root, ...relative.split('/'))
+    const statOf = async (relative: string) => {
+      try {
+        return await fs.lstat(absolute(relative))
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code
+        if (code === 'ENOENT' || code === 'ENOTDIR') return null
+        throw error
+      }
+    }
+    // A file-to-directory transition can leave extra untracked nested files.
+    // Validate the complete directory before an inverse patch could remove it.
+    const matchesDirectory = async (relative: string): Promise<boolean> => {
+      const prefix = relative + '/'
+      const children = new Set(
+        [...expected.keys()]
+          .filter((name) => name.startsWith(prefix))
+          .map((name) => name.slice(prefix.length).split('/')[0]!)
+      )
+      const actual = await fs.readdir(absolute(relative))
+      if (actual.length !== children.size || actual.some((name) => !children.has(name)))
+        return false
+      for (const child of children) {
+        const nested = prefix + child
+        if (!expected.has(nested)) {
+          const stat = await statOf(nested)
+          if (!stat?.isDirectory() || !(await matchesDirectory(nested))) return false
+        }
+      }
+      return true
+    }
+
+    for (const relative of paths) {
+      const wanted = expected.get(relative)
+      const state = await statOf(relative)
+      if (!wanted) {
+        const wasDirectory = [...expected.keys()].some((name) =>
+          name.startsWith(relative + '/')
+        )
+        if (wasDirectory) {
+          if (!state?.isDirectory() || !(await matchesDirectory(relative))) return false
+        } else if (state) {
+          return false
+        }
+        continue
+      }
+      if (!state) return false
+      if (wanted.mode === '120000') {
+        if (!state.isSymbolicLink()) return false
+        const contents = Buffer.from(await fs.readlink(absolute(relative)))
+        const actual = createHash('sha1')
+          .update('blob ' + contents.length + '\0')
+          .update(contents)
+          .digest('hex')
+        if (actual !== wanted.sha) return false
+      } else if (wanted.mode === '100644' || wanted.mode === '100755') {
+        if (!state.isFile()) return false
+        const actual = (
+          await this.git(['hash-object', '--path=' + relative, '--', relative])
+        ).trim()
+        if (actual !== wanted.sha) return false
+        if (
+          process.platform !== 'win32' &&
+          ((state.mode & 0o111) !== 0) !== (wanted.mode === '100755')
+        )
+          return false
+      } else {
+        return false
+      }
+    }
+    return true
+  }
+
   /** Reverses only the restore patch, refusing conflicts with later edits. */
   async undo(marker: RestoreMarker): Promise<void> {
     if (
@@ -234,18 +323,16 @@ export class TimeTravel {
       { cwd: this.root }
     )
     if (staged.code !== 0)
-      throw new Error('The index has staged changes to restored files; undo cannot safely proceed.')
+      throw new Error(
+        'The index has staged changes to restored files; undo cannot safely proceed.'
+      )
 
     await this.assertVisiblePaths(preview.files)
     // Reversing a patch is not a full-file equality test: if the user edits lines
     // outside its context, git apply --reverse can succeed but silently leave
     // those later edits in place. Undo only when every affected file exactly
     // matches the selected checkpoint (unrelated paths may remain dirty).
-    const match = await this.runner(
-      ['diff', '--no-ext-diff', '--quiet', marker.targetSha, '--', ...preview.files],
-      { cwd: this.root }
-    )
-    if (match.code !== 0)
+    if (!(await this.matchesCheckpoint(marker.targetSha, preview.files)))
       throw new Error(
         'Files affected by this restore have changed since Time Travel. Undo was cancelled without changing any files.'
       )
