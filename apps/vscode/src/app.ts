@@ -648,6 +648,7 @@ export class App implements vscode.Disposable {
         : []),
       '',
       'Your branch, commits, staging area and GitHub remote will not change.',
+      'ChatGPT still reads GitHub. Commit and push the restored files before another CodeGent task.',
       'All uncommitted and unsaved work must be cleared before restoring.',
       'Use Undo Time Travel to reverse this restore if the affected files remain unchanged.'
     ].join('\n')
@@ -668,7 +669,7 @@ export class App implements vscode.Disposable {
       text:
         'Restored ' +
         preview.files.length +
-        ' files in your working tree. Review the diff before committing; Git history is unchanged.'
+        ' files in your working tree. Review the diff, then commit and push before starting a new CodeGent task; Git history is unchanged.'
     })
     await this.refreshRepo()
     })

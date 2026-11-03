@@ -136,8 +136,10 @@ describe('TimeTravel', () => {
     const travel = new TimeTravel(dir)
     const marker = await travel.restore(first, head)
     fs.writeFileSync(path.join(dir, 'my-notes.txt'), 'personal\n')
+    git(dir, 'add', 'my-notes.txt')
     await travel.undo(marker)
     expect(fs.readFileSync(path.join(dir, 'my-notes.txt'), 'utf8')).toBe('personal\n')
+    expect(git(dir, 'show', ':my-notes.txt')).toBe('personal')
     expect(fs.readFileSync(path.join(dir, 'renamed.txt'), 'utf8')).toBe('old\n')
   })
 

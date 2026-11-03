@@ -229,11 +229,12 @@ export class TimeTravel {
       throw new Error(
         'Save or discard unsaved editor changes before undoing the restore.'
       )
-    const staged = await this.runner(['diff', '--cached', '--quiet', 'HEAD'], {
-      cwd: this.root
-    })
+    const staged = await this.runner(
+      ['diff', '--cached', '--quiet', 'HEAD', '--', ...preview.files],
+      { cwd: this.root }
+    )
     if (staged.code !== 0)
-      throw new Error('The index has staged changes; undo cannot safely proceed.')
+      throw new Error('The index has staged changes to restored files; undo cannot safely proceed.')
 
     await this.assertVisiblePaths(preview.files)
     // Reversing a patch is not a full-file equality test: if the user edits lines

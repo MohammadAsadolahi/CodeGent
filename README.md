@@ -62,7 +62,8 @@ the restore while its affected files remain unchanged.
 
 For safety, restoration requires a clean working tree and no unsaved editors. Files
 hidden from Git by special index flags and changes to submodule pointers are not supported.
-The result is uncommitted code for you to review, test and optionally commit. The timeline
+The result is uncommitted code for you to review and test. Commit and push it before
+starting another CodeGent task so ChatGPT reads the restored version on GitHub. The timeline
 is Git-based: steps run with **commit disabled** have only the existing per-step Undo,
 which does not survive a VS Code reload. ChatGPT conversation state is not rewound.
 

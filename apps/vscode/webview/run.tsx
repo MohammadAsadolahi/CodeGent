@@ -447,6 +447,10 @@ export const TimeTravelCard = ({
         Preview and restore an earlier local Git commit in your working tree. Branch,
         commits and staging stay unchanged. Your ChatGPT conversation is not rewound.
       </p>
+      <p class="muted">
+        A restore is local and uncommitted. Commit and push the restored code before
+        a new CodeGent task so ChatGPT sees it on GitHub.
+      </p>
       {timeline.undoAvailable && (
         <div class="actions">
           <button

@@ -10,7 +10,9 @@
   submodule pointer changes that Git apply would otherwise silently skip, and now has
   regression coverage for binary files and a full VS Code restore/undo integration test.
   Restore and undo are serialized with other Time Travel operations and prevent agent runs
-  from starting until the operation is complete.
+  from starting until the operation is complete. Undo permits unrelated staged edits,
+  and the UI now explains that restored code must be committed and pushed before ChatGPT
+  can read it on GitHub.
 
 - Added **Time Travel** to the VS Code panel: browse the latest 30 local Git commits, preview
   affected files, and restore any earlier ancestor without moving HEAD, staging, rewriting
